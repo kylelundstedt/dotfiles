@@ -1,7 +1,6 @@
-[user]
-name = Your Name
-email = your.email@example.com
-# signingkey = ssh-ed25519 YOUR_PUBLIC_KEY_HERE
+# No default [user] — identity comes from includeIf in .gitconfig
+# (personal via .gitconfig_personal, work via .gitconfig_work).
+# Committing outside those directories without .gitconfig_local will error.
 
 [core]
 excludesfile = ~/.gitignore_global
@@ -21,10 +20,9 @@ default = simple
 [hub]
 protocol = ssh # Use SSH for better security with 1Password
 
-# Commented out: This URL rewrite breaks Homebrew taps and other tools that need HTTPS
-# Uncomment only if you have SSH keys properly configured and want to force SSH for all GitHub repos
-# [url "git@github.com:"]
-#     insteadOf = https://github.com/
+# Rewrite HTTPS GitHub URLs to SSH so 1Password handles auth
+[url "git@github.com:"]
+    insteadOf = https://github.com/
 
 [credential]
 
