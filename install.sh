@@ -548,7 +548,7 @@ fi
 # Define folder lists
 linux_folders=("aws" "agents" "git" "starship" "zsh")
 # include git, zsh, starship on mac so prompt and git config are applied
-macos_folders=("1Password" "agents" "vscode" "homebrew" "ssh" "git" "zsh" "starship")
+macos_folders=("1Password" "agents" "launchd" "vscode" "homebrew" "ssh" "git" "zsh" "starship")
 
 # Change to the dotfiles directory
 cd "$HOME/dotfiles" || exit
