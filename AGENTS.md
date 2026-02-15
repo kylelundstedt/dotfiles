@@ -15,7 +15,7 @@ GNU Stow–managed dotfiles and AI agent platform for macOS and Linux. Each top-
 - Secrets stay out of committed files — use 1Password (`op run`) or `.gitignore`d local configs.
 - `agents/.agents/AGENTS.md` is the canonical global agent instruction file. `agents/.claude/CLAUDE.md` and `agents/.codex/AGENTS.md` are symlinks to it.
 - Skills live in `agents/.agents/skills/` (stow-managed) or `~/.agents/skills/` (git-cloned). Both `~/.claude/skills/` and `~/.codex/skills/` symlink into `~/.agents/skills/`.
-- MCP server wrappers live in `claude/bin/` and use `op run` to inject 1Password secrets at runtime. Servers: github-home, github-work, motherduck, dlt, tigris.
+- MCP server wrappers live in `agents/.agents/mcp/bin/` and use `op run` to inject 1Password secrets at runtime. Servers: github-home, github-work, motherduck, dlt, tigris.
 - Local config files (`aws/.aws/config`, `ssh/.ssh/config`, `git/.gitconfig_local`) are gitignored and created from examples or prompts during install.
 
 ## Structure
@@ -23,10 +23,9 @@ GNU Stow–managed dotfiles and AI agent platform for macOS and Linux. Each top-
 | Package | Purpose |
 |---------|---------|
 | `1Password/` | 1Password SSH agent config (macOS) |
-| `agents/` | Stow package — deploys agent infrastructure to `~/` (`AGENTS.md`, Claude/Codex symlinks, skills) |
+| `agents/` | Agent infrastructure — `AGENTS.md`, Claude/Codex symlinks, skills, MCP server wrappers (`op run`), Claude Code settings |
 | `agent_docs/` | Reference docs for this repo — agent setup plans, platform notes, secret management (not stowed) |
 | `aws/` | AWS CLI configuration (Linux) |
-| `claude/` | Claude Code settings, MCP server wrappers (`op run`), `.env` secret references |
 | `git/` | Git configuration with OS-specific includes |
 | `homebrew/` | Brewfiles for macOS + Linux |
 | `python/` | Python project dependencies via uv (not stowed) |

@@ -67,8 +67,8 @@ alias gps='git push'
 alias gpsf='git push --force'
 alias gs='git status'
 alias gup='git fetch --all && git pull --rebase'  # Fetch and rebase
-alias clauded='claude --dangerously-skip-permissions'
-alias codexa='codex --dangerously-bypass-approvals-and-sandbox'
+alias claude='claude --dangerously-skip-permissions'
+alias codex='codex --dangerously-bypass-approvals-and-sandbox'
 if [[ "$(uname)" == "Darwin" ]]; then
     alias ls='ls -G'
 fi

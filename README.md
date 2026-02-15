@@ -59,10 +59,9 @@ Configuration is managed with [GNU Stow](http://www.gnu.org/software/stow/), whi
 | Directory | Purpose | Stow Target | Platform |
 |-----------|---------|-------------|----------|
 | `1Password/` | 1Password SSH agent config | `~/.config/1Password/` | macOS |
-| `agents/` | Stow package — deploys shared agent infrastructure (`AGENTS.md`, Claude/Codex symlinks, skills, MCP wrappers) | `~/` | Both |
+| `agents/` | Agent infrastructure — `AGENTS.md`, Claude/Codex symlinks, skills, MCP wrappers, Claude Code settings | `~/` | Both |
 | `agent_docs/` | Reference docs for this repo — agent setup plans, platform notes, secret management | N/A (not stowed) | Both |
 | `aws/` | AWS CLI configuration | `~/.aws/` | Linux |
-| `claude/` | Claude Code settings (permissions, model prefs) | `~/.claude/` | Both |
 | `git/` | Git configuration with OS-specific includes | `~/` | Both |
 | `homebrew/` | Brewfile(s) for macOS + Linux | `~/` | Both |
 | `python/` | Python project dependencies (uv) | N/A (not stowed) | Both |
