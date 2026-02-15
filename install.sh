@@ -352,10 +352,12 @@ install_skills() {
     fi
     link_skill find-skills
 
-    # bootstrap-project - link if already deployed by stow
-    if [ -d "$HOME/.agents/skills/bootstrap-project" ]; then
-        link_skill bootstrap-project
-    fi
+    # Stow-managed skills — link if already deployed by stow
+    for skill in bootstrap-project sprites-local; do
+        if [ -d "$HOME/.agents/skills/$skill" ]; then
+            link_skill "$skill"
+        fi
+    done
 }
 
 trap cleanup_sudo_keepalive EXIT
@@ -1049,9 +1051,11 @@ else
     fi
 
     # Link stow-managed skills now that agents package is deployed
-    if [[ "$STOW_DRY_RUN" != true ]] && [ -d "$HOME/.agents/skills/bootstrap-project" ]; then
+    if [[ "$STOW_DRY_RUN" != true ]] && [ -d "$HOME/.agents/skills" ]; then
         mkdir -p "$HOME/.claude/skills" "$HOME/.codex/skills"
-        link_skill bootstrap-project
+        for skill in bootstrap-project sprites-local; do
+            [ -d "$HOME/.agents/skills/$skill" ] && link_skill "$skill"
+        done
     fi
 fi
 
