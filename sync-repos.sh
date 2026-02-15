@@ -4,8 +4,16 @@
 # Runs serially to avoid overwhelming SSH/1Password agent.
 set -euo pipefail
 
+LOCKFILE="/tmp/sync-repos.lock"
 PERSONAL_DIR="$HOME/github/kylelundstedt"
 WORK_DIR="$HOME/github/klundstedt"
+
+# Prevent overlapping runs
+if ! mkdir "$LOCKFILE" 2>/dev/null; then
+    echo "Another sync-repos is already running (lockfile: $LOCKFILE). Exiting."
+    exit 0
+fi
+trap 'rmdir "$LOCKFILE" 2>/dev/null' EXIT
 
 sync_repos() {
     local owner="$1" target_dir="$2"
@@ -22,11 +30,20 @@ sync_repos() {
     while read -r name url; do
         local repo_dir="$target_dir/$name"
         if [ -d "$repo_dir/.git" ]; then
-            echo "  fetch $name"
-            git -C "$repo_dir" fetch --all --quiet 2>&1 || echo "  WARN: fetch failed for $name"
+            if git -C "$repo_dir" rev-parse HEAD >/dev/null 2>&1; then
+                echo "  fetch $name"
+                git -C "$repo_dir" fetch --all --quiet 2>&1 || echo "  WARN: fetch failed for $name"
+            else
+                echo "  WARN: $name has corrupt .git, removing and re-cloning"
+                rm -rf "$repo_dir"
+                git clone --quiet "$url" "$repo_dir" 2>&1 || echo "  WARN: re-clone failed for $name"
+            fi
         else
             echo "  clone $name"
-            git clone --quiet "$url" "$repo_dir" 2>&1 || echo "  WARN: clone failed for $name"
+            if ! git clone --quiet "$url" "$repo_dir" 2>&1; then
+                echo "  WARN: clone failed for $name, cleaning up"
+                rm -rf "$repo_dir"
+            fi
         fi
     done
 }
