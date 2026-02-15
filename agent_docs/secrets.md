@@ -4,10 +4,10 @@ Secrets are never stored in plaintext. Instead, `.env` files contain [1Password 
 
 ## How MCP Server Wrappers Work
 
-Each MCP server has a wrapper script and a companion `.env` file in `claude/bin/`:
+Each MCP server has a wrapper script and a companion `.env` file in `agents/.agents/mcp/bin/`:
 
 ```
-claude/bin/
+agents/.agents/mcp/bin/
 ├── github-mcp-home          # wrapper script
 ├── github-mcp-home.env      # secret references (committed to git)
 ├── motherduck-mcp

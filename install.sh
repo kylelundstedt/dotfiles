@@ -167,45 +167,80 @@ install_apt_packages_quiet() {
 }
 
 configure_claude() {
-    if ! command -v claude >/dev/null 2>&1; then
-        return 0
-    fi
-    if command -v op >/dev/null 2>&1; then
-        echo "Configuring Claude Code MCP servers..."
-        local mcp_failed=false
-        add_mcp_server github-home "$HOME/dotfiles/claude/bin/github-mcp-home" || mcp_failed=true
-        add_mcp_server github-work "$HOME/dotfiles/claude/bin/github-mcp-work" || mcp_failed=true
-        add_mcp_server motherduck "$HOME/dotfiles/claude/bin/motherduck-mcp" || mcp_failed=true
-        add_mcp_server dlt "$HOME/dotfiles/claude/bin/dlt-mcp" || mcp_failed=true
-        add_mcp_server tigris "$HOME/dotfiles/claude/bin/tigris-mcp" || mcp_failed=true
-        if [[ "$mcp_failed" == false ]]; then
-            echo "  [+] MCP servers configured (github-home, github-work, motherduck, dlt, tigris)"
-        else
-            echo "  [!] One or more MCP servers failed to configure"
-        fi
-    else
-        echo ""
-        echo "  Note: MCP servers require 1Password CLI. Install it first, then re-run install.sh"
-    fi
+    configure_mcp_servers
     install_skills
 }
 
-add_mcp_server() {
-    local server_name wrapper_path add_output
-    server_name="$1"
-    wrapper_path="$2"
-    if [[ ! -x "$wrapper_path" ]]; then
-        echo "Error: MCP wrapper missing or not executable: $wrapper_path" >&2
-        return 1
+configure_mcp_servers() {
+    local mcp_failed=false
+
+    # Shared MCP wrapper paths (agent-agnostic, stow-managed under agents/.agents/mcp/bin).
+    local mcp_specs=(
+        "github-home:$HOME/dotfiles/agents/.agents/mcp/bin/github-mcp-home"
+        "github-work:$HOME/dotfiles/agents/.agents/mcp/bin/github-mcp-work"
+        "motherduck:$HOME/dotfiles/agents/.agents/mcp/bin/motherduck-mcp"
+        "dlt:$HOME/dotfiles/agents/.agents/mcp/bin/dlt-mcp"
+        "tigris:$HOME/dotfiles/agents/.agents/mcp/bin/tigris-mcp"
+    )
+
+    configure_mcp_servers_for_tool "claude" "${mcp_specs[@]}" || mcp_failed=true
+    configure_mcp_servers_for_tool "codex" "${mcp_specs[@]}" || mcp_failed=true
+
+    if [[ "$mcp_failed" == true ]]; then
+        echo "  [!] One or more MCP server registrations failed"
     fi
-    if ! add_output=$(claude mcp add --scope user "$server_name" -- "$wrapper_path" 2>&1); then
-        if echo "$add_output" | grep -qi "already exists"; then
-            return 0
+
+    if ! command -v op >/dev/null 2>&1; then
+        echo ""
+        echo "  Note: 1Password CLI is required at runtime for secret-backed MCP servers."
+        echo "        Install it first, then re-run install.sh."
+    fi
+}
+
+configure_mcp_servers_for_tool() {
+    local tool add_cmd failed=false
+    tool="$1"
+    shift
+
+    if ! command -v "$tool" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    echo "Configuring $tool MCP servers..."
+
+    for spec in "$@"; do
+        local server_name wrapper_path add_output
+        server_name="${spec%%:*}"
+        wrapper_path="${spec#*:}"
+
+        if [[ ! -x "$wrapper_path" ]]; then
+            echo "Warning: MCP wrapper missing or not executable: $wrapper_path" >&2
+            failed=true
+            continue
         fi
-        echo "Warning: failed to configure MCP server '$server_name'" >&2
-        [ -n "$add_output" ] && echo "$add_output" >&2
-        return 1
+
+        if [[ "$tool" == "claude" ]]; then
+            add_cmd=("$tool" "mcp" "add" "--scope" "user" "$server_name" "--" "$wrapper_path")
+        else
+            add_cmd=("$tool" "mcp" "add" "$server_name" "--" "$wrapper_path")
+        fi
+
+        if ! add_output=$("${add_cmd[@]}" 2>&1); then
+            if echo "$add_output" | grep -Eqi "already exists|already configured"; then
+                continue
+            fi
+            echo "Warning: failed to configure MCP server '$server_name' for $tool" >&2
+            [ -n "$add_output" ] && echo "$add_output" >&2
+            failed=true
+        fi
+    done
+
+    if [[ "$failed" == false ]]; then
+        echo "  [+] MCP servers configured for $tool"
+        return 0
     fi
+
+    return 1
 }
 
 # Run a command with elevated privileges (sudo if available, direct if root)
@@ -724,7 +759,7 @@ if [[ "$OS" == "linux" ]]; then
 
         if [[ "$NEED_OP_SETUP" == true ]]; then
             echo ""
-            echo "  After adding accounts, restart Claude Code for MCP servers to work."
+            echo "  After adding accounts, restart Claude Code and Codex for MCP servers to work."
         fi
     fi
 

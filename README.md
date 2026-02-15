@@ -59,10 +59,10 @@ Configuration is managed with [GNU Stow](http://www.gnu.org/software/stow/), whi
 | Directory | Purpose | Stow Target | Platform |
 |-----------|---------|-------------|----------|
 | `1Password/` | 1Password SSH agent config | `~/.config/1Password/` | macOS |
-| `agents/` | Stow package — deploys agent infrastructure to `~/` (`AGENTS.md`, Claude/Codex symlinks, skills) | `~/` | Both |
+| `agents/` | Stow package — deploys shared agent infrastructure (`AGENTS.md`, Claude/Codex symlinks, skills, MCP wrappers) | `~/` | Both |
 | `agent_docs/` | Reference docs for this repo — agent setup plans, platform notes, secret management | N/A (not stowed) | Both |
 | `aws/` | AWS CLI configuration | `~/.aws/` | Linux |
-| `claude/` | Claude Code settings, MCP server wrappers (`op run`), `.env` secret references | `~/.claude/` | Both |
+| `claude/` | Claude Code settings (permissions, model prefs) | `~/.claude/` | Both |
 | `git/` | Git configuration with OS-specific includes | `~/` | Both |
 | `homebrew/` | Brewfile(s) for macOS + Linux | `~/` | Both |
 | `python/` | Python project dependencies (uv) | N/A (not stowed) | Both |
@@ -98,7 +98,7 @@ Both Claude Code and Codex CLI share a single instruction file (`AGENTS.md`) dep
 | `mviz` | [matsonj/mviz](https://github.com/matsonj/mviz) | Chart and report builder |
 | `find-skills` | [vercel-labs/skills](https://github.com/vercel-labs/skills) | Skill discovery and installation |
 
-**MCP servers** — Wrappers in `claude/bin/` use `op run` to inject 1Password secrets at runtime:
+**MCP servers** — Shared wrappers in `agents/.agents/mcp/bin/` use `op run` to inject 1Password secrets at runtime. `install.sh` registers them for both Claude and Codex:
 
 | Server | Purpose |
 |--------|---------|
