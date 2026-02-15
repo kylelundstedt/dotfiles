@@ -1,0 +1,3 @@
+# Skills are copied (not symlinked) by install.sh because Codex
+# doesn't resolve multi-level symlinks when scanning for skills.
+\.agents/skills

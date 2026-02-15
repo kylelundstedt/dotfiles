@@ -352,9 +352,13 @@ install_skills() {
     fi
     link_skill find-skills
 
-    # Stow-managed skills — link if already deployed by stow
+    # Repo-managed skills — copy from dotfiles (not stow) so files are real, not symlinks.
+    # Codex doesn't resolve multi-level symlinks when scanning for skills.
+    local repo_skills="$HOME/dotfiles/agents/.agents/skills"
     for skill in bootstrap-project sprites-local; do
-        if [ -d "$HOME/.agents/skills/$skill" ]; then
+        if [ -d "$repo_skills/$skill" ]; then
+            rm -rf "$HOME/.agents/skills/$skill"
+            cp -R "$repo_skills/$skill" "$HOME/.agents/skills/$skill"
             link_skill "$skill"
         fi
     done
@@ -1050,11 +1054,16 @@ else
         done
     fi
 
-    # Link stow-managed skills now that agents package is deployed
-    if [[ "$STOW_DRY_RUN" != true ]] && [ -d "$HOME/.agents/skills" ]; then
-        mkdir -p "$HOME/.claude/skills" "$HOME/.codex/skills"
+    # Copy repo-managed skills now that agents package is deployed
+    if [[ "$STOW_DRY_RUN" != true ]]; then
+        local repo_skills="$HOME/dotfiles/agents/.agents/skills"
+        mkdir -p "$HOME/.agents/skills" "$HOME/.claude/skills" "$HOME/.codex/skills"
         for skill in bootstrap-project sprites-local; do
-            [ -d "$HOME/.agents/skills/$skill" ] && link_skill "$skill"
+            if [ -d "$repo_skills/$skill" ]; then
+                rm -rf "$HOME/.agents/skills/$skill"
+                cp -R "$repo_skills/$skill" "$HOME/.agents/skills/$skill"
+                link_skill "$skill"
+            fi
         done
     fi
 fi
