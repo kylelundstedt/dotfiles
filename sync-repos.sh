@@ -2,11 +2,28 @@
 # Sync all non-archived, non-fork repos from personal and work GitHub accounts.
 # Clones missing repos (SSH), fetches existing ones (SSH).
 # Runs serially to avoid overwhelming SSH/1Password agent.
+#
+# Scheduled by two LaunchAgents:
+#   - midnight daily (StartCalendarInterval)
+#   - every 12h as a catch-up for wake-from-sleep (StartInterval)
+# Staleness check below prevents redundant runs.
 set -euo pipefail
 
+LAST_RUN_FILE="/tmp/sync-repos.lastrun"
 LOCKFILE="/tmp/sync-repos.lock"
+MIN_INTERVAL=$((20 * 3600))  # 20 hours
 PERSONAL_DIR="$HOME/github/kylelundstedt"
 WORK_DIR="$HOME/github/klundstedt"
+
+# Skip if last successful run was recent
+if [[ -f "$LAST_RUN_FILE" ]]; then
+    last_run=$(cat "$LAST_RUN_FILE")
+    now=$(date +%s)
+    if (( now - last_run < MIN_INTERVAL )); then
+        echo "Last sync was $(( (now - last_run) / 3600 ))h ago, skipping."
+        exit 0
+    fi
+fi
 
 # Prevent overlapping runs
 if ! mkdir "$LOCKFILE" 2>/dev/null; then
@@ -52,4 +69,5 @@ sync_repos kylelundstedt "$PERSONAL_DIR"
 sync_repos IndustryVault "$WORK_DIR"
 sync_repos iv-cmg "$WORK_DIR"
 
+date +%s > "$LAST_RUN_FILE"
 echo "==> Done $(date)"
