@@ -34,9 +34,6 @@ required = true
 [pull]
 ff = only
 
-[init]
-templateDir = ~/.git-template/
-
 [gpg]
   format = ssh
 
