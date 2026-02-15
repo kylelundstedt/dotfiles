@@ -45,6 +45,7 @@ sync_repos() {
         --json name,sshUrl \
         --jq '.[] | "\(.name) \(.sshUrl)"' |
     while read -r name url; do
+        sleep 1
         local repo_dir="$target_dir/$name"
         if [ -d "$repo_dir/.git" ]; then
             if git -C "$repo_dir" rev-parse HEAD >/dev/null 2>&1; then

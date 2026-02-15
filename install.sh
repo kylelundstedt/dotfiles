@@ -556,6 +556,20 @@ cd "$HOME/dotfiles" || exit
 # Make sure main git config includes exactly one OS-specific file.
 configure_git_os_include
 
+# SSH multiplexing for GitHub — reuse connections across serial git fetches.
+ssh_config="$HOME/.ssh/config"
+if [[ -f "$ssh_config" ]] && ! grep -q 'Host github.com' "$ssh_config"; then
+    mkdir -p "$HOME/.ssh/sockets"
+    cat >> "$ssh_config" <<'EOF'
+
+Host github.com
+  ControlMaster auto
+  ControlPath ~/.ssh/sockets/%r@%h-%p
+  ControlPersist 600
+EOF
+    echo "  [+] SSH multiplexing configured for github.com"
+fi
+
 # Ensure install.sh is executable
 if [ -f "$HOME/dotfiles/install.sh" ] && [ ! -x "$HOME/dotfiles/install.sh" ]; then
     chmod +x "$HOME/dotfiles/install.sh"
