@@ -1,0 +1,10 @@
+1password.op-vscode
+adamviola.parquet-explorer
+github.github-vscode-theme
+github.vscode-github-actions
+mathematic.vscode-pdf
+mechatroner.rainbow-csv
+oderwat.indent-rainbow
+quarto.quarto
+snowflake.snowflake-vsc
+tailscale.vscode-tailscale

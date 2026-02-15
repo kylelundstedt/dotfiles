@@ -1,0 +1,42 @@
+name: Install Smoke Test
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  linux-install-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run installer smoke test in clean Ubuntu container
+        run: |
+          docker run --rm \
+            -v "$PWD:/repo" \
+            ubuntu:24.04 \
+            bash -lc '
+              set -euo pipefail
+
+              export DEBIAN_FRONTEND=noninteractive
+
+              # Start from canonical path to skip bootstrap clone/update.
+              mkdir -p /root
+              cp -a /repo /root/dotfiles
+              cd /root/dotfiles
+
+              # Provide lightweight shims so core_tools_installed() passes
+              # after prerequisite install, avoiding a long full package run.
+              mkdir -p /tmp/fakebin
+              for tool in fzf rg zoxide starship stow bat; do
+                cat > "/tmp/fakebin/$tool" <<EOF
+#!/usr/bin/env bash
+exit 0
+EOF
+                chmod +x "/tmp/fakebin/$tool"
+              done
+              export PATH="/tmp/fakebin:$PATH"
+
+              bash -n install.sh
+              ./install.sh --no-prompt --skip-stow
+            '

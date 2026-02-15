@@ -1,0 +1,7 @@
+[core]
+editor = code --wait
+
+[gpg "ssh"]
+program = "/Applications/1Password.app/Contents/MacOS/op-ssh-sign"
+# Automatically use GitHub Signing Key from 1Password, or fall back to first available key
+defaultKeyCommand = "sh -c 'SSH_AUTH_SOCK=~/Library/Group\\ Containers/2BUA8C4S2C.com.1password/t/agent.sock ssh-add -L | grep -i \"github.*signing\\|signing.*github\" | head -1 | cut -d\" \" -f1-2 || SSH_AUTH_SOCK=~/Library/Group\\ Containers/2BUA8C4S2C.com.1password/t/agent.sock ssh-add -L | grep -E \"^ssh-\" | head -1 | cut -d\" \" -f1-2'"

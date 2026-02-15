@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Wrapper script that fetches GitHub PAT from 1Password at runtime
+set -euo pipefail
+
+# Check if signed in to 1Password (fail fast instead of hanging)
+if ! op account get --account lundstedts.1password.com >/dev/null 2>&1; then
+    echo "Error: Not signed in to 1Password (lundstedts.1password.com)" >&2
+    echo "Run: eval \$(op signin --account lundstedts.1password.com)" >&2
+    exit 1
+fi
+
+SCRIPT_DIR="$(dirname "$0")"
+exec op run --env-file="$SCRIPT_DIR/github-mcp-home.env" \
+    --account lundstedts.1password.com -- npx -y @modelcontextprotocol/server-github "$@"

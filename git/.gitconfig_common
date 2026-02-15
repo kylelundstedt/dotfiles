@@ -1,0 +1,49 @@
+[user]
+name = Your Name
+email = your.email@example.com
+# signingkey = ssh-ed25519 YOUR_PUBLIC_KEY_HERE
+
+[core]
+excludesfile = ~/.gitignore_global
+compression = 9
+editor = nano
+
+# Prevent line ending issues--change to 'true' on Windows
+autocrlf = input
+
+[alias]
+empty = commit --allow-empty-message -m ''
+amend = commit --amend -C HEAD --allow-empty-message
+
+[push]
+default = simple
+
+[hub]
+protocol = ssh # Use SSH for better security with 1Password
+
+# Commented out: This URL rewrite breaks Homebrew taps and other tools that need HTTPS
+# Uncomment only if you have SSH keys properly configured and want to force SSH for all GitHub repos
+# [url "git@github.com:"]
+#     insteadOf = https://github.com/
+
+[credential]
+
+[filter "lfs"]
+clean = git-lfs clean -- %f
+smudge = git-lfs smudge -- %f
+process = git-lfs filter-process
+required = true
+[pull]
+ff = only
+
+[init]
+templateDir = ~/.git-template/
+
+[gpg]
+  format = ssh
+
+[gui]
+# editor set by shell $EDITOR; VS Code overrides via .gitconfig_macos
+
+[commit]
+  gpgsign = true

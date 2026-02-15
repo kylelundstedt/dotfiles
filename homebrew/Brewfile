@@ -1,0 +1,109 @@
+# `brew bundle --file ~/dotfiles/homebrew/Brewfile`
+brew "atuin"
+brew "awscli"
+brew "bat"
+brew "carapace"
+brew "curl"
+# brew "direnv"
+# tap "dopplerhq/cli"
+# brew "dopplerhq/cli/doppler"
+brew "duckdb"
+brew "fastfetch"
+brew "fzf"
+brew "gh"
+brew "git"
+# brew "gitpod-io/tap/gitpod"
+brew "gnupg"
+brew "htop"
+brew "jq"
+brew "just"
+brew "libpq"
+brew "mas"  # macOS-only, will fail gracefully on Linux
+brew "micro"
+brew "nano"
+brew "node"
+brew "openssl"
+brew "pandoc"
+brew "parallel"
+brew "pgcli"
+brew "rclone"
+# brew "rename"  # Conflicts with util-linux on some Linux distros
+brew "ripgrep"
+# brew "quarylabs/quary/sqruff"  # macOS-only or has platform issues
+# brew "r"
+# brew "rust"
+brew "snowflake-cli"
+brew "starship"
+brew "stow"
+# brew "tower/tower-cli/tower"
+brew "tree"
+brew "uv"
+brew "wget"
+brew "yq"
+brew "zoxide"
+cask "1password"
+cask "1password-cli"
+# cask "nikitabobko/tap/aerospace"
+# cask "alfred", args: { appdir: "/Applications" }
+# cask "bartender", args: { appdir: "/Applications" }
+# cask "box-drive"
+cask "caffeine", args: { appdir: "/Applications" }
+cask "cardhop", args: { appdir: "/Applications" }
+cask "chatgpt"
+cask "claude"
+cask "claude-code"
+cask "codex"
+# cask "cursor"
+# cask "dash", args: { appdir: "/Applications" }
+cask "datagrip", args: { appdir: "/Applications" }
+cask "columnar-tech/tap/dbc"
+cask "discord", args: { appdir: "/Applications" }
+# cask "dropbox", args: { appdir: "/Applications" }
+cask "fantastical", args: { appdir: "/Applications" }
+cask "font-atkinson-hyperlegible"
+cask 'font-computer-modern'
+# cask 'font-consolas-for-powerline'
+# cask 'font-cooper-hewitt'
+# cask 'font-et-book'
+# cask "font-fira-mono-nerd-font"
+# cask 'font-fira-sans'
+# cask "font-iosevka-nerd-font"
+# cask 'font-inconsolata'
+cask "font-jetbrains-mono-nerd-font"
+# cask 'font-noto-sans'
+cask "ghostty"
+cask "google-chrome", args: { appdir: "/Applications" }
+cask "jetbrains-toolbox", args: { appdir: "/Applications" }
+# cask "linear-linear", args: { appdir: "/Applications" }
+# cask "macwhisper"
+cask "microsoft-auto-update"
+cask "microsoft-office", args: { appdir: "/Applications" }
+cask "microsoft-teams", args: { appdir: "/Applications" }
+# cask "moom"
+cask "notion", args: { appdir: "/Applications" }
+# cask "omnigraffle", args: { appdir: "/Applications" }
+# cask "omnioutliner", args: { appdir: "/Applications" }
+# cask "omniplan", args: { appdir: "/Applications" }
+cask "orbstack"
+# cask "positron"
+cask "quarto"
+cask "rocket"
+cask "rustdesk", args: { appdir: "/Applications" }
+# cask "rstudio"
+cask "slack", args: { appdir: "/Applications" }
+cask "snowflake-snowsql", args: { appdir: "/Applications" }
+# cask "sublime-text", args: { appdir: "/Applications" }  # Removed - migrated to VS Code
+# cask "tableplus"
+# cask "tabula"
+cask "visual-studio-code", args: { appdir: "/Applications" }
+# cask "warp"
+# cask "windsurf"
+# cask "zed"
+cask "zoom"
+mas "1Password for Safari", id: 1569813296
+mas "GarageBand", id: 682658836
+# mas "Instapaper Save", id: 1481302432ple
+mas "Keynote", id: 409183694
+mas "Notion Web Clipper", id: 1559269364
+mas 'Pages', id: 409201541
+# mas "Tailscale", id: 1475387142

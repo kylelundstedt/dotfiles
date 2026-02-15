@@ -1,0 +1,45 @@
+#!/bin/bash
+# Pre-commit hook: run shellcheck on shell scripts
+
+set -e
+
+# Find shell scripts that are staged for commit
+SHELL_SCRIPTS=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(sh|bash)$' || true)
+
+# Also check known shell scripts without extensions
+KNOWN_SCRIPTS="install.sh"
+for script in $KNOWN_SCRIPTS; do
+    if git diff --cached --name-only --diff-filter=ACM | grep -qx "$script"; then
+        SHELL_SCRIPTS="$SHELL_SCRIPTS $script"
+    fi
+done
+
+# Check scripts in claude/bin/ (exclude .env files)
+BIN_SCRIPTS=$(git diff --cached --name-only --diff-filter=ACM | grep '^claude/bin/' | grep -v '\.env$' || true)
+if [ -n "$BIN_SCRIPTS" ]; then
+    SHELL_SCRIPTS="$SHELL_SCRIPTS $BIN_SCRIPTS"
+fi
+
+# Remove duplicates and empty entries
+SHELL_SCRIPTS=$(echo "$SHELL_SCRIPTS" | tr ' ' '\n' | sort -u | grep -v '^$' || true)
+
+if [ -z "$SHELL_SCRIPTS" ]; then
+    exit 0
+fi
+
+# Check if shellcheck is installed
+if ! command -v shellcheck >/dev/null 2>&1; then
+    echo "Warning: shellcheck not installed, skipping shell script checks"
+    echo "Install with: brew install shellcheck"
+    exit 0
+fi
+
+echo "Running shellcheck on staged scripts..."
+# shellcheck disable=SC2086  # Word splitting intended
+if shellcheck $SHELL_SCRIPTS; then
+    echo "✓ shellcheck passed"
+else
+    echo ""
+    echo "✗ shellcheck failed - please fix the issues above"
+    exit 1
+fi
