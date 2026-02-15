@@ -16,6 +16,7 @@ amend = commit --amend -C HEAD --allow-empty-message
 
 [push]
 default = simple
+autoSetupRemote = true
 
 [hub]
 protocol = ssh # Use SSH for better security with 1Password
