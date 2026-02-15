@@ -235,6 +235,25 @@ configure_mcp_servers_for_tool() {
         fi
     done
 
+    # Codex wrappers (op run + npx/uvx) need more than the default 10s startup timeout.
+    if [[ "$tool" == "codex" ]]; then
+        local codex_config="$HOME/.codex/config.toml"
+        if [[ -f "$codex_config" ]] && command -v python3 >/dev/null 2>&1; then
+            python3 -c '
+import sys, re
+p = sys.argv[1]
+t = open(p).read()
+parts = re.split(r"(?=\[mcp_servers\.)", t)
+result = []
+for s in parts:
+    if s.startswith("[mcp_servers.") and "startup_timeout_sec" not in s:
+        s = re.sub(r"(command = [^\n]+\n)", r"\1startup_timeout_sec = 30\n", s)
+    result.append(s)
+open(p, "w").write("".join(result))
+' "$codex_config"
+        fi
+    fi
+
     if [[ "$failed" == false ]]; then
         echo "  [+] MCP servers configured for $tool"
         return 0
