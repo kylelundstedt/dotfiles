@@ -355,7 +355,7 @@ install_skills() {
     # Repo-managed skills — copy from dotfiles (not stow) so files are real, not symlinks.
     # Codex doesn't resolve multi-level symlinks when scanning for skills.
     local repo_skills="$HOME/dotfiles/agents/.agents/skills"
-    for skill in bootstrap-project data-pipelines sprites-local; do
+    for skill in bootstrap-project data-pipelines sprites; do
         if [ -d "$repo_skills/$skill" ]; then
             rm -rf "$HOME/.agents/skills/$skill"
             cp -R "$repo_skills/$skill" "$HOME/.agents/skills/$skill"
@@ -1058,7 +1058,7 @@ else
     if [[ "$STOW_DRY_RUN" != true ]]; then
         local repo_skills="$HOME/dotfiles/agents/.agents/skills"
         mkdir -p "$HOME/.agents/skills" "$HOME/.claude/skills" "$HOME/.codex/skills"
-        for skill in bootstrap-project data-pipelines sprites-local; do
+        for skill in bootstrap-project data-pipelines sprites; do
             if [ -d "$repo_skills/$skill" ]; then
                 rm -rf "$HOME/.agents/skills/$skill"
                 cp -R "$repo_skills/$skill" "$HOME/.agents/skills/$skill"

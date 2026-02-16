@@ -30,8 +30,11 @@
 - Global: `~/.agents/skills/<name>/SKILL.md`, symlinked into `~/.claude/skills/` and `~/.codex/skills/`.
 - Project-level: `.claude/skills/<name>/SKILL.md` in the repo root.
 - Each skill needs a `SKILL.md` with YAML frontmatter (`name`, `description`) and markdown instructions.
-- Use `/bootstrap-project` to set up agent context (`AGENTS.md`, `CLAUDE.md` symlink, `agent_docs/`) in a new or existing repo.
 - Put always-on rules in `AGENTS.md`. Put on-demand workflows and domain knowledge in skills.
+- When to use specific skills:
+  - `/bootstrap-project` — always use when setting up agent context in a new or existing repo.
+  - `/data-pipelines` — use for any data pipeline, analytics, or ingestion work. Covers dlt, sqlmesh, DuckDB, polars, marimo, uv.
+  - `/sprites` — use when the user wants to manage remote Sprites (Fly.io microVMs).
 
 ## Writing
 - Use proper dashes in prose (em dash or spaced en dash), not unspaced hyphens.
