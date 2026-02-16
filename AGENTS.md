@@ -29,7 +29,6 @@ GNU Stow–managed dotfiles and AI agent platform for macOS and Linux. Each top-
 | `git/` | Git configuration with OS-specific includes |
 | `homebrew/` | Brewfiles for macOS + Linux |
 | `launchd/` | LaunchAgents for macOS — daily repo sync (stowed) |
-| `python/` | Python project dependencies via uv (not stowed) |
 | `ssh/` | SSH client configuration (macOS) |
 | `starship/` | Starship prompt configuration |
 | `vscode/` | VS Code settings and extensions (macOS) |

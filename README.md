@@ -4,7 +4,7 @@ One command to set up a fully configured development environment on macOS or Lin
 
 ## What You Get
 
-**AI agent platform** — [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [Codex CLI](https://github.com/openai/codex) with a shared instruction system (`AGENTS.md`), cross-agent skills (`bootstrap-project`, `mviz`, `find-skills`), five MCP servers (GitHub home/work, MotherDuck, dlt, Tigris) with [1Password secret injection](agent_docs/secrets.md), and a convention for per-project agent context (`agent_docs/`)
+**AI agent platform** — [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [Codex CLI](https://github.com/openai/codex) with a shared instruction system (`AGENTS.md`), cross-agent skills (`bootstrap-project`, `data-pipelines`, `sprites-local`, `mviz`, `find-skills`), five MCP servers (GitHub home/work, MotherDuck, dlt, Tigris) with [1Password secret injection](agent_docs/secrets.md), and a convention for per-project agent context (`agent_docs/`)
 
 **Shell** — Zsh with [Starship](https://starship.rs/) prompt, [Atuin](https://atuin.sh/) history sync, [Zoxide](https://github.com/ajeetdsouza/zoxide) smart `cd`, [Carapace](https://carapace.sh/) completions, and [Direnv](https://direnv.net/)
 
@@ -64,10 +64,11 @@ Configuration is managed with [GNU Stow](http://www.gnu.org/software/stow/), whi
 | `aws/` | AWS CLI configuration | `~/.aws/` | Linux |
 | `git/` | Git configuration with OS-specific includes | `~/` | Both |
 | `homebrew/` | Brewfile(s) for macOS + Linux | `~/` | Both |
-| `python/` | Python project dependencies (uv) | N/A (not stowed) | Both |
+| `launchd/` | LaunchAgents — daily repo sync | `~/Library/LaunchAgents/` | macOS |
 | `ssh/` | SSH client configuration | `~/.ssh/` | Both |
 | `starship/` | Starship prompt configuration | `~/.config/` | Both |
 | `vscode/` | VS Code IDE settings & keybindings | `~/Library/Application Support/Code/` | macOS |
+| `sync-repos.sh` | Clones/fetches all GitHub repos for personal and work accounts | N/A (standalone script) | Both |
 | `zsh/` | Zsh shell configuration | `~/` | Both |
 
 Git uses a generated OS include so only one platform-specific file is active:
@@ -93,7 +94,9 @@ Both Claude Code and Codex CLI share a single instruction file (`AGENTS.md`) dep
 
 | Skill | Source | Purpose |
 |-------|--------|---------|
-| `bootstrap-project` | This repo (stow-managed) | Scaffolds per-project `AGENTS.md`, `CLAUDE.md` symlink, and `agent_docs/` |
+| `bootstrap-project` | This repo | Scaffolds per-project `AGENTS.md`, `CLAUDE.md` symlink, and `agent_docs/` |
+| `data-pipelines` | This repo | DuckDB-centric data stack — dlt, sqlmesh, polars, marimo, uv |
+| `sprites-local` | This repo | Manage remote Sprites (Fly.io microVMs) from local machine |
 | `mviz` | [matsonj/mviz](https://github.com/matsonj/mviz) | Chart and report builder |
 | `find-skills` | [vercel-labs/skills](https://github.com/vercel-labs/skills) | Skill discovery and installation |
 
@@ -118,12 +121,6 @@ Both Claude Code and Codex CLI share a single instruction file (`AGENTS.md`) dep
 - **Git**: edit `~/dotfiles/git/.gitconfig_local` (gitignored personal name/email)
 - **AWS**: `~/dotfiles/aws/.aws/config` — update SSO URLs, account IDs, regions
 - **SSH**: `~/dotfiles/ssh/.ssh/config` — add your hosts
-
-**Python (uv):**
-
-```bash
-cd ~/dotfiles/python && ./install.sh
-```
 
 **Reload after changes:**
 
