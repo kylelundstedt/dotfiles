@@ -37,12 +37,17 @@ GNU Stow–managed dotfiles and AI agent platform for macOS and Linux. Each top-
 
 ## install.sh
 
-The install script self-bootstraps from a bare machine. Key responsibilities:
+The install script self-bootstraps from a bare machine. Structured into three composable layers controlled by `--only`:
 
-- Detects OS and installs packages (Homebrew on macOS; apt, dnf, pacman, yum, zypper on Linux)
-- Installs CLI tools in parallel (starship, carapace, uv alongside apt packages)
-- Configures MCP servers for Claude Code via `claude mcp add`
-- Installs and symlinks agent skills for both Claude and Codex
-- Stows all packages and links stow-managed skills post-stow
-- Handles root, sudo, and non-interactive modes for containers and CI
+- **Shell layer** (universal): prerequisites, core CLI tools, starship/carapace/uv, stow shell packages (`git`, `zsh`, `starship`), git config, set default shell
+- **Agent layer** (local + interactive microVM): 1Password CLI, Claude Code CLI, Codex CLI, MCP server config, skills install, stow `agents` package
+- **Apps layer** (local machine only): Homebrew casks, npm globals, VS Code extensions, Sprite CLI, Apple Containers CLI, LaunchAgents, stow platform-specific packages
+
+**Auto-detection:** without `--only`, the script detects context (local, Sprite microVM, container) and picks appropriate layers. Override with `--only shell,agents` etc.
+
+**Flags:** `--only <layers>`, `--background-apps`, `--dry-run`, `--no-prompt`, `--include-heavy`, `--skip-stow`, `--interactive`
+
+Key properties:
 - Idempotent — safe to re-run
+- Handles root, sudo, and non-interactive modes for containers and CI
+- `--background-apps` forks the apps layer into the background after shell + agents complete

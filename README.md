@@ -33,11 +33,18 @@ Or clone and run manually:
 ```bash
 git clone https://github.com/kylelundstedt/dotfiles ~/dotfiles
 cd ~/dotfiles
-./install.sh                  # CLI tools + dotfiles only
-./install.sh --include-heavy  # + macOS casks/MAS apps or Linux extras
+./install.sh                          # All layers (auto-detected)
+./install.sh --only shell,agents      # Shell + agents only (microVM)
+./install.sh --only shell --no-prompt # Shell only (non-interactive microVM)
+./install.sh --include-heavy          # + macOS casks/MAS apps or Linux extras
+./install.sh --background-apps        # Fork apps layer to background
 ```
 
-**Flags:** `--dry-run`, `--no-prompt`, `--include-heavy`, `--skip-stow`, `--interactive`
+**Flags:** `--only <layers>`, `--background-apps`, `--dry-run`, `--no-prompt`, `--include-heavy`, `--skip-stow`, `--interactive`
+
+**Layers:** `shell` (CLI tools, shell config), `agents` (Claude/Codex, MCP servers, skills), `apps` (brew casks, VS Code, Sprite CLI, Apple Containers CLI)
+
+Auto-detection picks layers based on context: local machine gets all three, Sprite microVMs get shell + agents (or shell-only if non-interactive), containers get shell only. Override with `--only`.
 
 That's it — your shell, git, agent tooling, and dev tools are all configured. Start using them:
 

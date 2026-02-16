@@ -29,3 +29,4 @@ git/.gitconfig_local
 git/.gitconfig_personal
 git/.gitconfig_work
 .claude/settings.local.json
+.install-apps.log
