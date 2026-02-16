@@ -28,10 +28,12 @@ GNU Stow–managed dotfiles and AI agent platform for macOS and Linux. Each top-
 | `aws/` | AWS CLI configuration (Linux) |
 | `git/` | Git configuration with OS-specific includes |
 | `homebrew/` | Brewfiles for macOS + Linux |
+| `launchd/` | LaunchAgents for macOS — daily repo sync (stowed) |
 | `python/` | Python project dependencies via uv (not stowed) |
 | `ssh/` | SSH client configuration (macOS) |
 | `starship/` | Starship prompt configuration |
 | `vscode/` | VS Code settings and extensions (macOS) |
+| `sync-repos.sh` | Clones/fetches all GitHub repos for personal and work accounts |
 | `zsh/` | Zsh configuration, aliases, completions |
 
 ## install.sh
