@@ -86,6 +86,8 @@ detect_context() {
         echo "microvm-sprite"
     elif [[ -f "/.dockerenv" ]] || grep -q container /proc/1/cgroup 2>/dev/null; then
         echo "container"
+    elif grep -q vminitd /proc/cmdline 2>/dev/null; then
+        echo "container"
     else
         echo "local"
     fi
@@ -626,16 +628,16 @@ EOF
 
     # Check if local config already has values
     if [ -f "$GIT_CONFIG_LOCAL" ] && [ -s "$GIT_CONFIG_LOCAL" ]; then
-        CURRENT_NAME=$(grep -E "^name = " "$GIT_CONFIG_LOCAL" | cut -d'=' -f2 | xargs)
-        CURRENT_EMAIL=$(grep -E "^email = " "$GIT_CONFIG_LOCAL" | cut -d'=' -f2 | xargs)
+        CURRENT_NAME=$(grep -E "^name = " "$GIT_CONFIG_LOCAL" | cut -d'=' -f2 | xargs || true)
+        CURRENT_EMAIL=$(grep -E "^email = " "$GIT_CONFIG_LOCAL" | cut -d'=' -f2 | xargs || true)
         if [[ -n "$CURRENT_NAME" ]] && [[ -n "$CURRENT_EMAIL" ]]; then
             echo "Git configuration already set (name: $CURRENT_NAME, email: $CURRENT_EMAIL)"
         fi
     else
         # Check if .gitconfig_common has real values (not template) — migrate them
         if [ -f "$GIT_CONFIG_COMMON" ]; then
-            COMMON_NAME=$(grep -E "^name = " "$GIT_CONFIG_COMMON" | cut -d'=' -f2 | xargs)
-            COMMON_EMAIL=$(grep -E "^email = " "$GIT_CONFIG_COMMON" | cut -d'=' -f2 | xargs)
+            COMMON_NAME=$(grep -E "^name = " "$GIT_CONFIG_COMMON" | cut -d'=' -f2 | xargs || true)
+            COMMON_EMAIL=$(grep -E "^email = " "$GIT_CONFIG_COMMON" | cut -d'=' -f2 | xargs || true)
 
             if [[ "$COMMON_NAME" != "Your Name" ]] && [[ "$COMMON_EMAIL" != "your.email@example.com" ]] && [[ -n "$COMMON_NAME" ]] && [[ -n "$COMMON_EMAIL" ]]; then
                 echo "Migrating Git config from .gitconfig_common to .gitconfig_local (gitignored)..."
