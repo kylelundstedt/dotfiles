@@ -16,6 +16,12 @@
 - In reviews: prioritize correctness, regression risk, and missing tests.
 - Don't add features, abstractions, or cleanup beyond what was asked.
 
+## Data Work
+- Prefer SQL first, then Python, then bash. Use the simplest language that gets the job done.
+- SQL dialect: DuckDB. Use DuckDB-specific syntax (EXCLUDE, REPLACE, GROUP BY ALL, list/struct literals, etc.).
+- Python package/project management: uv. Never use pip directly.
+- Preferred Python libraries: polars (not pandas), dlt for ingestion, sqlmesh for transformations, duckdb for local analytics, marimo for notebooks, altair/seaborn for visualization.
+
 ## Git
 - Do not add "Co-Authored-By" lines to commit messages.
 - Push after committing unless explicitly told not to.
