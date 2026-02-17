@@ -154,7 +154,7 @@ atuin sync                                        # Shell history
 ## Further Reading
 
 - [Secret Management with 1Password](agent_docs/secrets.md) — `op run` pattern, MCP server wrappers
-- [Linux](agent_docs/linux.md) — platform notes, OrbStack, Fly.io Sprites, Docker testing, cloud-init
+- [Linux](agent_docs/linux.md) — platform notes, OrbStack, local sprites (Apple Container), Fly.io Sprites, Docker testing, cloud-init
 - [Adding Rules and Skills](agent_docs/agents-advanced.md) — when and how to extend agent configuration beyond `AGENTS.md`
 - [Agent Recommendations](agent_docs/agents-recommendations.md) — dual-agent operating patterns, routing defaults, maintenance checklists
 
