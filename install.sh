@@ -395,50 +395,15 @@ cleanup_sudo_keepalive() {
     fi
 }
 
-link_skill() {
-    local name="$1"
-    local target="../../.agents/skills/$name"
-    [ -L "$HOME/.claude/skills/$name" ] || ln -sf "$target" "$HOME/.claude/skills/$name"
-    [ -L "$HOME/.codex/skills/$name" ] || ln -sf "$target" "$HOME/.codex/skills/$name"
-}
-
 install_skills() {
+    if ! command -v npx >/dev/null 2>&1; then
+        echo "  [!] npx not found, skipping skill installation"
+        return 0
+    fi
     echo "Installing agent skills..."
-    mkdir -p "$HOME/.agents/skills" "$HOME/.claude/skills" "$HOME/.codex/skills"
-
-    # mviz - chart & report builder (matsonj/mviz)
-    if [ ! -d "$HOME/.agents/skills/mviz" ]; then
-        if GIT_TERMINAL_PROMPT=0 git clone --quiet --depth=1 https://github.com/matsonj/mviz.git "$HOME/.agents/skills/mviz" 2>/dev/null; then
-            echo "  [+] mviz skill installed"
-        else
-            echo "  [!] mviz skill installation failed"
-        fi
-    fi
-    link_skill mviz
-
-    # find-skills - skill discovery (vercel-labs/skills, subdirectory)
-    if [ ! -d "$HOME/.agents/skills/find-skills" ]; then
-        SKILLS_TMP=$(mktemp -d)
-        if GIT_TERMINAL_PROMPT=0 git clone --quiet --depth=1 https://github.com/vercel-labs/skills.git "$SKILLS_TMP" 2>/dev/null; then
-            mv "$SKILLS_TMP/skills/find-skills" "$HOME/.agents/skills/find-skills"
-            echo "  [+] find-skills skill installed"
-        else
-            echo "  [!] find-skills skill installation failed"
-        fi
-        rm -rf "$SKILLS_TMP"
-    fi
-    link_skill find-skills
-
-    # Repo-managed skills — copy from dotfiles (not stow) so files are real, not symlinks.
-    # Codex doesn't resolve multi-level symlinks when scanning for skills.
-    local repo_skills="$HOME/dotfiles/agents/.agents/skills"
-    for skill in bootstrap-project data-pipelines sprites; do
-        if [ -d "$repo_skills/$skill" ]; then
-            rm -rf "$HOME/.agents/skills/$skill"
-            cp -R "$repo_skills/$skill" "$HOME/.agents/skills/$skill"
-            link_skill "$skill"
-        fi
-    done
+    npx -y skills add -g -y matsonj/mviz
+    npx -y skills add -g -y vercel-labs/skills -s find-skills
+    npx -y skills add -g -y klundstedt/dotfiles -s bootstrap-project data-pipelines sprites
 }
 
 set_shell() {
@@ -678,7 +643,6 @@ install_shell_linux() {
         # Update apt cache first so filter_apt_packages can check availability
         DEBIAN_FRONTEND=noninteractive run_privileged apt-get -qq update >/dev/null 2>&1 || true
         # Aligned with Brewfile.linux (excluding tools not in apt repos)
-        # Note: nodejs/npm excluded - installed via NodeSource for smaller footprint
         CORE_APT_PACKAGES=(
             atuin
             awscli
@@ -695,6 +659,7 @@ install_shell_linux() {
             just
             micro
             nano
+            npm
             pandoc
             parallel
             rclone
@@ -1141,20 +1106,6 @@ run_combined_stow() {
     if [[ "$OS" == "macos" ]] && layer_enabled "apps"; then
         mkdir -p "$HOME/.config/op"
         chmod 700 "$HOME/.config/op"
-    fi
-
-    # Copy repo-managed skills now that agents package is deployed
-    # (Codex needs real files, not stow symlinks)
-    if [[ "$STOW_DRY_RUN" != true ]] && layer_enabled "agents"; then
-        local repo_skills="$HOME/dotfiles/agents/.agents/skills"
-        mkdir -p "$HOME/.agents/skills" "$HOME/.claude/skills" "$HOME/.codex/skills"
-        for skill in bootstrap-project data-pipelines sprites; do
-            if [ -d "$repo_skills/$skill" ]; then
-                rm -rf "$HOME/.agents/skills/$skill"
-                cp -R "$repo_skills/$skill" "$HOME/.agents/skills/$skill"
-                link_skill "$skill"
-            fi
-        done
     fi
 }
 
