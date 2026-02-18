@@ -12,7 +12,7 @@
     "terminal.integrated.enableImages": true,
     "terminal.integrated.enableMultiLinePasteWarning": false,
     "git.openRepositoryInParentFolders": "always",
-    "workbench.colorTheme": "Default Dark Modern",
+    "workbench.colorTheme": "GitHub Dark Colorblind (Beta)",
     "chat.disableAIFeatures": true,
     "editor.fontFamily": "Monaspace Neon",
     "editor.fontLigatures": true,
@@ -27,5 +27,11 @@
     "window.commandCenter": true,
     "quarto.render.previewFormat": "pdf",
     "workbench.sideBar.location": "left",
-    "panel.defaultLocation": "right"
+    "panel.defaultLocation": "right",
+    "indentRainbow.colors": [                                                                 
+        "rgba(50, 140, 255, 0.20)",                                                             
+        "rgba(255, 160, 40, 0.20)",                                                           
+        "rgba(50, 140, 255, 0.35)",                                                           
+        "rgba(255, 160, 40, 0.35)"
+    ]
 }
