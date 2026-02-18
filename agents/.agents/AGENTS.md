@@ -15,6 +15,7 @@
 - Prefer concrete findings with file and line references.
 - In reviews: prioritize correctness, regression risk, and missing tests.
 - Don't add features, abstractions, or cleanup beyond what was asked.
+- Formatters: Prettier for Markdown (`npx prettier --write "**/*.md"`), Ruff for Python (`uv run ruff format .`). Run before committing.
 
 ## Data Work
 - Prefer SQL first, then Python, then bash. Use the simplest language that gets the job done.
