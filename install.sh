@@ -403,7 +403,7 @@ install_skills() {
     echo "Installing agent skills..."
     npx -y skills add -g -y matsonj/mviz
     npx -y skills add -g -y vercel-labs/skills -s find-skills
-    npx -y skills add -g -y klundstedt/dotfiles -s bootstrap-project data-pipelines sprites
+    npx -y skills add -g -y kylelundstedt/dotfiles -s bootstrap-project data-pipelines sprites
 }
 
 set_shell() {
