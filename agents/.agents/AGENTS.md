@@ -23,9 +23,14 @@
 - Python package/project management: uv. Never use pip directly.
 - Preferred Python libraries: polars (not pandas), dlt for ingestion, sqlmesh for transformations, duckdb for local analytics, marimo for notebooks, altair/seaborn for visualization.
 
+## TODO
+- At the start of a session, check for `TODO.md` in the project root. If it exists, read it to understand outstanding work.
+- When completing a task from `TODO.md`, mark it done. When new work is identified, add it.
+- Keep entries short — one line per item, grouped by topic if needed.
+
 ## Git
 - Do not add "Co-Authored-By" lines to commit messages.
-- Push after committing unless explicitly told not to.
+- Commit often, but don't push automatically. Push when asked or when a logical chunk of work is complete.
 
 ## Skills
 - Global: `~/.agents/skills/<name>/SKILL.md`, symlinked into `~/.claude/skills/` and `~/.codex/skills/`.

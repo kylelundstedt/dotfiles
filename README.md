@@ -74,6 +74,7 @@ Configuration is managed with [GNU Stow](http://www.gnu.org/software/stow/), whi
 | `launchd/` | LaunchAgents — daily repo sync | `~/Library/LaunchAgents/` | macOS |
 | `ssh/` | SSH client configuration | `~/.ssh/` | Both |
 | `starship/` | Starship prompt configuration | `~/.config/` | Both |
+| `scripts/` | Utility scripts (e.g., `open-project.sh` for Zed + Ghostty tiling) | N/A (not stowed) | macOS |
 | `vscode/` | VS Code IDE settings & keybindings | `~/Library/Application Support/Code/` | macOS |
 | `sync-repos.sh` | Clones/fetches all GitHub repos for personal and work accounts | N/A (standalone script) | Both |
 | `zsh/` | Zsh shell configuration | `~/` | Both |

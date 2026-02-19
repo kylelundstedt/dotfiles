@@ -83,7 +83,7 @@ zstyle ':completion:*:git:*' group-order 'main commands' 'alias commands' 'exter
 
 ### 1Password ###
 # GitHub PATs for MCP servers are fetched from 1Password at runtime via wrapper scripts.
-# See: ~/dotfiles/agents/.agents/mcp/bin/github-mcp-{home,work}
+# See: ~/dotfiles/agents/.agents/mcp/bin/
 
 export PATH="/opt/homebrew/opt/libpq/bin:$PATH"
 
