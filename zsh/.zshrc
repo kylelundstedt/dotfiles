@@ -83,10 +83,10 @@ zstyle ':completion:*:git:*' group-order 'main commands' 'alias commands' 'exter
 
 ### 1Password ###
 # GitHub PATs for MCP servers are fetched from 1Password at runtime via wrapper scripts.
-# See: ~/dotfiles/claude/bin/github-mcp-{home,work}
+# See: ~/dotfiles/agents/.agents/mcp/bin/github-mcp-{home,work}
 
 export PATH="/opt/homebrew/opt/libpq/bin:$PATH"
 
-if command -v brew >/dev/null 2>&1 && brew --prefix node@22 >/dev/null 2>&1; then
-    export PATH="$(brew --prefix node@22)/bin:$PATH"
+if command -v brew >/dev/null 2>&1 && brew --prefix node >/dev/null 2>&1; then
+    export PATH="$(brew --prefix node)/bin:$PATH"
 fi

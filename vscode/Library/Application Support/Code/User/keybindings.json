@@ -13,9 +13,6 @@
               "command": "git.stageAll"
             },
             {
-              "command": "github.copilot.git.generateCommitMessage"
-            },
-            {
               "command": "git.commit"
             },
             {

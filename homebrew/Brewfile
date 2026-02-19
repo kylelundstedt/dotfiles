@@ -4,7 +4,7 @@ brew "awscli"
 brew "bat"
 brew "carapace"
 brew "curl"
-# brew "direnv"
+brew "direnv"
 # tap "dopplerhq/cli"
 # brew "dopplerhq/cli/doppler"
 brew "duckdb"
@@ -98,7 +98,7 @@ cask "snowflake-snowsql", args: { appdir: "/Applications" }
 cask "visual-studio-code", args: { appdir: "/Applications" }
 # cask "warp"
 # cask "windsurf"
-# cask "zed"
+cask "zed"
 cask "zoom"
 mas "1Password for Safari", id: 1569813296
 mas "GarageBand", id: 682658836

@@ -15,7 +15,7 @@ Stow deploys the core agent infrastructure:
 ~/.codex/AGENTS.md  → ../.agents/AGENTS.md   ← so Codex reads the canonical file
 ```
 
-Skills are **copied** (not stow-symlinked) by `install.sh` into `~/.agents/skills/`, then symlinked into both `~/.claude/skills/` and `~/.codex/skills/`. This is because Codex doesn't resolve multi-level symlinks when scanning for skills.
+Skills are deployed by `npx -y skills add -g -y` (the [skills CLI](https://github.com/vercel-labs/skills)), which installs them directly into `~/.claude/skills/` and `~/.codex/skills/`. The `.stow-local-ignore` file excludes skills from the stow package.
 
 ```
 ~/.agents/skills/bootstrap-project/          ← scaffolds per-project agent context
@@ -30,7 +30,7 @@ Skills are **copied** (not stow-symlinked) by `install.sh` into `~/.agents/skill
 
 **Global instructions** — edit `agents/.agents/AGENTS.md`. The stow symlinks ensure both agents pick up changes automatically.
 
-**Adding a skill** — create `agents/.agents/skills/<name>/SKILL.md` with YAML frontmatter (`name`, `description`), then add the skill name to the `for skill in ...` loop in `install.sh` (appears twice — in `install_skills` and in the post-stow section). The `.stow-local-ignore` file already excludes skills from stow.
+**Adding a skill** — create `agents/.agents/skills/<name>/SKILL.md` with YAML frontmatter (`name`, `description`), then add the corresponding `npx -y skills add` command to the `install_skills` function in `install.sh`. The `.stow-local-ignore` file already excludes skills from stow.
 
 **Adding an MCP server** — place the wrapper script and any companion `.env` file in `agents/.agents/mcp/bin/`, then add the server name + wrapper path to the `mcp_specs` array in `install.sh`.
 
@@ -40,7 +40,7 @@ Skills are **copied** (not stow-symlinked) by `install.sh` into `~/.agents/skill
 # Stow the agents package (deploys AGENTS.md, MCP wrappers, Claude settings)
 stow --no-folding -R -t "$HOME" agents
 
-# Copy skills and create symlinks (run after stow)
+# Install skills and configure MCP servers (run after stow)
 ./install.sh
 ```
 

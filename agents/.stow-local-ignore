@@ -1,3 +1,3 @@
-# Skills are copied (not symlinked) by install.sh because Codex
-# doesn't resolve multi-level symlinks when scanning for skills.
+# Skills are deployed by `npx -y skills add` (not stowed) to avoid
+# multi-level symlinks that Codex can't resolve.
 \.agents/skills

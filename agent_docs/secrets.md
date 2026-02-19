@@ -24,7 +24,7 @@ GITHUB_PERSONAL_ACCESS_TOKEN=op://Private/GitHub PAT Home/token
 The wrapper resolves them with a single `op run` call:
 
 ```bash
-exec op run --env-file="$SCRIPT_DIR/github-mcp-home.env" --no-masking \
+exec op run --env-file="$SCRIPT_DIR/github-mcp-home.env" \
     --account lundstedts.1password.com -- npx -y @modelcontextprotocol/server-github "$@"
 ```
 
