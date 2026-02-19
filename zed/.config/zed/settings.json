@@ -1,0 +1,43 @@
+// Zed settings
+//
+// For information on how to configure Zed, see the Zed
+// documentation: https://zed.dev/docs/configuring-zed
+//
+// To see all of Zed's default settings without changing your
+// custom settings, run `zed: open default settings` from the
+// command palette (cmd-shift-p / ctrl-shift-p)
+{
+  "agent": {
+    "default_model": {
+      "provider": "zed.dev",
+      "model": "claude-3-5-sonnet-latest"
+    },
+  },
+  "ui_font_size": 16,
+  "buffer_font_size": 14,
+  "theme": {
+    "mode": "dark",
+    "light": "GitHub Dark Colorblind",
+    "dark": "GitHub Dark Colorblind"
+  },
+  "gutter": {
+    "code_actions": false,
+    "runnables": false,
+    "breakpoints": false,
+    "min_line_number_digits": 1
+  },
+  "git": {
+    "git_gutter": "hide",
+    "inline_blame": {
+      "enabled": false
+    }
+  },
+  "languages": {
+    "Markdown": {
+      "gutter": { "folds": false }
+    }
+  },
+  "project_panel": {
+    "git_status": true
+  }
+}

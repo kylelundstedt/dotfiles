@@ -132,7 +132,7 @@ layer_enabled() {
 SHELL_STOW_PACKAGES=("git" "zsh" "starship")
 AGENT_STOW_PACKAGES=("agents")
 if [[ "$OS" == "macos" ]]; then
-    APPS_STOW_PACKAGES=("1Password" "launchd" "vscode" "homebrew" "ssh")
+    APPS_STOW_PACKAGES=("1Password" "ghostty" "launchd" "vscode" "zed" "homebrew" "ssh")
 else
     APPS_STOW_PACKAGES=("aws")
 fi

@@ -26,6 +26,7 @@ GNU Stow–managed dotfiles and AI agent platform for macOS and Linux. Each top-
 | `agents/` | Agent infrastructure — `AGENTS.md`, Claude/Codex symlinks, skills, MCP server wrappers (`op run`), Claude Code settings |
 | `agent_docs/` | Reference docs for this repo — agent setup plans, platform notes, secret management (not stowed) |
 | `aws/` | AWS CLI configuration (Linux) |
+| `ghostty/` | Ghostty terminal configuration (macOS) |
 | `git/` | Git configuration with OS-specific includes |
 | `homebrew/` | Brewfiles for macOS + Linux |
 | `launchd/` | LaunchAgents for macOS — daily repo sync (stowed) |
@@ -33,6 +34,7 @@ GNU Stow–managed dotfiles and AI agent platform for macOS and Linux. Each top-
 | `starship/` | Starship prompt configuration |
 | `vscode/` | VS Code settings and extensions (macOS) |
 | `sync-repos.sh` | Clones/fetches all GitHub repos for personal and work accounts |
+| `zed/` | Zed editor configuration (macOS) |
 | `zsh/` | Zsh configuration, aliases, completions |
 
 ## install.sh

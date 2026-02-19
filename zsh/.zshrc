@@ -2,14 +2,14 @@
 # Executes commands at the start of an interactive session.
 #
 
-if command -v code >/dev/null 2>&1; then
-    EDITOR="code --wait"
+if command -v zed >/dev/null 2>&1; then
+    export EDITOR="zed --wait"
+elif command -v code >/dev/null 2>&1; then
+    export EDITOR="code --wait"
 elif command -v micro >/dev/null 2>&1; then
-    EDITOR="micro"
-elif command -v nano >/dev/null 2>&1; then
-    EDITOR="nano"
+    export EDITOR="micro"
 else
-    EDITOR="vi"
+    export EDITOR="nano"
 fi
 
 if type brew &>/dev/null; then
