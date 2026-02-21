@@ -4,7 +4,18 @@
 
 backend_available() { command -v sprite &>/dev/null; }
 
-SPRITE_LOCAL_PORT=2222
+# Pick a random high port to avoid collisions between concurrent sprite proxies
+_find_free_port() {
+    local port
+    while true; do
+        port=$((RANDOM % 16384 + 49152))
+        if ! lsof -ti :"$port" &>/dev/null; then
+            echo "$port"
+            return
+        fi
+    done
+}
+SPRITE_LOCAL_PORT=""
 
 _sprite_exec() {
     local args=(sprite exec -s "$MACHINE")
@@ -87,11 +98,9 @@ SSHEOF
         fi
     ' >&2
 
-    # Start local proxy
+    # Start local proxy on a free port
+    SPRITE_LOCAL_PORT=$(_find_free_port)
     echo "  Starting proxy (localhost:$SPRITE_LOCAL_PORT -> $MACHINE:22)..." >&2
-    ssh-keygen -R "[localhost]:$SPRITE_LOCAL_PORT" 2>/dev/null || true
-    lsof -ti :"$SPRITE_LOCAL_PORT" 2>/dev/null | xargs kill 2>/dev/null || true
-    sleep 1
 
     local proxy_args=(-s "$MACHINE")
     [[ -n "${ORG:-}" ]] && proxy_args+=(-o "$ORG")
