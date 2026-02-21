@@ -7,10 +7,11 @@
 // custom settings, run `zed: open default settings` from the
 // command palette (cmd-shift-p / ctrl-shift-p)
 {
+  "release_channel": "preview",
   "agent": {
     "default_model": {
       "provider": "zed.dev",
-      "model": "claude-3-5-sonnet-latest"
+      "model": "claude-3-5-sonnet-latest",
     },
   },
   "ui_font_size": 16,
@@ -18,29 +19,29 @@
   "theme": {
     "mode": "dark",
     "light": "GitHub Dark Colorblind",
-    "dark": "GitHub Dark Colorblind"
+    "dark": "GitHub Dark Colorblind",
   },
   "gutter": {
     "code_actions": false,
     "runnables": false,
     "breakpoints": false,
-    "min_line_number_digits": 1
+    "min_line_number_digits": 1,
   },
   "git": {
     "git_gutter": "hide",
     "inline_blame": {
-      "enabled": false
-    }
+      "enabled": false,
+    },
   },
   "languages": {
     "Markdown": {
-      "gutter": { "folds": false }
-    }
+      "gutter": { "folds": false },
+    },
   },
   "project_panel": {
-    "git_status": true
+    "git_status": true,
   },
   "terminal": {
-    "dock": "right"
-  }
+    "dock": "right",
+  },
 }
