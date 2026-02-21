@@ -196,6 +196,10 @@ if [[ -z "$PROJECT" ]]; then
         printf "GitHub repo (owner/name): " >&2
         read -r repo
         [[ -z "$repo" ]] && die "Repo required"
+        # Ensure GitHub host keys are trusted on remote targets
+        if [[ -n "$SSH_TARGET" ]]; then
+            remote_exec 'mkdir -p ~/.ssh && ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null' >/dev/null
+        fi
         PROJECT=$(backend_clone_project "$repo")
     fi
 fi
