@@ -6,18 +6,16 @@
 backend_available() { command -v container &>/dev/null; }
 
 backend_list() {
-    container list 2>/dev/null | tail -n +2 | awk '{print $1}'
+    container list --all 2>/dev/null | tail -n +2 | awk '{print $1}'
 }
 
 backend_create() {
-    local image name
-    printf "Image (e.g. ubuntu:latest): " >&2
-    read -r image
-    [[ -z "$image" ]] && image="ubuntu:latest"
-    printf "Container name: " >&2
+    local name
+    printf "Name: " >&2
     read -r name
-    [[ -z "$name" ]] && die "Name required"
-    container create --name "$name" "$image" >&2
+    if [[ -z "$name" ]]; then die "Name required"; fi
+    container run --name "$name" ubuntu:25.04 sleep infinity >&2 &
+    sleep 3
     MACHINE="$name"
     echo "Created $MACHINE (container)" >&2
 }
@@ -25,12 +23,13 @@ backend_create() {
 backend_start() {
     if [[ -z "$MACHINE" ]]; then die "No container specified"; fi
     local state
-    state=$(container list 2>/dev/null | awk -v m="$MACHINE" '$1==m{print $2}') || true
-    if [[ "$state" != "running" ]]; then
-        echo "Starting container: $MACHINE..." >&2
-        container start "$MACHINE" >/dev/null
-        sleep 3
+    state=$(container list --all 2>/dev/null | awk -v m="$MACHINE" '$1==m{print $5}') || true
+    if [[ "$state" == "running" ]]; then
+        return
     fi
+    echo "Starting container: $MACHINE..." >&2
+    container start "$MACHINE" >/dev/null
+    sleep 3
 }
 
 backend_ensure_ssh() {

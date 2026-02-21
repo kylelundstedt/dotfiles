@@ -19,9 +19,9 @@ backend_list() {
 
 backend_create() {
     local name
-    printf "Sprite name: " >&2
+    printf "Name: " >&2
     read -r name
-    [[ -z "$name" ]] && die "Name required"
+    if [[ -z "$name" ]]; then die "Name required"; fi
     local args=(sprite create --skip-console "$name")
     [[ -n "${ORG:-}" ]] && args+=(-o "$ORG")
     "${args[@]}" >&2

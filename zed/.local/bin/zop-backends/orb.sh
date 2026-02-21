@@ -10,12 +10,11 @@ backend_list() {
 }
 
 backend_create() {
-    local distro name
-    distro=$(pick "Distro" ubuntu debian fedora arch alpine)
+    local name
     printf "VM name: " >&2
     read -r name
-    [[ -z "$name" ]] && name="$distro"
-    orb create "$distro" "$name" >&2
+    if [[ -z "$name" ]]; then die "Name required"; fi
+    orb create ubuntu:25.04 "$name" >&2
     MACHINE="$name"
     echo "Created $MACHINE (orb)" >&2
 }
