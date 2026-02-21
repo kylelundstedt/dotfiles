@@ -29,7 +29,6 @@ mkdir -p "$HOME/.local/bin"
 export PATH=$PATH:$HOME/go/bin
 export PATH="$PATH:$HOME/.local/bin"
 export PATH="$PATH:$HOME/.atuin/bin"
-export PATH="$PATH:$HOME/dotfiles/scripts"
 command -v starship >/dev/null && eval "$(starship init zsh)"
 command -v atuin >/dev/null && eval "$(atuin init zsh)"
 command -v uv >/dev/null && eval "$(uv generate-shell-completion zsh)"

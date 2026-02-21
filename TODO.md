@@ -23,6 +23,16 @@
 - [x] `data-pipelines` and `sprites` skills — added to `agents/.agents/skills/` upstream
 - [x] `.githooks/pre-commit` — deleted upstream
 
+## zop (unified Zed launcher)
+- [x] Create `zop` dispatcher + backend interface in `zed/.local/bin/`
+- [x] Implement local, orb, container, sprite backends
+- [x] Delete `scripts/` directory, remove PATH entry from `.zshrc`
+- [x] Test orb backend with real OrbStack VM
+- [x] Test container backend with Apple Container (macOS 26)
+- [x] Test sprite backend with real Sprite
+- [ ] Investigate Zed "Error: opening project path" toast on orb backend (connection works, may be Zed race condition)
+- [ ] Add Spotlight/Shortcuts integration (osascript fallback when no tty)
+
 ## Minor
 - [x] `homebrew/Brewfile:105` — corrupted text `id: 1481302432ple` (fixed in Brewfile rewrite)
 - [ ] `agent_docs/secrets.md` — remove `--no-masking` flag not in actual wrappers
