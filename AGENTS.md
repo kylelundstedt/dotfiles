@@ -5,7 +5,8 @@ GNU Stow–managed dotfiles and AI agent platform for macOS and Linux. Each top-
 ## Key Commands
 
 - Install everything: `./install.sh` (or `./install.sh --no-prompt` for non-interactive)
-- Test on Linux: `./test-linux.sh` (OrbStack VM) or the Docker one-liner in that script
+- Install with macOS apps (casks, Mac App Store): `./install.sh --apps`
+- Test on Linux: `./test-linux.sh` (OrbStack VM)
 - Stow a single package: `stow --no-folding -R -t "$HOME" <package>`
 - Dry-run stow: `stow --no-folding -R -n -t "$HOME" <package>`
 
@@ -28,7 +29,7 @@ GNU Stow–managed dotfiles and AI agent platform for macOS and Linux. Each top-
 | `aws/` | AWS CLI configuration (Linux) |
 | `ghostty/` | Ghostty terminal configuration (macOS) |
 | `git/` | Git configuration with OS-specific includes |
-| `homebrew/` | Brewfiles for macOS + Linux |
+| `homebrew/` | Brewfile for macOS casks and Mac App Store apps (CLI tools installed directly in install.sh) |
 | `launchd/` | LaunchAgents for macOS — daily repo sync (stowed) |
 | `scripts/` | Utility scripts — `open-project.sh` for Zed + Ghostty tiling (not stowed, macOS) |
 | `ssh/` | SSH client configuration (macOS) |
@@ -40,17 +41,20 @@ GNU Stow–managed dotfiles and AI agent platform for macOS and Linux. Each top-
 
 ## install.sh
 
-The install script self-bootstraps from a bare machine. Structured into three composable layers controlled by `--only`:
+The install script sets up a machine from scratch. It runs sequentially through:
 
-- **Shell layer** (universal): prerequisites, core CLI tools, starship/carapace/uv, stow shell packages (`git`, `zsh`, `starship`), git config, set default shell
-- **Agent layer** (local + interactive microVM): 1Password CLI, Claude Code CLI, Codex CLI, MCP server config, skills install, stow `agents` package
-- **Apps layer** (local machine only): Homebrew casks, npm globals, VS Code extensions, Sprite CLI, Apple Containers CLI, LaunchAgents, stow platform-specific packages
+1. **System deps** — stow, zsh, git, curl (apt on Linux, Homebrew on macOS)
+2. **CLI tools** — installed in parallel via curl scripts and GitHub release binaries to `~/.local/bin` (starship, uv, atuin, zoxide, direnv, just, fnm, bat, fzf, rg, jq, yq, gh, duckdb, carapace)
+3. **Node** — via fnm (LTS)
+4. **Git config** — OS include file, SSH multiplexing for GitHub, interactive prompt for user name/email
+5. **Shell** — set default shell to zsh
+6. **Stow** — all packages (with interactive confirmation unless `--no-prompt`)
+7. **Agents** — Claude Code CLI, Codex CLI, 1Password CLI (Linux), MCP server registration, Codex startup timeout patch, agent skills
+8. **Apps** (only with `--apps`) — `brew bundle` for casks/MAS apps, Sprite CLI, LaunchAgents
 
-**Auto-detection:** without `--only`, the script detects context (local, Sprite microVM, container) and picks appropriate layers. Override with `--only shell,agents` etc.
-
-**Flags:** `--only <layers>`, `--background-apps`, `--dry-run`, `--no-prompt`, `--include-heavy`, `--skip-stow`, `--interactive`
+**Flags:** `--apps`, `--dry-run`, `--no-prompt`, `--skip-stow`
 
 Key properties:
-- Idempotent — safe to re-run
-- Handles root, sudo, and non-interactive modes for containers and CI
-- `--background-apps` forks the apps layer into the background after shell + agents complete
+- Idempotent — safe to re-run (each tool checks `need <cmd>` before installing)
+- Works on macOS and Linux (apt-based)
+- Non-interactive mode auto-enabled when not attached to a TTY

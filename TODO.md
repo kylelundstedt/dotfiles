@@ -9,8 +9,8 @@
 - [x] Fix git push rule contradiction — stow version says "push after committing", should match "push when asked"
 
 ## Dead or inconsistent config
-- [ ] `zsh/.zshrc:90-92` — node@22 PATH block doesn't match Brewfile's `node` (latest). Align or remove.
-- [ ] `homebrew/Brewfile:7` — direnv commented out on macOS but hooked in `.zshrc` and listed in README
+- [x] `zsh/.zshrc:90-92` — node PATH block replaced by fnm eval
+- [x] `homebrew/Brewfile:7` — direnv now curl-installed on all platforms
 - [ ] `vscode/` settings reference Warp.app and hardcoded Snowflake path. Update for Ghostty or remove.
 
 ## Unmanaged state
@@ -18,6 +18,6 @@
 - [x] `.githooks/pre-commit` — deleted upstream
 
 ## Minor
-- [ ] `homebrew/Brewfile:105` — corrupted text `id: 1481302432ple`
+- [x] `homebrew/Brewfile:105` — corrupted text `id: 1481302432ple` (fixed in Brewfile rewrite)
 - [ ] `agent_docs/secrets.md` — remove `--no-masking` flag not in actual wrappers
 - [ ] `git/.gitconfig_common:27` — remove empty `[credential]` section

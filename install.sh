@@ -1,322 +1,410 @@
 #!/bin/bash
 set -euo pipefail
-IFS=$'\n\t'
 
-# Ensure USER is set (not always present in minimal containers)
-USER="${USER:-$(whoami)}"
-
-# Save original arguments for bootstrap exec
-ORIGINAL_ARGS=("$@")
-
-SUDO_PID=""
-STOW_DRY_RUN=false
-STOW_NO_PROMPT=false
-INCLUDE_HEAVY=false
+# --- Args ---
+INSTALL_APPS=false
+DRY_RUN=false
+NO_PROMPT=false
 SKIP_STOW=false
-FORCE_INTERACTIVE=false
-INSTALL_LAYERS=""
-BACKGROUND_APPS=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --dry-run)
-            STOW_DRY_RUN=true
-            shift
-            ;;
-        --no-prompt)
-            STOW_NO_PROMPT=true
-            shift
-            ;;
-        --include-heavy)
-            INCLUDE_HEAVY=true
-            shift
-            ;;
-        --skip-stow)
-            SKIP_STOW=true
-            shift
-            ;;
-        --interactive)
-            FORCE_INTERACTIVE=true
-            shift
-            ;;
-        --only)
-            INSTALL_LAYERS="$2"
-            shift 2
-            ;;
-        --background-apps)
-            BACKGROUND_APPS=true
-            shift
-            ;;
+        --apps)       INSTALL_APPS=true; shift ;;
+        --dry-run)    DRY_RUN=true; shift ;;
+        --no-prompt)  NO_PROMPT=true; shift ;;
+        --skip-stow)  SKIP_STOW=true; shift ;;
         *)
-            echo "Unknown option: $1"
-            echo "Usage: $0 [--dry-run] [--no-prompt] [--include-heavy] [--skip-stow] [--interactive] [--only <layers>] [--background-apps]"
+            echo "Usage: $0 [--apps] [--dry-run] [--no-prompt] [--skip-stow]"
             exit 1
             ;;
     esac
 done
 
-# Detect the operating system
+# --- OS detection ---
 if [[ "$OSTYPE" == "darwin"* ]]; then
     OS="macos"
 elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
     OS="linux"
 else
-    echo "Unsupported operating system"
-    exit 1
+    echo "Unsupported OS"; exit 1
 fi
 
 IS_INTERACTIVE=false
-if [[ -t 0 && -t 1 ]]; then
-    IS_INTERACTIVE=true
-fi
-if [[ "$FORCE_INTERACTIVE" == true ]]; then
-    IS_INTERACTIVE=true
-fi
+[[ -t 0 && -t 1 ]] && IS_INTERACTIVE=true
+[[ "$IS_INTERACTIVE" == false ]] && NO_PROMPT=true
 
-if [[ "$IS_INTERACTIVE" == false ]]; then
-    STOW_NO_PROMPT=true
-fi
+DOTFILES_DIR="$HOME/dotfiles"
+LOCAL_BIN="$HOME/.local/bin"
+mkdir -p "$LOCAL_BIN"
+export PATH="$LOCAL_BIN:$PATH"
 
-# =============================================================================
-# Context detection
-# =============================================================================
+# --- Helpers ---
+need() { ! command -v "$1" >/dev/null 2>&1; }
 
-detect_context() {
-    if [[ -d "/.sprite" ]]; then
-        echo "microvm-sprite"
-    elif [[ -f "/.dockerenv" ]] || grep -q container /proc/1/cgroup 2>/dev/null; then
-        echo "container"
-    elif grep -q vminitd /proc/cmdline 2>/dev/null; then
-        echo "container"
-    else
-        echo "local"
-    fi
-}
-
-default_layers() {
-    local context
-    context=$(detect_context)
-    case "$context" in
-        microvm-sprite)
-            if [[ "$IS_INTERACTIVE" == true ]]; then
-                echo "shell,agents"
-            else
-                echo "shell"
-            fi
-            ;;
-        container)
-            echo "shell"
-            ;;
-        local)
-            echo "shell,agents,apps"
-            ;;
-    esac
-}
-
-DETECTED_CONTEXT=$(detect_context)
-if [[ -z "$INSTALL_LAYERS" ]]; then
-    INSTALL_LAYERS=$(default_layers)
-    LAYERS_AUTO=true
-else
-    LAYERS_AUTO=false
-fi
-
-layer_enabled() {
-    [[ ",$INSTALL_LAYERS," == *",$1,"* ]]
-}
-
-# =============================================================================
-# Per-layer stow package lists
-# =============================================================================
-
-SHELL_STOW_PACKAGES=("git" "zsh" "starship")
-AGENT_STOW_PACKAGES=("agents")
-if [[ "$OS" == "macos" ]]; then
-    APPS_STOW_PACKAGES=("1Password" "ghostty" "launchd" "vscode" "zed" "homebrew" "ssh")
-else
-    APPS_STOW_PACKAGES=("aws")
-fi
-
-# =============================================================================
-# Utility functions
-# =============================================================================
-
-append_line_if_missing() {
-    file="$1"
-    line="$2"
-    if [ -f "$file" ]; then
-        if ! grep -Fq "$line" "$file"; then
-            echo "$line" >> "$file"
+# Fetch latest GitHub release asset, extract, and place binary in ~/.local/bin.
+# Usage: install_github_binary <owner/repo> <asset_pattern> <binary_name> [<path_inside_archive>]
+#   asset_pattern: grep -E pattern to match the asset filename (use ARCH/OS placeholders before calling)
+#   binary_name: final name in ~/.local/bin
+#   path_inside_archive: optional path to the binary inside a tar/zip (default: same as binary_name)
+install_github_binary() {
+    local repo="$1" pattern="$2" bin_name="$3"
+    local inner_path="${4:-$bin_name}"
+    local tmp asset_url asset_name api_response
+    # Resolve latest release asset URL (retry once on 403 rate-limit)
+    local gh_api_url="https://api.github.com/repos/${repo}/releases/latest"
+    local attempt
+    for attempt in 1 2; do
+        if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+            api_response=$(curl -fsSL -H "Authorization: token $GITHUB_TOKEN" "$gh_api_url" 2>&1) && break
+        else
+            api_response=$(curl -fsSL "$gh_api_url" 2>&1) && break
         fi
+        [[ $attempt -eq 1 ]] && sleep $((RANDOM % 5 + 2))
+    done
+    asset_url=$(echo "$api_response" \
+        | grep -oE "\"browser_download_url\": \"[^\"]+\"" \
+        | grep -E "$pattern" \
+        | head -1 \
+        | sed 's/"browser_download_url": "//;s/"//')
+    if [[ -z "$asset_url" ]]; then
+        echo "  [!] $bin_name: no matching release asset"; return 1
+    fi
+    asset_name="${asset_url##*/}"
+    tmp=$(mktemp -d)
+
+    if curl -fsSL "$asset_url" -o "$tmp/$asset_name"; then
+        case "$asset_name" in
+            *.tar.gz|*.tgz) tar -xzf "$tmp/$asset_name" -C "$tmp" ;;
+            *.zip)          unzip -qo "$tmp/$asset_name" -d "$tmp" ;;
+            *)              chmod +x "$tmp/$asset_name"; if [[ "$asset_name" != "$inner_path" ]]; then mv "$tmp/$asset_name" "$tmp/$inner_path"; fi ;;
+        esac
+        # Find the binary — check inner_path first, then search
+        if [[ -f "$tmp/$inner_path" ]]; then
+            mv "$tmp/$inner_path" "$LOCAL_BIN/$bin_name"
+        else
+            local found
+            found=$(find "$tmp" -name "$bin_name" -type f | head -1)
+            if [[ -n "$found" ]]; then
+                mv "$found" "$LOCAL_BIN/$bin_name"
+            else
+                echo "  [!] $bin_name: binary not found in archive"; rm -rf "$tmp"; return 1
+            fi
+        fi
+        chmod +x "$LOCAL_BIN/$bin_name"
+        echo "  [+] $bin_name"
     else
-        echo "$line" > "$file"
+        echo "  [!] $bin_name: download failed"
+    fi
+    rm -rf "$tmp"
+}
+
+# --- install_system_deps ---
+install_system_deps() {
+    echo "=== System dependencies ==="
+    if [[ "$OS" == "linux" ]]; then
+        echo "Installing system packages via apt..."
+        sudo apt-get update -qq 2>/dev/null || true
+        sudo apt-get install -y -qq stow zsh git curl unzip
+    elif [[ "$OS" == "macos" ]]; then
+        if need brew; then
+            echo "Homebrew is required on macOS. Install from https://brew.sh and re-run."
+            exit 1
+        fi
+        brew list stow &>/dev/null || brew install stow
     fi
 }
 
-backup_if_regular_file() {
-    local path backup_path
-    path="$1"
-    if [[ -f "$path" && ! -L "$path" ]]; then
-        backup_path="${path}.pre-dotfiles.$(date +%Y%m%d%H%M%S)"
-        mv "$path" "$backup_path"
-        echo "Backed up $path to $backup_path"
-    fi
-}
+# --- install_cli_tools ---
+install_cli_tools() {
+    echo ""
+    echo "=== CLI tools ==="
+    local arch
+    arch=$(uname -m)
 
-configure_git_os_include() {
-    local include_path target_file
-    target_file="$HOME/.gitconfig_os_local"
-    case "$OS" in
-        macos)
-            include_path="~/.gitconfig_macos"
-            ;;
-        linux)
-            include_path="~/.gitconfig_linux"
-            ;;
-        *)
-            return 0
-            ;;
+    # Platform strings for GitHub release asset matching
+    # target_triple: used by bat, ripgrep (Rust-style: aarch64-apple-darwin, x86_64-unknown-linux)
+    # gh_os/gh_arch: used by gh, fzf, jq, yq, duckdb, carapace (go-style: darwin/amd64, linux/arm64)
+    local target_triple gh_os gh_arch duckdb_os gh_cli_os
+    case "$OS-$arch" in
+        macos-arm64)   target_triple="aarch64-apple-darwin"; gh_os="darwin"; gh_arch="arm64"; duckdb_os="osx"; gh_cli_os="macOS" ;;
+        macos-x86_64)  target_triple="x86_64-apple-darwin";  gh_os="darwin"; gh_arch="amd64"; duckdb_os="osx"; gh_cli_os="macOS" ;;
+        linux-x86_64)  target_triple="x86_64-unknown-linux";  gh_os="linux";  gh_arch="amd64"; duckdb_os="linux"; gh_cli_os="linux" ;;
+        linux-aarch64) target_triple="aarch64-unknown-linux"; gh_os="linux";  gh_arch="arm64"; duckdb_os="linux"; gh_cli_os="linux" ;;
+        *) echo "  [!] Unsupported platform: $OS-$arch"; return 1 ;;
     esac
 
-    cat > "$target_file" <<EOF
+    # All installs run in parallel — each writes to a unique binary/path
+    local pids=()
+
+    # Curl install scripts
+    if need starship; then
+        (curl -fsSL https://starship.rs/install.sh | sh -s -- --yes --bin-dir="$LOCAL_BIN" >/dev/null 2>&1 && echo "  [+] starship" || echo "  [!] starship failed") &
+        pids+=($!)
+    fi
+    if need uv; then
+        (curl -fsSL https://astral.sh/uv/install.sh | env CARGO_HOME="$HOME/.local" sh >/dev/null 2>&1 && echo "  [+] uv" || echo "  [!] uv failed") &
+        pids+=($!)
+    fi
+    if need atuin; then
+        (curl -fsSL https://setup.atuin.sh | sh -s -- --yes --no-modify-path >/dev/null 2>&1 && echo "  [+] atuin" || echo "  [!] atuin failed") &
+        pids+=($!)
+    fi
+    if need zoxide; then
+        (curl -fsSL https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | sh >/dev/null 2>&1 && echo "  [+] zoxide" || echo "  [!] zoxide failed") &
+        pids+=($!)
+    fi
+    if need direnv; then
+        (curl -fsSL https://direnv.net/install.sh | bash >/dev/null 2>&1 && echo "  [+] direnv" || echo "  [!] direnv failed") &
+        pids+=($!)
+    fi
+    if need just; then
+        (curl -fsSL https://just.systems/install.sh | bash -s -- --to "$LOCAL_BIN" >/dev/null 2>&1 && echo "  [+] just" || echo "  [!] just failed") &
+        pids+=($!)
+    fi
+    if need fnm; then
+        (curl -fsSL https://fnm.vercel.app/install | bash -s -- --skip-shell --install-dir "$LOCAL_BIN" >/dev/null 2>&1 && echo "  [+] fnm" || echo "  [!] fnm failed") &
+        pids+=($!)
+    fi
+
+    # GitHub release binaries
+    # bat/ripgrep use Rust target triples; gh/duckdb/others use Go-style os_arch
+    if need bat; then
+        (install_github_binary "sharkdp/bat" "bat-v.*-${target_triple}.*\\.tar\\.gz" "bat" "") &
+        pids+=($!)
+    fi
+    if need fzf; then
+        (install_github_binary "junegunn/fzf" "fzf-.*-${gh_os}_${gh_arch}\\.tar\\.gz" "fzf" "fzf") &
+        pids+=($!)
+    fi
+    if need rg; then
+        (install_github_binary "BurntSushi/ripgrep" "ripgrep-.*-${target_triple}.*\\.tar\\.gz" "rg" "") &
+        pids+=($!)
+    fi
+    if need jq; then
+        (install_github_binary "jqlang/jq" "jq-${gh_os}-${gh_arch}\"$" "jq" "jq-${gh_os}-${gh_arch}") &
+        pids+=($!)
+    fi
+    if need yq; then
+        (install_github_binary "mikefarah/yq" "yq_${gh_os}_${gh_arch}\"$" "yq" "yq_${gh_os}_${gh_arch}") &
+        pids+=($!)
+    fi
+    if need gh; then
+        (install_github_binary "cli/cli" "gh_.*_${gh_cli_os}_${gh_arch}\\.(tar\\.gz|zip)" "gh" "") &
+        pids+=($!)
+    fi
+    if need duckdb; then
+        (install_github_binary "duckdb/duckdb" "duckdb_cli-${duckdb_os}-${gh_arch}\\.zip" "duckdb" "duckdb") &
+        pids+=($!)
+    fi
+    if need carapace; then
+        (install_github_binary "carapace-sh/carapace-bin" "carapace-bin_.*_${gh_os}_${gh_arch}\\.tar\\.gz" "carapace" "carapace") &
+        pids+=($!)
+    fi
+
+    # Wait for all parallel installs
+    for pid in "${pids[@]}"; do
+        wait "$pid" 2>/dev/null || true
+    done
+}
+
+# --- setup_node ---
+setup_node() {
+    echo ""
+    echo "=== Node (via fnm) ==="
+    if need fnm; then
+        echo "  [!] fnm not available, skipping node setup"
+        return 0
+    fi
+    eval "$(fnm env)"
+    if need node; then
+        fnm install --lts >/dev/null 2>&1 && echo "  [+] node $(node --version)" || echo "  [!] node install failed"
+    else
+        echo "  node $(node --version) already installed"
+    fi
+}
+
+# --- setup_git ---
+setup_git() {
+    echo ""
+    echo "=== Git configuration ==="
+    local git_config_local="$DOTFILES_DIR/git/.gitconfig_local"
+    local os_local="$HOME/.gitconfig_os_local"
+
+    # Write OS include
+    local include_path
+    case "$OS" in
+        macos) include_path="~/.gitconfig_macos" ;;
+        linux) include_path="~/.gitconfig_linux" ;;
+    esac
+    cat > "$os_local" <<EOF
 [include]
     path = $include_path
 EOF
-}
 
-prompt_git_user() {
-    local git_name git_email
-    echo ""
-    echo "Git Configuration Setup"
-    echo "Please provide your Git user information:"
-    echo ""
-    echo "Examples:"
-    echo "  Name:  John Doe"
-    echo "  Email: john.doe@example.com"
-    echo ""
+    # SSH multiplexing for GitHub
+    local ssh_config="$HOME/.ssh/config"
+    if [[ -f "$ssh_config" ]] && ! grep -q 'Host github.com' "$ssh_config"; then
+        mkdir -p "$HOME/.ssh/sockets"
+        cat >> "$ssh_config" <<'SSHEOF'
 
-    if [ -t 0 ]; then
-        read -rp "Git user name: " git_name
-        if [[ -z "$git_name" ]]; then
-            echo "Error: Git user name is required"
-            exit 1
-        fi
-        read -rp "Git email: " git_email
-        if [[ -z "$git_email" ]]; then
-            echo "Error: Git email is required"
-            exit 1
-        fi
-    else
-        local existing_name existing_email
-        existing_name=$(git config --global user.name 2>/dev/null || echo "")
-        existing_email=$(git config --global user.email 2>/dev/null || echo "")
-        if [[ -n "$existing_name" ]] && [[ -n "$existing_email" ]]; then
-            echo "Using existing Git configuration from system..."
-            git_name="$existing_name"
-            git_email="$existing_email"
-        else
-            echo ""
-            echo "Skipping Git user configuration (non-interactive mode)."
-            echo "Run later: cd ~/dotfiles && ./install.sh"
-            echo ""
-            return 0
-        fi
+Host github.com
+  ControlMaster auto
+  ControlPath ~/.ssh/sockets/%r@%h-%p
+  ControlPersist 600
+SSHEOF
+        echo "  [+] SSH multiplexing for github.com"
     fi
 
-    if [[ -n "$git_name" ]] && [[ -n "$git_email" ]]; then
-        cat > "$GIT_CONFIG_LOCAL" <<EOF
+    # Ensure local config exists
+    touch "$git_config_local"
+    if [[ -s "$git_config_local" ]]; then
+        echo "  Git user config already set"
+        return 0
+    fi
+
+    # Prompt for name/email
+    if [[ "$IS_INTERACTIVE" == true ]]; then
+        echo "  Git user not configured yet."
+        read -rp "  Git user name: " git_name
+        read -rp "  Git email: " git_email
+        if [[ -n "$git_name" && -n "$git_email" ]]; then
+            cat > "$git_config_local" <<EOF
 [user]
 name = $git_name
 email = $git_email
 EOF
-        echo "Created Git local configuration (gitignored)"
+            echo "  [+] Wrote git/.gitconfig_local"
+        fi
+    else
+        echo "  Skipping git user setup (non-interactive). Run install.sh interactively to configure."
     fi
 }
 
-install_apt_packages_quiet() {
-    if [ "$#" -eq 0 ]; then
-        return 0
-    fi
-    if ! DEBIAN_FRONTEND=noninteractive run_privileged apt-get -qq install -y "$@" >/tmp/apt-install.log 2>&1; then
-        cat /tmp/apt-install.log
-        return 1
-    fi
-}
-
-configure_claude() {
-    configure_mcp_servers
-    install_skills
-}
-
-configure_mcp_servers() {
-    local mcp_failed=false
-
-    # Shared MCP wrapper paths (agent-agnostic, stow-managed under agents/.agents/mcp/bin).
-    local mcp_specs=(
-        "github-home:$HOME/dotfiles/agents/.agents/mcp/bin/github-mcp-home"
-        "github-work:$HOME/dotfiles/agents/.agents/mcp/bin/github-mcp-work"
-        "motherduck:$HOME/dotfiles/agents/.agents/mcp/bin/motherduck-mcp"
-        "dlt:$HOME/dotfiles/agents/.agents/mcp/bin/dlt-mcp"
-        "tigris:$HOME/dotfiles/agents/.agents/mcp/bin/tigris-mcp"
-    )
-
-    configure_mcp_servers_for_tool "claude" "${mcp_specs[@]}" || mcp_failed=true
-    configure_mcp_servers_for_tool "codex" "${mcp_specs[@]}" || mcp_failed=true
-
-    if [[ "$mcp_failed" == true ]]; then
-        echo "  [!] One or more MCP server registrations failed"
-    fi
-
-    if ! command -v op >/dev/null 2>&1; then
-        echo ""
-        echo "  Note: 1Password CLI is required at runtime for secret-backed MCP servers."
-        echo "        Install it first, then re-run install.sh."
+# --- set_shell ---
+set_shell() {
+    local desired_shell
+    desired_shell="$(command -v zsh || true)"
+    if [[ -n "$desired_shell" && "$SHELL" != "$desired_shell" ]]; then
+        chsh -s "$desired_shell" 2>/dev/null || echo "  Note: could not change shell to zsh"
     fi
 }
 
-configure_mcp_servers_for_tool() {
-    local tool add_cmd failed=false
-    tool="$1"
-    shift
-
-    if ! command -v "$tool" >/dev/null 2>&1; then
+# --- run_stow ---
+run_stow() {
+    if [[ "$SKIP_STOW" == true ]]; then
+        echo "  Skipping stow."
         return 0
     fi
 
-    echo "Configuring $tool MCP servers..."
+    echo ""
+    echo "=== Stow ==="
 
-    for spec in "$@"; do
-        local server_name wrapper_path add_output
-        server_name="${spec%%:*}"
-        wrapper_path="${spec#*:}"
+    # Always stow these
+    local packages=("git" "zsh" "starship" "agents")
 
-        if [[ ! -x "$wrapper_path" ]]; then
-            echo "Warning: MCP wrapper missing or not executable: $wrapper_path" >&2
-            failed=true
-            continue
-        fi
+    # Platform-specific
+    if [[ "$OS" == "macos" ]]; then
+        packages+=("1Password" "ghostty" "launchd" "vscode" "zed" "homebrew" "ssh")
+    else
+        packages+=("aws")
+    fi
 
-        if [[ "$tool" == "claude" ]]; then
-            add_cmd=("$tool" "mcp" "add" "--scope" "user" "$server_name" "--" "$wrapper_path")
-        else
-            add_cmd=("$tool" "mcp" "add" "$server_name" "--" "$wrapper_path")
-        fi
-
-        if ! add_output=$("${add_cmd[@]}" 2>&1); then
-            if echo "$add_output" | grep -Eqi "already exists|already configured"; then
-                continue
-            fi
-            echo "Warning: failed to configure MCP server '$server_name' for $tool" >&2
-            [ -n "$add_output" ] && echo "$add_output" >&2
-            failed=true
+    # Backup files that conflict with the agents stow package
+    for f in "$HOME/.claude/settings.json" "$HOME/.claude/CLAUDE.md" "$HOME/.codex/AGENTS.md" "$HOME/.agents/AGENTS.md"; do
+        if [[ -f "$f" && ! -L "$f" ]]; then
+            mv "$f" "${f}.pre-dotfiles.$(date +%Y%m%d%H%M%S)"
+            echo "  Backed up $f"
         fi
     done
 
-    # Codex wrappers (op run + npx/uvx) need more than the default 10s startup timeout.
-    if [[ "$tool" == "codex" ]]; then
-        local codex_config="$HOME/.codex/config.toml"
-        if [[ -f "$codex_config" ]] && command -v python3 >/dev/null 2>&1; then
-            python3 -c '
+    # In non-interactive Linux, back up shell config files that containers provide
+    if [[ "$OS" == "linux" && "$IS_INTERACTIVE" == false ]]; then
+        for f in .zshrc .bashrc .profile .gitconfig; do
+            if [[ -f "$HOME/$f" && ! -L "$HOME/$f" ]]; then
+                mv "$HOME/$f" "$HOME/${f}.pre-dotfiles.$(date +%Y%m%d%H%M%S)"
+            fi
+        done
+    fi
+
+    echo "  Packages: ${packages[*]}"
+    for folder in "${packages[@]}"; do
+        if [[ "$NO_PROMPT" != true ]]; then
+            read -rp "  Stow '$folder'? [y/N]: " reply
+            [[ "$reply" != [yY] ]] && continue
+        fi
+        if [[ "$DRY_RUN" == true ]]; then
+            stow --no-folding -R -n -t "$HOME" "$folder"
+        elif [[ "$OS" == "macos" || "$IS_INTERACTIVE" == true ]]; then
+            stow --adopt --no-folding -R -t "$HOME" "$folder"
+        else
+            stow --no-folding -R -t "$HOME" "$folder"
+        fi
+    done
+
+    # Ensure 1Password config dir permissions
+    if [[ "$OS" == "macos" ]]; then
+        mkdir -p "$HOME/.config/op"
+        chmod 700 "$HOME/.config/op"
+    fi
+}
+
+# --- setup_agents ---
+setup_agents() {
+    echo ""
+    echo "=== Agents ==="
+
+    # Claude Code CLI
+    if need claude && [[ ! -f "$LOCAL_BIN/claude" ]]; then
+        echo "  Installing Claude Code CLI..."
+        if curl -fsSL https://claude.ai/install.sh | bash >/dev/null 2>&1; then
+            echo "  [+] Claude Code"
+        else
+            echo "  [!] Claude Code install failed"
+        fi
+    fi
+
+    # Codex CLI
+    if command -v npm >/dev/null 2>&1 && need codex; then
+        echo "  Installing Codex CLI..."
+        npm install -g @openai/codex >/dev/null 2>&1 || echo "  [!] Codex install failed"
+    fi
+
+    # 1Password CLI (Linux only — macOS gets it from Brewfile cask)
+    if need op && [[ "$OS" == "linux" ]]; then
+        echo "  Installing 1Password CLI..."
+        curl -sS https://downloads.1password.com/linux/keys/1password.asc | sudo gpg --dearmor --output /usr/share/keyrings/1password-archive-keyring.gpg 2>/dev/null || true
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/$(dpkg --print-architecture) stable main" | sudo tee /etc/apt/sources.list.d/1password.list >/dev/null 2>&1 || true
+        sudo apt-get update -qq >/dev/null 2>&1 && sudo apt-get install -y -qq 1password-cli >/dev/null 2>&1 && echo "  [+] 1Password CLI" || echo "  [!] 1Password CLI failed"
+    fi
+
+    # MCP servers (shared wrapper paths)
+    echo "  Configuring MCP servers..."
+    local mcp_wrappers=(
+        "github-home:$DOTFILES_DIR/agents/.agents/mcp/bin/github-mcp-home"
+        "github-work:$DOTFILES_DIR/agents/.agents/mcp/bin/github-mcp-work"
+        "motherduck:$DOTFILES_DIR/agents/.agents/mcp/bin/motherduck-mcp"
+        "dlt:$DOTFILES_DIR/agents/.agents/mcp/bin/dlt-mcp"
+        "tigris:$DOTFILES_DIR/agents/.agents/mcp/bin/tigris-mcp"
+    )
+    for tool in claude codex; do
+        command -v "$tool" >/dev/null 2>&1 || continue
+        for spec in "${mcp_wrappers[@]}"; do
+            local name="${spec%%:*}" wrapper="${spec#*:}"
+            [[ ! -x "$wrapper" ]] && continue
+            local cmd
+            if [[ "$tool" == "claude" ]]; then
+                cmd=("$tool" mcp add --scope user "$name" -- "$wrapper")
+            else
+                cmd=("$tool" mcp add "$name" -- "$wrapper")
+            fi
+            "${cmd[@]}" 2>/dev/null || true
+        done
+
+        # Codex startup timeout patch
+        if [[ "$tool" == "codex" ]]; then
+            local codex_config="$HOME/.codex/config.toml"
+            if [[ -f "$codex_config" ]] && command -v python3 >/dev/null 2>&1; then
+                python3 -c '
 import sys, re
 p = sys.argv[1]
 t = open(p).read()
@@ -328,972 +416,68 @@ for s in parts:
     result.append(s)
 open(p, "w").write("".join(result))
 ' "$codex_config"
-        fi
-    fi
-
-    if [[ "$failed" == false ]]; then
-        echo "  [+] MCP servers configured for $tool"
-        return 0
-    fi
-
-    return 1
-}
-
-# Run a command with elevated privileges (sudo if available, direct if root)
-run_privileged() {
-    if [ "$(id -u)" -eq 0 ]; then
-        "$@"
-    elif command -v sudo >/dev/null 2>&1; then
-        # Pass DEBIAN_FRONTEND through sudo (sudo strips env vars by default)
-        if [ -n "${DEBIAN_FRONTEND:-}" ]; then
-            sudo DEBIAN_FRONTEND="$DEBIAN_FRONTEND" "$@"
-        else
-            sudo "$@"
-        fi
-    else
-        echo "Error: requires root or sudo"
-        return 1
-    fi
-}
-
-filter_apt_packages() {
-    for pkg in "$@"; do
-        # Check if package exists in apt cache
-        # Using variable capture avoids pipe issues in subshell context
-        local output
-        output=$(apt-cache show "$pkg" 2>/dev/null) || true
-        if [[ -n "$output" ]]; then
-            printf '%s\n' "$pkg"
-        else
-            echo "Skipping missing apt package: $pkg" >&2
+            fi
         fi
     done
-}
+    echo "  [+] MCP servers configured"
 
-sudo_ok() {
-    if command -v sudo >/dev/null 2>&1; then
-        sudo -n true >/dev/null 2>&1
-        return $?
-    fi
-    return 1
-}
-
-core_tools_installed() {
-    # Check for key tools; bat may be batcat on Debian/Ubuntu
-    command -v fzf >/dev/null 2>&1 || return 1
-    command -v rg >/dev/null 2>&1 || return 1
-    command -v zoxide >/dev/null 2>&1 || return 1
-    command -v starship >/dev/null 2>&1 || return 1
-    command -v stow >/dev/null 2>&1 || return 1
-    { command -v bat >/dev/null 2>&1 || command -v batcat >/dev/null 2>&1; } || return 1
-    return 0
-}
-
-cleanup_sudo_keepalive() {
-    if [[ -n "${SUDO_PID:-}" ]] && kill -0 "$SUDO_PID" 2>/dev/null; then
-        kill "$SUDO_PID" 2>/dev/null || true
-    fi
-}
-
-install_skills() {
-    if ! command -v npx >/dev/null 2>&1; then
+    # Skills
+    if command -v npx >/dev/null 2>&1; then
+        echo "  Installing agent skills..."
+        npx -y skills add -g -y matsonj/mviz 2>/dev/null || true
+        npx -y skills add -g -y vercel-labs/skills -s find-skills 2>/dev/null || true
+        npx -y skills add -g -y kylelundstedt/dotfiles -s bootstrap-project data-pipelines sprites 2>/dev/null || true
+        echo "  [+] Skills installed"
+    else
         echo "  [!] npx not found, skipping skill installation"
-        return 0
-    fi
-    echo "Installing agent skills..."
-    npx -y skills add -g -y matsonj/mviz
-    npx -y skills add -g -y vercel-labs/skills -s find-skills
-    npx -y skills add -g -y kylelundstedt/dotfiles -s bootstrap-project data-pipelines sprites
-}
-
-set_shell() {
-    local desired_shell
-    desired_shell="$(command -v zsh || true)"
-    if [[ -z "$desired_shell" ]]; then
-        if [[ "$OS" == "macos" ]]; then
-            desired_shell="/bin/zsh"
-        elif [[ "$OS" == "linux" ]]; then
-            desired_shell="/usr/bin/zsh"
-        fi
     fi
 
-    if [[ -n "$desired_shell" ]] && command -v zsh >/dev/null 2>&1; then
-        if [[ "$SHELL" != "$desired_shell" ]]; then
-            if [[ "$IS_INTERACTIVE" == true ]]; then
-                chsh -s "$desired_shell" "$USER" || echo "Warning: unable to change shell to $desired_shell"
-            elif [ "$(id -u)" -eq 0 ]; then
-                if command -v chsh >/dev/null 2>&1; then
-                    chsh -s "$desired_shell" "$USER" || echo "Warning: unable to change shell to $desired_shell"
-                elif command -v usermod >/dev/null 2>&1; then
-                    usermod -s "$desired_shell" "$USER" || echo "Warning: unable to change shell to $desired_shell"
-                fi
-            elif sudo_ok; then
-                sudo -n chsh -s "$desired_shell" "$USER" || echo "Warning: unable to change shell to $desired_shell"
-            else
-                echo "Non-interactive mode: unable to change shell (no sudo/root)."
-            fi
-        fi
-    fi
-}
-
-ensure_brew() {
-    # Try to load brew from known locations first
-    if command -v brew >/dev/null 2>&1; then
-        return 0
-    fi
-    if [[ "$OS" == "macos" ]]; then
-        if [ -x "/opt/homebrew/bin/brew" ]; then
-            eval "$(/opt/homebrew/bin/brew shellenv)"
-            return 0
-        elif [ -x "/usr/local/bin/brew" ]; then
-            eval "$(/usr/local/bin/brew shellenv)"
-            return 0
-        fi
-    elif [[ "$OS" == "linux" ]]; then
-        if [ -x "/home/linuxbrew/.linuxbrew/bin/brew" ]; then
-            eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-            return 0
-        elif [ -x "$HOME/.linuxbrew/bin/brew" ]; then
-            eval "$("$HOME/.linuxbrew/bin/brew" shellenv)"
-            return 0
-        fi
-    fi
-
-    # Install Homebrew
-    if [[ "$IS_INTERACTIVE" == false ]]; then
-        echo "Error: Homebrew is required but not installed (non-interactive mode)."
-        echo "Install Homebrew first or re-run with --interactive."
-        exit 1
-    fi
-    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-    # Load brew into PATH after installation
-    if [[ "$OS" == "macos" ]]; then
-        if [ -x "/opt/homebrew/bin/brew" ]; then
-            eval "$(/opt/homebrew/bin/brew shellenv)"
-        elif [ -x "/usr/local/bin/brew" ]; then
-            eval "$(/usr/local/bin/brew shellenv)"
-        fi
-    elif [[ "$OS" == "linux" ]]; then
-        if [ -x "/home/linuxbrew/.linuxbrew/bin/brew" ]; then
-            eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-            # shellcheck disable=SC2016  # Single quotes intentional - expand at shell load time
-            append_line_if_missing "$HOME/.zshrc" 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv zsh)"'
-            # shellcheck disable=SC2016
-            append_line_if_missing "$HOME/.bashrc" 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv bash)"'
-        elif [ -x "$HOME/.linuxbrew/bin/brew" ]; then
-            eval "$("$HOME/.linuxbrew/bin/brew" shellenv)"
-            # shellcheck disable=SC2016
-            append_line_if_missing "$HOME/.zshrc" 'eval "$($HOME/.linuxbrew/bin/brew shellenv zsh)"'
-            # shellcheck disable=SC2016
-            append_line_if_missing "$HOME/.bashrc" 'eval "$($HOME/.linuxbrew/bin/brew shellenv bash)"'
-        fi
-    fi
-
-    if ! command -v brew >/dev/null 2>&1; then
-        echo "Warning: Homebrew installation may have completed, but brew is not in PATH."
-        echo "You may need to run: eval \"\$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)\""
-    fi
-}
-
-install_apple_containers_cli() {
-    # Requires macOS 26+ (Tahoe)
-    local macos_version major_version
-    macos_version=$(sw_vers -productVersion 2>/dev/null || echo "0")
-    major_version="${macos_version%%.*}"
-    if [[ "$major_version" -lt 26 ]]; then
-        echo "  [!] Apple Containers CLI requires macOS 26+ (current: $macos_version)"
-        return 0
-    fi
-
-    echo "Installing Apple Containers CLI..."
-
-    # If upgrading, uninstall first (preserves containers with -k)
-    if [[ -x /usr/local/bin/uninstall-container.sh ]]; then
-        /usr/local/bin/uninstall-container.sh -k 2>/dev/null || true
-    fi
-
-    # Fetch latest .pkg URL from GitHub releases
-    local pkg_url pkg_tmp
-    pkg_url=$(curl -sL "https://api.github.com/repos/apple/container/releases/latest" \
-        | grep '"browser_download_url".*\.pkg"' \
-        | head -1 \
-        | sed -E 's/.*"(https[^"]+)".*/\1/')
-
-    if [[ -z "$pkg_url" ]]; then
-        echo "  [!] Could not determine Apple Containers CLI download URL"
-        return 1
-    fi
-
-    pkg_tmp=$(mktemp -d)
-    if curl -fsSL "$pkg_url" -o "$pkg_tmp/container.pkg"; then
-        if run_privileged installer -pkg "$pkg_tmp/container.pkg" -target / >/dev/null 2>&1; then
-            echo "  [+] Apple Containers CLI installed"
-        else
-            echo "  [!] Apple Containers CLI installation failed"
-        fi
-    else
-        echo "  [!] Failed to download Apple Containers CLI"
-    fi
-    rm -rf "$pkg_tmp"
-}
-
-# =============================================================================
-# Shell layer — everything a human needs to feel at home in a terminal
-# =============================================================================
-
-install_shell_layer() {
-    echo ""
-    echo "=== Shell layer ==="
-
-    # Set default shell to zsh
-    set_shell
-
-    # Install zsh on Linux if missing
-    if [[ "$OS" == "linux" ]] && ! command -v zsh >/dev/null 2>&1; then
-        echo "Installing zsh (required for setup)..."
-        if command -v apt-get >/dev/null 2>&1; then
-            run_privileged apt-get update && run_privileged apt-get install -y zsh
-        elif command -v dnf >/dev/null 2>&1; then
-            run_privileged dnf install -y zsh
-        elif command -v yum >/dev/null 2>&1; then
-            run_privileged yum install -y zsh
-        elif command -v pacman >/dev/null 2>&1; then
-            run_privileged pacman -Sy --noconfirm zsh
-        elif command -v zypper >/dev/null 2>&1; then
-            run_privileged zypper install -y zsh
-        fi
-    fi
-
-    # Git configuration
-    configure_git_os_include
-
-    # SSH multiplexing for GitHub — reuse connections across serial git fetches.
-    local ssh_config="$HOME/.ssh/config"
-    if [[ -f "$ssh_config" ]] && ! grep -q 'Host github.com' "$ssh_config"; then
-        mkdir -p "$HOME/.ssh/sockets"
-        cat >> "$ssh_config" <<'EOF'
-
-Host github.com
-  ControlMaster auto
-  ControlPath ~/.ssh/sockets/%r@%h-%p
-  ControlPersist 600
-EOF
-        echo "  [+] SSH multiplexing configured for github.com"
-    fi
-
-    # Prompt for Git user configuration and save to gitignored local file
-    GIT_CONFIG_LOCAL="$HOME/dotfiles/git/.gitconfig_local"
-    GIT_CONFIG_COMMON="$HOME/dotfiles/git/.gitconfig_common"
-
-    # Ensure local config file exists (even if empty) to avoid Git include errors
-    if [ ! -f "$GIT_CONFIG_LOCAL" ]; then
-        touch "$GIT_CONFIG_LOCAL"
-    fi
-
-    # Check if local config already has values
-    if [ -f "$GIT_CONFIG_LOCAL" ] && [ -s "$GIT_CONFIG_LOCAL" ]; then
-        CURRENT_NAME=$(grep -E "^name = " "$GIT_CONFIG_LOCAL" | cut -d'=' -f2 | xargs || true)
-        CURRENT_EMAIL=$(grep -E "^email = " "$GIT_CONFIG_LOCAL" | cut -d'=' -f2 | xargs || true)
-        if [[ -n "$CURRENT_NAME" ]] && [[ -n "$CURRENT_EMAIL" ]]; then
-            echo "Git configuration already set (name: $CURRENT_NAME, email: $CURRENT_EMAIL)"
-        fi
-    else
-        # Check if .gitconfig_common has real values (not template) — migrate them
-        if [ -f "$GIT_CONFIG_COMMON" ]; then
-            COMMON_NAME=$(grep -E "^name = " "$GIT_CONFIG_COMMON" | cut -d'=' -f2 | xargs || true)
-            COMMON_EMAIL=$(grep -E "^email = " "$GIT_CONFIG_COMMON" | cut -d'=' -f2 | xargs || true)
-
-            if [[ "$COMMON_NAME" != "Your Name" ]] && [[ "$COMMON_EMAIL" != "your.email@example.com" ]] && [[ -n "$COMMON_NAME" ]] && [[ -n "$COMMON_EMAIL" ]]; then
-                echo "Migrating Git config from .gitconfig_common to .gitconfig_local (gitignored)..."
-                cat > "$GIT_CONFIG_LOCAL" <<EOF
-[user]
-name = $COMMON_NAME
-email = $COMMON_EMAIL
-EOF
-                # Restore template values in common file (BSD sed fallback for macOS)
-                sed -i.bak "s/^name = .*/name = Your Name/" "$GIT_CONFIG_COMMON" && rm -f "$GIT_CONFIG_COMMON.bak"
-                sed -i.bak "s/^email = .*/email = your.email@example.com/" "$GIT_CONFIG_COMMON" && rm -f "$GIT_CONFIG_COMMON.bak"
-                echo "Migrated Git configuration to local file (gitignored)"
-            else
-                prompt_git_user
-            fi
-        else
-            prompt_git_user
-        fi
-        echo ""
-    fi
-
-    # Install core CLI tools
-    if [[ "$OS" == "linux" ]]; then
-        install_shell_linux
-    elif [[ "$OS" == "macos" ]]; then
-        install_shell_macos
-    fi
-}
-
-install_shell_linux() {
-    if core_tools_installed; then
-        echo "Core tools already installed, skipping package installation."
-        return 0
-    fi
-
-    if command -v apt-get >/dev/null 2>&1; then
-        echo "Installing core CLI tools via apt..."
-        # Update apt cache first so filter_apt_packages can check availability
-        DEBIAN_FRONTEND=noninteractive run_privileged apt-get -qq update >/dev/null 2>&1 || true
-        # Aligned with Brewfile.linux (excluding tools not in apt repos)
-        CORE_APT_PACKAGES=(
-            atuin
-            awscli
-            bat
-            curl
-            direnv
-            fastfetch
-            fzf
-            gh
-            git
-            gnupg
-            htop
-            jq
-            just
-            micro
-            nano
-            npm
-            pandoc
-            parallel
-            rclone
-            ripgrep
-            stow
-            tree
-            wget
-            yq
-            zoxide
-        )
-        mapfile -t CORE_APT_PACKAGES_FILTERED < <(filter_apt_packages "${CORE_APT_PACKAGES[@]}")
-        APT_PID=""
-        if [ "${#CORE_APT_PACKAGES_FILTERED[@]}" -gt 0 ]; then
-            # Run apt-get install in background so we can overlap with network downloads
-            (
-                if ! DEBIAN_FRONTEND=noninteractive run_privileged apt-get -qq install -y "${CORE_APT_PACKAGES_FILTERED[@]}" >/tmp/apt-install.log 2>&1; then
-                    cat /tmp/apt-install.log >&2
-                    exit 1
-                fi
-            ) &
-            APT_PID=$!
-        fi
-
-        # Install starship, carapace, and uv in parallel (overlapping with apt-get)
-        echo "Installing apt packages + starship, carapace, uv in parallel..."
-
-        # Starship installation (background)
-        if ! command -v starship >/dev/null 2>&1; then
-            (
-                if [ "$(id -u)" -eq 0 ]; then
-                    curl -sS https://starship.rs/install.sh | sh -s -- --yes >/dev/null 2>&1 && echo "  [+] starship installed" || echo "  [!] starship failed"
-                elif sudo -n true 2>/dev/null; then
-                    curl -sS https://starship.rs/install.sh | sudo sh -s -- --yes >/dev/null 2>&1 && echo "  [+] starship installed" || echo "  [!] starship failed"
-                else
-                    curl -sS https://starship.rs/install.sh | sh -s -- --yes --bin-dir="$HOME/.local/bin" >/dev/null 2>&1 && echo "  [+] starship installed" || echo "  [!] starship failed"
-                fi
-            ) &
-            STARSHIP_PID=$!
-        fi
-
-        # Carapace installation (background)
-        if ! command -v carapace >/dev/null 2>&1; then
-            (
-                CARAPACE_TMP=$(mktemp -d)
-                CARAPACE_ARCH="amd64"
-                [ "$(uname -m)" = "aarch64" ] && CARAPACE_ARCH="arm64"
-                # Get latest version tag from GitHub API
-                CARAPACE_VERSION=$(curl -sL "https://api.github.com/repos/carapace-sh/carapace-bin/releases/latest" | grep '"tag_name"' | sed -E 's/.*"v([^"]+)".*/\1/')
-                if [ -n "$CARAPACE_VERSION" ] && curl -sL "https://github.com/carapace-sh/carapace-bin/releases/download/v${CARAPACE_VERSION}/carapace-bin_${CARAPACE_VERSION}_linux_${CARAPACE_ARCH}.tar.gz" | tar -xz -C "$CARAPACE_TMP" 2>/dev/null; then
-                    if [ "$(id -u)" -eq 0 ]; then
-                        mv "$CARAPACE_TMP/carapace" /usr/local/bin/carapace && chmod +x /usr/local/bin/carapace
-                    elif sudo -n true 2>/dev/null; then
-                        sudo mv "$CARAPACE_TMP/carapace" /usr/local/bin/carapace && sudo chmod +x /usr/local/bin/carapace
-                    else
-                        mkdir -p "$HOME/.local/bin"
-                        mv "$CARAPACE_TMP/carapace" "$HOME/.local/bin/carapace" && chmod +x "$HOME/.local/bin/carapace"
-                    fi
-                    echo "  [+] carapace installed"
-                else
-                    echo "  [!] carapace failed"
-                fi
-                rm -rf "$CARAPACE_TMP"
-            ) &
-            CARAPACE_PID=$!
-        fi
-
-        # UV installation (background)
-        if ! command -v uv >/dev/null 2>&1; then
-            (
-                curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1 && echo "  [+] uv installed" || echo "  [!] uv failed"
-            ) &
-            UV_PID=$!
-        fi
-
-        # Wait for all parallel installations to complete
-        [ -n "${STARSHIP_PID:-}" ] && wait "$STARSHIP_PID" 2>/dev/null
-        [ -n "${CARAPACE_PID:-}" ] && wait "$CARAPACE_PID" 2>/dev/null
-        [ -n "${UV_PID:-}" ] && wait "$UV_PID" 2>/dev/null
-
-        # Wait for apt-get to complete
-        if [ -n "$APT_PID" ]; then
-            if ! wait "$APT_PID"; then
-                echo "Error: apt-get install failed"
-                exit 1
-            fi
-            echo "  [+] apt packages installed"
-        fi
-
-        # Add uv to PATH for this session (after it's installed)
-        export PATH="$HOME/.local/bin:$PATH"
-    else
-        # No apt — fall back to Homebrew
-        ensure_brew
-        local brew_flags=()
-        if [[ "$IS_INTERACTIVE" == false ]]; then
-            export HOMEBREW_NO_AUTO_UPDATE=1
-            export HOMEBREW_NO_INSTALL_CLEANUP=1
-            export HOMEBREW_NO_ENV_HINTS=1
-            export HOMEBREW_NO_ANALYTICS=1
-            brew_flags+=(--quiet --no-upgrade)
-        fi
-        echo "Installing core CLI tools for Linux via Homebrew..."
-        brew bundle "${brew_flags[@]}" --file="$HOME/dotfiles/homebrew/Brewfile.linux" || {
-            echo "Warning: Some packages may have failed during core install."
-        }
-    fi
-}
-
-install_shell_macos() {
-    ensure_brew
-
-    if core_tools_installed; then
-        echo "Core tools already installed, skipping brew bundle for formulas."
-        return 0
-    fi
-
-    local brew_flags=()
-    if [[ "$IS_INTERACTIVE" == false ]]; then
-        export HOMEBREW_NO_AUTO_UPDATE=1
-        export HOMEBREW_NO_INSTALL_CLEANUP=1
-        export HOMEBREW_NO_ENV_HINTS=1
-        export HOMEBREW_NO_ANALYTICS=1
-        brew_flags+=(--quiet --no-upgrade)
-    fi
-
-    # Ensure required taps are added before bundle install
-    echo "Adding required Homebrew taps..."
-    brew tap columnar-tech/tap 2>/dev/null || echo "Note: columnar-tech/tap may already be added or unavailable"
-
-    # Install CLI tools (brew formulas only — no casks or mas)
-    echo "Installing CLI tools from Brewfile..."
-    local temp_brewfile
-    temp_brewfile=$(mktemp)
-    sed -e '/^cask /d' \
-        -e '/^mas /d' \
-        -e '/brew "mas"/d' \
-        "$HOME/dotfiles/homebrew/Brewfile" > "$temp_brewfile"
-    brew bundle "${brew_flags[@]}" --file="$temp_brewfile" || {
-        echo ""
-        echo "Warning: Some CLI packages may have failed to install."
-        echo "You can retry later with:"
-        echo "  brew bundle --file=\"$HOME/dotfiles/homebrew/Brewfile\""
-    }
-    rm -f "$temp_brewfile"
-}
-
-# =============================================================================
-# Agent layer — everything an AI coding agent needs to operate
-# =============================================================================
-
-install_agent_layer() {
-    echo ""
-    echo "=== Agent layer ==="
-
-    # 1Password CLI (required for MCP server secrets)
     if ! command -v op >/dev/null 2>&1; then
-        if [[ "$OS" == "linux" ]] && command -v apt-get >/dev/null 2>&1; then
-            echo "Installing 1Password CLI..."
-            # Add 1Password GPG key and repository
-            curl -sS https://downloads.1password.com/linux/keys/1password.asc | run_privileged gpg --dearmor --output /usr/share/keyrings/1password-archive-keyring.gpg 2>/dev/null || true
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/$(dpkg --print-architecture) stable main" | run_privileged tee /etc/apt/sources.list.d/1password.list >/dev/null 2>&1 || true
-            # Install 1password-cli
-            if DEBIAN_FRONTEND=noninteractive run_privileged apt-get -qq update >/dev/null 2>&1 && \
-               DEBIAN_FRONTEND=noninteractive run_privileged apt-get -qq install -y 1password-cli >/dev/null 2>&1; then
-                echo "  [+] 1Password CLI installed"
-            else
-                echo "Warning: 1Password CLI installation failed. You can install it manually later:"
-                echo "  https://developer.1password.com/docs/cli/get-started/"
-            fi
-        elif [[ "$OS" == "macos" ]]; then
-            # On macOS, 1Password CLI comes from Brewfile; nudge the user if missing
-            echo "  Note: 1Password CLI not found. Install via: brew install 1password-cli"
-        fi
-    fi
-
-    # Claude Code CLI via native installer
-    if ! command -v claude >/dev/null 2>&1 && [ ! -f "$HOME/.local/bin/claude" ]; then
-        echo "Installing Claude Code CLI..."
-        if curl -fsSL https://claude.ai/install.sh | bash >/dev/null 2>&1; then
-            echo "  [+] Claude Code installed"
-            export PATH="$HOME/.local/bin:$PATH"
-        else
-            echo "Warning: Claude Code installation failed. You can install it manually later:"
-            echo "  curl -fsSL https://claude.ai/install.sh | bash"
-        fi
-    fi
-
-    # Codex CLI (if npm available)
-    if command -v npm >/dev/null 2>&1 && ! command -v codex >/dev/null 2>&1; then
-        if ! npm ls -g @openai/codex >/dev/null 2>&1; then
-            echo "Installing Codex CLI..."
-            npm install -g @openai/codex >/dev/null 2>&1 || echo "  [!] Codex CLI installation failed"
-        fi
-    fi
-
-    # Configure MCP servers and install skills
-    configure_claude
-
-    # Check if 1Password accounts are configured
-    if command -v op >/dev/null 2>&1; then
-        local op_accounts need_op_setup=false
-        op_accounts=$(op account list 2>/dev/null || echo "")
-
-        if ! echo "$op_accounts" | grep -q "lundstedts.1password.com"; then
-            echo ""
-            echo "  Note: Personal 1Password account not configured."
-            echo "        Run: eval \$(op account add --address lundstedts.1password.com)"
-            need_op_setup=true
-        fi
-
-        if ! echo "$op_accounts" | grep -q "industryvault.1password.com"; then
-            echo ""
-            echo "  Note: Work 1Password account (industryvault) not configured."
-            echo "        Run: eval \$(op account add --address industryvault.1password.com)"
-            need_op_setup=true
-        fi
-
-        if [[ "$need_op_setup" == true ]]; then
-            echo ""
-            echo "  After adding accounts, restart Claude Code and Codex for MCP servers to work."
-        fi
+        echo ""
+        echo "  Note: 1Password CLI is required at runtime for secret-backed MCP servers."
     fi
 }
 
-# =============================================================================
-# Apps layer — heavy installs, GUI apps, platform-specific tooling
-# =============================================================================
-
-install_apps_layer() {
+# --- install_apps ---
+install_apps() {
+    if [[ "$INSTALL_APPS" != true ]]; then
+        return 0
+    fi
     echo ""
-    echo "=== Apps layer ==="
+    echo "=== Apps (brew bundle) ==="
+    if [[ "$OS" != "macos" ]]; then
+        echo "  Apps layer is macOS only, skipping."
+        return 0
+    fi
+    brew bundle --file="$DOTFILES_DIR/homebrew/Brewfile" || echo "  Note: some casks/mas apps may have failed (normal)."
 
-    # Pre-authorize sudo on macOS (for casks that install to /Applications)
-    if [[ "$OS" == "macos" ]] && command -v sudo >/dev/null 2>&1 && [[ "$IS_INTERACTIVE" == true ]]; then
-        echo "Pre-authorizing sudo for brew bundle installation..."
-        sudo -v || echo "Warning: sudo pre-authorization failed"
-        # Keep sudo alive during brew bundle (refresh every 60 seconds)
-        (
-            while true; do
-                sudo -n true 2>/dev/null || exit
-                sleep 60
-                kill -0 "$$" 2>/dev/null || exit
-            done
-        ) &
-        SUDO_PID=$!
-        disown "$SUDO_PID" 2>/dev/null || true
+    # Sprite CLI
+    if need sprite; then
+        curl -fsSL https://sprites.dev/install.sh | sh >/dev/null 2>&1 && echo "  [+] Sprite CLI" || echo "  [!] Sprite CLI failed"
     fi
 
-    local brew_flags=()
-    if [[ "$IS_INTERACTIVE" == false ]]; then
-        export HOMEBREW_NO_AUTO_UPDATE=1
-        export HOMEBREW_NO_INSTALL_CLEANUP=1
-        export HOMEBREW_NO_ENV_HINTS=1
-        export HOMEBREW_NO_ANALYTICS=1
-        brew_flags+=(--quiet --no-upgrade)
-    fi
-
-    if [[ "$OS" == "macos" ]]; then
-        # npm global packages (node installed via brew)
-        if command -v npm >/dev/null 2>&1; then
-            echo "Installing npm global packages..."
-            local npm_packages=(
-                "@anthropic-ai/claude-code"
-                "@tigrisdata/cli"
-            )
-            for pkg in "${npm_packages[@]}"; do
-                if npm ls -g "$pkg" >/dev/null 2>&1; then
-                    continue
-                fi
-                npm install -g "$pkg" >/dev/null 2>&1 || {
-                    echo "  Warning: Failed to install $pkg"
-                }
-            done
-        fi
-
-        # Install heavyweight casks/mas only with --include-heavy flag
-        if [[ "$INCLUDE_HEAVY" == true ]]; then
-            ensure_brew
-            echo ""
-            echo "Installing macOS casks and Mac App Store apps..."
-            brew bundle "${brew_flags[@]}" --file="$HOME/dotfiles/homebrew/Brewfile" || {
-                echo ""
-                echo "Warning: Some packages may have failed to install."
-                echo "This is normal for:"
-                echo "  - Mac App Store apps (mas) if you're not signed in or apps are unavailable"
-                echo "  - Some casks that require manual setup or are unavailable"
-                echo ""
-                echo "You can retry failed installations later with:"
-                echo "  brew bundle --file=\"$HOME/dotfiles/homebrew/Brewfile\""
-            }
-        else
-            echo "Skipping casks and Mac App Store apps (use --include-heavy to install)."
-        fi
-    elif [[ "$OS" == "linux" ]]; then
-        # Install heavy Linux tools only with --include-heavy flag
-        if [[ "$INCLUDE_HEAVY" == true ]]; then
-            ensure_brew
-            echo "Installing heavy Linux tools..."
-            brew bundle "${brew_flags[@]}" --file="$HOME/dotfiles/homebrew/Brewfile.linux-heavy" || {
-                echo "Warning: Some heavy packages may have failed to install."
-            }
-        else
-            echo "Skipping heavy Linux tools (use --include-heavy to install)."
-        fi
-    fi
-
-    # VS Code extensions
-    if command -v code >/dev/null 2>&1; then
-        local vscode_extensions="$HOME/Library/Application Support/Code/User/extensions.txt"
-        if [ -f "$vscode_extensions" ]; then
-            echo "Installing VS Code extensions..."
-            while IFS= read -r ext || [ -n "$ext" ]; do
-                [ -z "$ext" ] && continue
-                code --install-extension "$ext" --force >/dev/null 2>&1 && echo "  [+] $ext" || echo "  [!] $ext failed"
-            done < "$vscode_extensions"
-        fi
-    fi
-
-    # Local config templates
-    echo ""
-    echo "Setting up local config templates..."
-    if [ -f "$HOME/dotfiles/aws/.aws/config.example" ] && [ ! -f "$HOME/dotfiles/aws/.aws/config" ]; then
-        cp "$HOME/dotfiles/aws/.aws/config.example" "$HOME/dotfiles/aws/.aws/config"
-        echo "  ✓ Created aws/.aws/config from example (please customize)"
-    fi
-    if [ -f "$HOME/dotfiles/ssh/.ssh/config.example" ] && [ ! -f "$HOME/dotfiles/ssh/.ssh/config" ]; then
-        cp "$HOME/dotfiles/ssh/.ssh/config.example" "$HOME/dotfiles/ssh/.ssh/config"
-        echo "  ✓ Created ssh/.ssh/config from example (please customize)"
-    fi
-
-    # Sprite CLI (macOS + Linux)
-    if ! command -v sprite >/dev/null 2>&1; then
-        echo "Installing Sprite CLI..."
-        if curl -fsSL https://sprites.dev/install.sh | sh >/dev/null 2>&1; then
-            echo "  [+] Sprite CLI installed"
-        else
-            echo "  [!] Sprite CLI installation failed"
-        fi
-    fi
-
-    # Apple Containers CLI (macOS only)
-    if [[ "$OS" == "macos" ]] && ! command -v container >/dev/null 2>&1; then
-        install_apple_containers_cli
-    fi
-
-    # Load LaunchAgents (macOS only, after stow has deployed them)
-    if [[ "$OS" == "macos" && "$STOW_DRY_RUN" != true ]]; then
+    # Load LaunchAgents
+    if [[ "$DRY_RUN" != true ]]; then
         for plist in "$HOME/Library/LaunchAgents"/com.kylelundstedt.*.plist; do
-            if [[ -f "$plist" ]]; then
-                launchctl load -w "$plist" 2>/dev/null || true
-            fi
+            [[ -f "$plist" ]] && launchctl load -w "$plist" 2>/dev/null || true
         done
     fi
 }
 
-# =============================================================================
-# Stow — combine packages from all active layers and deploy
-# =============================================================================
+# --- Main ---
+cd "$DOTFILES_DIR" || { echo "Error: $DOTFILES_DIR not found"; exit 1; }
 
-run_combined_stow() {
-    if [[ "$SKIP_STOW" == true ]]; then
-        echo "Skipping stow as requested."
-        return 0
-    fi
-
-    # Ensure GNU Stow is available
-    if ! command -v stow >/dev/null 2>&1; then
-        if [[ "$OS" == "macos" ]]; then
-            if ! command -v brew >/dev/null 2>&1; then
-                echo "Homebrew is required to install stow. Install from https://brew.sh and re-run."
-                exit 1
-            fi
-            brew list stow >/dev/null 2>&1 || brew install stow
-        elif [[ "$OS" == "linux" ]]; then
-            if command -v apt-get >/dev/null 2>&1; then
-                run_privileged apt-get update && run_privileged apt-get install -y stow
-            elif command -v dnf >/dev/null 2>&1; then
-                run_privileged dnf install -y stow
-            elif command -v yum >/dev/null 2>&1; then
-                run_privileged yum install -y stow
-            elif command -v pacman >/dev/null 2>&1; then
-                run_privileged pacman -Sy --noconfirm stow
-            elif command -v zypper >/dev/null 2>&1; then
-                run_privileged zypper install -y stow
-            else
-                echo "Please install GNU Stow with your package manager and re-run."
-                exit 1
-            fi
-        fi
-    fi
-
-    # Collect stow packages from active layers
-    local stow_packages=()
-    layer_enabled "shell" && stow_packages+=("${SHELL_STOW_PACKAGES[@]}")
-    layer_enabled "agents" && stow_packages+=("${AGENT_STOW_PACKAGES[@]}")
-    layer_enabled "apps" && stow_packages+=("${APPS_STOW_PACKAGES[@]}")
-
-    if [[ ${#stow_packages[@]} -eq 0 ]]; then
-        return 0
-    fi
-
-    echo ""
-    echo "Stowing packages: ${stow_packages[*]}"
-
-    # Backup conflicting agent files before stow
-    if layer_enabled "agents"; then
-        backup_if_regular_file "$HOME/.claude/settings.json"
-        backup_if_regular_file "$HOME/.claude/CLAUDE.md"
-        backup_if_regular_file "$HOME/.codex/AGENTS.md"
-        backup_if_regular_file "$HOME/.agents/AGENTS.md"
-    fi
-
-    # In non-interactive Linux, remove common conflicting files that containers provide
-    # (--adopt would overwrite dotfiles with container defaults, which we don't want)
-    if [[ "$OS" == "linux" && "$IS_INTERACTIVE" == false ]]; then
-        for f in .zshrc .bashrc .profile .gitconfig; do
-            if [[ -f "$HOME/$f" && ! -L "$HOME/$f" ]]; then
-                local backup_path="$HOME/${f}.pre-dotfiles.$(date +%Y%m%d%H%M%S)"
-                mv "$HOME/$f" "$backup_path"
-                echo "Backed up $HOME/$f to $backup_path"
-            fi
-        done
-    fi
-
-    for folder in "${stow_packages[@]}"; do
-        if [[ "$STOW_NO_PROMPT" != true ]]; then
-            echo "About to stow '$folder' into $HOME (stow --adopt)."
-            read -rp "Continue? [y/N]: " REPLY
-            if [[ "$REPLY" != "y" && "$REPLY" != "Y" ]]; then
-                echo "Skipping $folder"
-                continue
-            fi
-        fi
-        if [[ "$STOW_DRY_RUN" == true ]]; then
-            stow --no-folding -R -n -t "$HOME" "$folder"
-        elif [[ "$OS" == "macos" ]] || [[ "$IS_INTERACTIVE" == true ]]; then
-            stow --adopt --no-folding -R -t "$HOME" "$folder"
-        else
-            stow --no-folding -R -t "$HOME" "$folder"
-        fi
-    done
-
-    # Ensure the permissions of the .config/op directory are set to 700
-    if [[ "$OS" == "macos" ]] && layer_enabled "apps"; then
-        mkdir -p "$HOME/.config/op"
-        chmod 700 "$HOME/.config/op"
-    fi
-}
-
-# =============================================================================
-# Main execution
-# =============================================================================
-
-trap cleanup_sudo_keepalive EXIT
-
-# Ensure required tools for setup are available
-if ! command -v git >/dev/null 2>&1 || ! command -v curl >/dev/null 2>&1; then
-    if [[ "$OS" == "linux" ]]; then
-        echo "Installing missing prerequisites (git/curl/sudo/zsh)..."
-        RUN_AS_ROOT=false
-        if [ "$(id -u)" -eq 0 ]; then
-            RUN_AS_ROOT=true
-        fi
-        if [[ "$IS_INTERACTIVE" == false ]] && [[ "$RUN_AS_ROOT" == false ]] && ! sudo_ok; then
-            echo "Error: sudo requires a password in non-interactive mode."
-            echo "Run as root or re-run with --interactive."
-            exit 1
-        fi
-
-        if command -v apt-get >/dev/null 2>&1; then
-            # Single apt-get update for prerequisites
-            DEBIAN_FRONTEND=noninteractive run_privileged apt-get -qq update >/tmp/apt-update.log 2>&1 || true
-            if command -v sudo >/dev/null 2>&1; then
-                install_apt_packages_quiet git curl sudo zsh
-            elif [[ "$RUN_AS_ROOT" == true ]]; then
-                DEBIAN_FRONTEND=noninteractive apt-get -qq update >/tmp/apt-update.log 2>&1 || {
-                    cat /tmp/apt-update.log
-                    exit 1
-                }
-                DEBIAN_FRONTEND=noninteractive apt-get -qq install -y git curl sudo zsh >/tmp/apt-install.log 2>&1 || {
-                    cat /tmp/apt-install.log
-                    exit 1
-                }
-            else
-                echo "Error: sudo is not installed and you are not root."
-                echo "Please install sudo or run this script as root."
-                exit 1
-            fi
-        elif command -v dnf >/dev/null 2>&1; then
-            if command -v sudo >/dev/null 2>&1; then
-                sudo dnf -q install -y git curl sudo zsh
-            elif [[ "$RUN_AS_ROOT" == true ]]; then
-                dnf -q install -y git curl sudo zsh
-            else
-                echo "Error: sudo is not installed and you are not root."
-                echo "Please install sudo or run this script as root."
-                exit 1
-            fi
-        elif command -v yum >/dev/null 2>&1; then
-            if command -v sudo >/dev/null 2>&1; then
-                sudo yum -q install -y git curl sudo zsh
-            elif [[ "$RUN_AS_ROOT" == true ]]; then
-                yum -q install -y git curl sudo zsh
-            else
-                echo "Error: sudo is not installed and you are not root."
-                echo "Please install sudo or run this script as root."
-                exit 1
-            fi
-        elif command -v pacman >/dev/null 2>&1; then
-            if command -v sudo >/dev/null 2>&1; then
-                sudo pacman -Sy --noconfirm --quiet git curl sudo zsh
-            elif [[ "$RUN_AS_ROOT" == true ]]; then
-                pacman -Sy --noconfirm --quiet git curl sudo zsh
-            else
-                echo "Error: sudo is not installed and you are not root."
-                echo "Please install sudo or run this script as root."
-                exit 1
-            fi
-        elif command -v zypper >/dev/null 2>&1; then
-            if command -v sudo >/dev/null 2>&1; then
-                sudo zypper -q install -y git curl sudo zsh
-            elif [[ "$RUN_AS_ROOT" == true ]]; then
-                zypper -q install -y git curl sudo zsh
-            else
-                echo "Error: sudo is not installed and you are not root."
-                echo "Please install sudo or run this script as root."
-                exit 1
-            fi
-        else
-            echo "Error: git and curl are required but no supported package manager was found."
-            exit 1
-        fi
-    fi
-fi
-
-if ! command -v git >/dev/null 2>&1; then
-    echo "Error: git is required but not installed."
-    echo "Please install git and re-run this script."
-    exit 1
-fi
-if ! command -v curl >/dev/null 2>&1; then
-    echo "Error: curl is required but not installed."
-    echo "Please install curl and re-run this script."
-    exit 1
-fi
-
-# Bootstrap from canonical repo to avoid cached installer scripts.
-# If we're not running from ~/dotfiles/install.sh, fetch/update the repo and exec it.
-SCRIPT_SOURCE="${BASH_SOURCE[0]:-$0}"
-if [[ "${DOTFILES_BOOTSTRAP:-0}" != "1" && "$SCRIPT_SOURCE" != "$HOME/dotfiles/install.sh" ]]; then
-    export DOTFILES_BOOTSTRAP=1
-    DOTFILES_DIR="$HOME/dotfiles"
-    if [ -d "$DOTFILES_DIR/.git" ]; then
-        git -C "$DOTFILES_DIR" fetch --quiet origin || true
-        if [[ -z "$(git -C "$DOTFILES_DIR" status --porcelain 2>/dev/null || true)" ]]; then
-            git -C "$DOTFILES_DIR" pull --ff-only --quiet || true
-        else
-            echo "Skipping dotfiles auto-update in $DOTFILES_DIR (local changes detected)."
-        fi
-    else
-        mkdir -p "$DOTFILES_DIR"
-        GIT_TERMINAL_PROMPT=0 git clone --quiet --depth=1 --filter=blob:none https://github.com/kylelundstedt/dotfiles "$DOTFILES_DIR"
-    fi
-    if [ -f "$DOTFILES_DIR/install.sh" ]; then
-        exec bash "$DOTFILES_DIR/install.sh" "${ORIGINAL_ARGS[@]}"
-    fi
-fi
-
-# Define the path for the dotfiles directory
-DOTFILES_DIR="$HOME/dotfiles"
-
-# Check if the dotfiles directory already exists
-if [ -d "$DOTFILES_DIR" ]; then
-    echo "The dotfiles directory already exists: $DOTFILES_DIR"
-else
-    # Create the dotfiles directory
-    mkdir -p "$DOTFILES_DIR"
-    echo "Created dotfiles directory: $DOTFILES_DIR"
-    GIT_TERMINAL_PROMPT=0 git clone --quiet --depth=1 --filter=blob:none https://github.com/kylelundstedt/dotfiles "$DOTFILES_DIR"
-fi
-
-# Change to the dotfiles directory
-cd "$HOME/dotfiles" || exit
-
-# Ensure install.sh is executable
-if [ -f "$HOME/dotfiles/install.sh" ] && [ ! -x "$HOME/dotfiles/install.sh" ]; then
-    chmod +x "$HOME/dotfiles/install.sh"
-fi
-
-# Summary (printed after bootstrap to avoid duplicate output)
-echo "Install summary:"
-echo "  OS: $OS"
-echo "  Context: $DETECTED_CONTEXT ($(if [[ "$LAYERS_AUTO" == true ]]; then echo "auto-detected"; else echo "override"; fi))"
-echo "  Layers: $INSTALL_LAYERS"
-echo "  Interactive: $IS_INTERACTIVE"
-echo "  Stow dry-run: $STOW_DRY_RUN"
-echo "  Skip stow: $SKIP_STOW"
+echo "Install: OS=$OS, apps=$INSTALL_APPS, dry-run=$DRY_RUN"
 echo ""
 
-# Run enabled layers
-layer_enabled "shell" && install_shell_layer
-layer_enabled "agents" && install_agent_layer
-
-# Stow all active layers (fast, always foreground)
-run_combined_stow
-
-# Apps layer (with optional background mode)
-if layer_enabled "apps"; then
-    if [[ "$BACKGROUND_APPS" == true ]]; then
-        echo ""
-        echo "Shell + agents complete. Starting apps layer in background..."
-        (install_apps_layer >> "$HOME/dotfiles/.install-apps.log" 2>&1) &
-        disown
-        echo "  Log: ~/dotfiles/.install-apps.log"
-        echo "  Check: tail -f ~/dotfiles/.install-apps.log"
-    else
-        install_apps_layer
-    fi
-fi
+install_system_deps
+install_cli_tools
+setup_node
+setup_git
+set_shell
+run_stow
+setup_agents
+install_apps
 
 echo ""
-echo "Dotfiles installation complete for $OS"
-echo "  Layers installed: $INSTALL_LAYERS"
-echo ""
-echo "Next steps:"
-echo "  1. Start a new shell session to use zsh with your new prompt:"
-echo "     - Open a new terminal tab/window, or"
-echo "     - Run: exec zsh"
-echo ""
-if layer_enabled "apps"; then
-    if [ -f "$HOME/dotfiles/aws/.aws/config" ] || [ -f "$HOME/dotfiles/ssh/.ssh/config" ]; then
-        echo "  2. Customize local configs (optional):"
-        [ -f "$HOME/dotfiles/aws/.aws/config" ] && echo "     - Edit ~/dotfiles/aws/.aws/config with your AWS settings"
-        [ -f "$HOME/dotfiles/ssh/.ssh/config" ] && echo "     - Edit ~/dotfiles/ssh/.ssh/config with your SSH hosts"
-        echo ""
-    fi
-fi
+echo "Done. Start a new shell session (or run: exec zsh)"

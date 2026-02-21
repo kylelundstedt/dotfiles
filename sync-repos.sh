@@ -14,6 +14,7 @@ LOCKFILE="/tmp/sync-repos.lock"
 MIN_INTERVAL=$((20 * 3600))  # 20 hours
 PERSONAL_DIR="$HOME/github/kylelundstedt"
 WORK_DIR="$HOME/github/klundstedt"
+SKIP_REPOS="dotfiles"  # managed separately at ~/dotfiles
 
 # Skip if last successful run was recent
 if [[ -f "$LAST_RUN_FILE" ]]; then
@@ -45,6 +46,10 @@ sync_repos() {
         --json name,sshUrl \
         --jq '.[] | "\(.name) \(.sshUrl)"' |
     while read -r name url; do
+        if [[ " $SKIP_REPOS " == *" $name "* ]]; then
+            echo "  skip $name (managed separately)"
+            continue
+        fi
         sleep 1
         local repo_dir="$target_dir/$name"
         if [ -d "$repo_dir/.git" ]; then

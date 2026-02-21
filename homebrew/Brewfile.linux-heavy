@@ -1,8 +1,0 @@
-tap "dopplerhq/cli"
-brew "dopplerhq/cli/doppler"
-brew "libpq"
-brew "node"
-brew "pgcli"
-brew "r"
-brew "rust"
-brew "snowflake-cli"
