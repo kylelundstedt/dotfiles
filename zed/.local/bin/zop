@@ -7,10 +7,6 @@ set -euo pipefail
 # Usage: zop [--backend local|orb|container|sprite] [--machine <name>] [--project <path>] [--org <org>]
 
 BACKENDS_DIR="$(dirname "$(readlink -f "$0")")/zop-backends"
-AVAILABLE_BACKENDS=()
-for f in "$BACKENDS_DIR"/*.sh; do
-    [[ -f "$f" ]] && AVAILABLE_BACKENDS+=("$(basename "$f" .sh)")
-done
 
 # --- Helpers ---
 
@@ -56,6 +52,40 @@ remote_exec() {
     fi
 }
 
+# Source a backend file, clearing previous backend functions first.
+load_backend() {
+    local name="$1"
+    local file="$BACKENDS_DIR/${name}.sh"
+    [[ -f "$file" ]] || die "Unknown backend: $name"
+    # shellcheck source=/dev/null
+    source "$file"
+}
+
+# Build combined target list across all available backends.
+list_all_targets() {
+    local backend bf machines
+    for bf in "$BACKENDS_DIR"/*.sh; do
+        [[ -f "$bf" ]] || continue
+        backend="$(basename "$bf" .sh)"
+        # shellcheck source=/dev/null
+        source "$bf"
+        if ! backend_available 2>/dev/null; then
+            continue
+        fi
+        if [[ "$backend" == "local" ]]; then
+            echo "local"
+        else
+            machines=$(backend_list 2>/dev/null) || true
+            if [[ -n "$machines" ]]; then
+                while IFS= read -r m; do
+                    echo "$m ($backend)"
+                done <<< "$machines"
+            fi
+        fi
+    done
+    echo "[+ new]"
+}
+
 # --- Argument parsing ---
 
 BACKEND=""
@@ -92,24 +122,45 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# --- Resolve backend ---
+# --- Step 1: Pick a target (required) ---
 
 if [[ -z "$BACKEND" ]]; then
-    BACKEND=$(pick "Backend" "${AVAILABLE_BACKENDS[@]}")
-fi
+    targets=$(list_all_targets)
+    selection=$(pick_from "Target" "$targets")
 
-BACKEND_FILE="$BACKENDS_DIR/${BACKEND}.sh"
-[[ -f "$BACKEND_FILE" ]] || die "Unknown backend: $BACKEND (no file at $BACKEND_FILE)"
-
-# shellcheck source=/dev/null
-source "$BACKEND_FILE"
-
-# --- Resolve machine ---
-
-if [[ -z "$MACHINE" ]]; then
-    machines=$(backend_list) || true
-    if [[ -n "$machines" ]]; then
-        MACHINE=$(pick_from "Machine" "$machines")
+    if [[ "$selection" == "[+ new]" ]]; then
+        # Provision a new machine — pick which backend type
+        available=()
+        for bf in "$BACKENDS_DIR"/*.sh; do
+            [[ -f "$bf" ]] || continue
+            b="$(basename "$bf" .sh)"
+            [[ "$b" == "local" ]] && continue
+            # shellcheck source=/dev/null
+            source "$bf"
+            backend_available 2>/dev/null && available+=("$b")
+        done
+        [[ ${#available[@]} -eq 0 ]] && die "No remote backends available"
+        BACKEND=$(pick "Backend" "${available[@]}")
+        load_backend "$BACKEND"
+        backend_create
+    elif [[ "$selection" == "local" ]]; then
+        BACKEND="local"
+        load_backend "$BACKEND"
+    else
+        # Parse "machine-name (backend)" format
+        MACHINE="${selection% (*}"
+        BACKEND="${selection##*(}"
+        BACKEND="${BACKEND%)}"
+        load_backend "$BACKEND"
+    fi
+else
+    load_backend "$BACKEND"
+    # If backend + no machine specified, prompt from that backend's machines
+    if [[ -z "$MACHINE" && "$BACKEND" != "local" ]]; then
+        machines=$(backend_list 2>/dev/null) || true
+        if [[ -n "$machines" ]]; then
+            MACHINE=$(pick_from "Machine" "$machines")
+        fi
     fi
 fi
 
@@ -120,25 +171,32 @@ backend_start
 SSH_TARGET=""
 SSH_TARGET=$(backend_ensure_ssh)
 
-# --- Resolve project ---
+# --- Step 2: Pick a project (required) ---
 
 if [[ -z "$PROJECT" ]]; then
-    projects=$(backend_list_projects) || true
+    projects=$(backend_list_projects 2>/dev/null) || true
     if [[ -n "$projects" ]]; then
-        PROJECT=$(pick_from "Project" "$projects")
+        projects=$(printf '%s\n%s' "$projects" "[+ clone]")
     else
-        PROJECT=$(backend_home)
+        projects="[+ clone]"
+    fi
+
+    PROJECT=$(pick_from "Project" "$projects")
+
+    if [[ "$PROJECT" == "[+ clone]" ]]; then
+        printf "GitHub repo (owner/name): " >&2
+        read -r repo
+        [[ -z "$repo" ]] && die "Repo required"
+        PROJECT=$(backend_clone_project "$repo")
     fi
 fi
 
 # --- Open Zed ---
 
 if [[ -z "$SSH_TARGET" ]]; then
-    # Local backend
     zed "$PROJECT"
 else
     # Remote backend — build ssh:// URI
-    # Add / separator only if PROJECT doesn't start with / (e.g., "~")
     sep="/"
     [[ "$PROJECT" == /* ]] && sep=""
 

@@ -3,12 +3,26 @@
 # Requires: container CLI (Apple silicon, macOS Tahoe)
 # Installs openssh-server for SSH access — containers don't expose SSH by default.
 
+backend_available() { command -v container &>/dev/null; }
+
 backend_list() {
     container list 2>/dev/null | tail -n +2 | awk '{print $1}'
 }
 
+backend_create() {
+    local image name
+    printf "Image (e.g. ubuntu:latest): " >&2
+    read -r image
+    [[ -z "$image" ]] && image="ubuntu:latest"
+    printf "Container name: " >&2
+    read -r name
+    [[ -z "$name" ]] && die "Name required"
+    container create --name "$name" "$image" >&2
+    MACHINE="$name"
+}
+
 backend_start() {
-    [[ -z "$MACHINE" ]] && die "No container specified. Create one with: container create <name> <image>"
+    [[ -z "$MACHINE" ]] && die "No container specified"
     local state
     state=$(container list 2>/dev/null | awk -v m="$MACHINE" '$1==m{print $2}') || true
     if [[ "$state" != "running" ]]; then
@@ -79,6 +93,12 @@ SSHEOF
 
 backend_list_projects() {
     remote_exec "find ~ -mindepth 1 -maxdepth 1 -type d ! -name '.*' 2>/dev/null" || true
+}
+
+backend_clone_project() {
+    local repo="$1"
+    remote_exec "git clone 'git@github.com:${repo}.git' ~/${repo##*/}" >&2
+    echo "~/${repo##*/}"
 }
 
 backend_home() {

@@ -30,6 +30,8 @@
 - [x] Test orb backend with real OrbStack VM
 - [x] Test container backend with Apple Container (macOS 26)
 - [x] Test sprite backend with real Sprite
+- [x] Redesign: combined target picker, required backend + project, provisioning ([+ new] / [+ clone])
+- [ ] Test redesigned flow with orb, container, and sprite backends
 - [ ] Investigate Zed "Error: opening project path" toast on orb backend (connection works, may be Zed race condition)
 - [ ] Add Spotlight/Shortcuts integration (osascript fallback when no tty)
 

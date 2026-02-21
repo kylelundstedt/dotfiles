@@ -2,6 +2,8 @@
 # zop backend: Fly.io Sprite (remote)
 # Requires: sprite CLI, SSH agent with keys
 
+backend_available() { command -v sprite &>/dev/null; }
+
 SPRITE_LOCAL_PORT=2222
 
 _sprite_exec() {
@@ -15,8 +17,19 @@ backend_list() {
     sprite list 2>/dev/null | awk 'NF{print $1}'
 }
 
+backend_create() {
+    local name
+    printf "Sprite name: " >&2
+    read -r name
+    [[ -z "$name" ]] && die "Name required"
+    local args=(sprite create --skip-console "$name")
+    [[ -n "${ORG:-}" ]] && args+=(-o "$ORG")
+    "${args[@]}" >&2
+    MACHINE="$name"
+}
+
 backend_start() {
-    [[ -z "$MACHINE" ]] && die "No sprite specified. Create one with: sprite create"
+    [[ -z "$MACHINE" ]] && die "No sprite specified"
     # Sprites auto-wake on connection
 }
 
@@ -96,6 +109,12 @@ SSHEOF
 
 backend_list_projects() {
     remote_exec "find ~ -mindepth 1 -maxdepth 1 -type d ! -name '.*' 2>/dev/null" || true
+}
+
+backend_clone_project() {
+    local repo="$1"
+    remote_exec "git clone 'git@github.com:${repo}.git' ~/${repo##*/}" >&2
+    echo "~/${repo##*/}"
 }
 
 backend_home() {
