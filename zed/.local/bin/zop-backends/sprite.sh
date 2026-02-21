@@ -29,7 +29,7 @@ backend_create() {
 }
 
 backend_start() {
-    [[ -z "$MACHINE" ]] && die "No sprite specified"
+    if [[ -z "$MACHINE" ]]; then die "No sprite specified"; fi
     # Sprites auto-wake on connection
 }
 
@@ -55,7 +55,7 @@ PubkeyAuthentication yes
 PermitRootLogin no
 SSHEOF
         echo "    Configured" >&2
-    '
+    ' >&2
 
     # Copy SSH public key
     echo "  [2/3] Copying SSH public key..." >&2
@@ -68,7 +68,7 @@ SSHEOF
             echo "$SSH_PUBKEY" >> ~/.ssh/authorized_keys
             echo "    Key added" >&2
         fi
-    '
+    ' >&2
 
     # Start sshd service
     echo "  [3/3] Starting sshd service..." >&2
@@ -84,7 +84,7 @@ SSHEOF
             sleep 2
             echo "    Started" >&2
         fi
-    '
+    ' >&2
 
     # Start local proxy
     echo "  Starting proxy (localhost:$SPRITE_LOCAL_PORT -> $MACHINE:22)..." >&2

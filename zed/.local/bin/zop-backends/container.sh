@@ -22,7 +22,7 @@ backend_create() {
 }
 
 backend_start() {
-    [[ -z "$MACHINE" ]] && die "No container specified"
+    if [[ -z "$MACHINE" ]]; then die "No container specified"; fi
     local state
     state=$(container list 2>/dev/null | awk -v m="$MACHINE" '$1==m{print $2}') || true
     if [[ "$state" != "running" ]]; then

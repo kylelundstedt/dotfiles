@@ -20,7 +20,7 @@ backend_create() {
 }
 
 backend_start() {
-    [[ -z "$MACHINE" ]] && die "No OrbStack VM specified"
+    if [[ -z "$MACHINE" ]]; then die "No OrbStack VM specified"; fi
     local state
     state=$(orb info "$MACHINE" 2>/dev/null | awk '/State:/{print $2}') || true
     if [[ "$state" != "running" ]]; then
