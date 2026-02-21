@@ -11,7 +11,7 @@ backend_list() {
 
 backend_create() {
     local name
-    printf "VM name: " >&2
+    printf "Name: " >&2
     read -r name
     if [[ -z "$name" ]]; then die "Name required"; fi
     orb create ubuntu:25.04 "$name" >&2

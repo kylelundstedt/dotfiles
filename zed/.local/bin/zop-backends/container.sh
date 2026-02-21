@@ -38,14 +38,14 @@ backend_ensure_ssh() {
 
     echo "Setting up SSH on container: $MACHINE" >&2
 
-    # Install openssh-server
-    echo "  [1/3] Installing openssh-server..." >&2
+    # Install openssh-server + git
+    echo "  [1/3] Installing openssh-server, git..." >&2
     container exec "$MACHINE" sh -c '
-        if command -v sshd >/dev/null 2>&1; then
+        if command -v sshd >/dev/null 2>&1 && command -v git >/dev/null 2>&1; then
             echo "    Already installed" >&2
         else
             export DEBIAN_FRONTEND=noninteractive
-            apt-get update -qq >/dev/null && apt-get install -y -qq openssh-server >/dev/null
+            apt-get update -qq >/dev/null && apt-get install -y -qq openssh-server git >/dev/null
         fi
         mkdir -p /run/sshd
         cat > /etc/ssh/sshd_config.d/zop.conf <<SSHEOF
