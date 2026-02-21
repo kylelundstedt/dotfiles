@@ -39,5 +39,8 @@
   },
   "project_panel": {
     "git_status": true
+  },
+  "terminal": {
+    "dock": "right"
   }
 }
