@@ -89,6 +89,7 @@ SSHEOF
 
     # Start local proxy
     echo "  Starting proxy (localhost:$SPRITE_LOCAL_PORT -> $MACHINE:22)..." >&2
+    ssh-keygen -R "[localhost]:$SPRITE_LOCAL_PORT" 2>/dev/null || true
     lsof -ti :"$SPRITE_LOCAL_PORT" 2>/dev/null | xargs kill 2>/dev/null || true
     sleep 1
 
