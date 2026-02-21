@@ -29,6 +29,7 @@ mkdir -p "$HOME/.local/bin"
 export PATH=$PATH:$HOME/go/bin
 export PATH="$PATH:$HOME/.local/bin"
 export PATH="$PATH:$HOME/.atuin/bin"
+export PATH="$PATH:$HOME/dotfiles/scripts"
 command -v starship >/dev/null && eval "$(starship init zsh)"
 command -v atuin >/dev/null && eval "$(atuin init zsh)"
 command -v uv >/dev/null && eval "$(uv generate-shell-completion zsh)"
@@ -85,8 +86,4 @@ zstyle ':completion:*:git:*' group-order 'main commands' 'alias commands' 'exter
 # GitHub PATs for MCP servers are fetched from 1Password at runtime via wrapper scripts.
 # See: ~/dotfiles/agents/.agents/mcp/bin/
 
-export PATH="/opt/homebrew/opt/libpq/bin:$PATH"
-
-if command -v brew >/dev/null 2>&1 && brew --prefix node >/dev/null 2>&1; then
-    export PATH="$(brew --prefix node)/bin:$PATH"
-fi
+command -v fnm >/dev/null && eval "$(fnm env)"
