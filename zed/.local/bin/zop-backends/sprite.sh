@@ -26,6 +26,7 @@ backend_create() {
     [[ -n "${ORG:-}" ]] && args+=(-o "$ORG")
     "${args[@]}" >&2
     MACHINE="$name"
+    echo "Created $MACHINE (sprite)" >&2
 }
 
 backend_start() {

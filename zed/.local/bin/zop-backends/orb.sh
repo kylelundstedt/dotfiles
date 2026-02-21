@@ -17,6 +17,7 @@ backend_create() {
     [[ -z "$name" ]] && name="$distro"
     orb create "$distro" "$name" >&2
     MACHINE="$name"
+    echo "Created $MACHINE (orb)" >&2
 }
 
 backend_start() {

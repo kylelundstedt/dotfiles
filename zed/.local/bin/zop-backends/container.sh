@@ -19,6 +19,7 @@ backend_create() {
     [[ -z "$name" ]] && die "Name required"
     container create --name "$name" "$image" >&2
     MACHINE="$name"
+    echo "Created $MACHINE (container)" >&2
 }
 
 backend_start() {
