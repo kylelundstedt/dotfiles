@@ -1,5 +1,11 @@
 # TODO
 
+## install.sh rewrite
+- [ ] Test on fresh Linux VM (`./test-linux.sh`) — verify all CLI tools install correctly
+- [ ] Test on macOS (clean `~/.local/bin`) — verify GitHub release binary matching for arm64
+- [ ] Test `--apps` flag (brew bundle casks + MAS apps)
+- [ ] Test idempotency — run install.sh twice, confirm no errors or re-downloads
+
 ## Stale references (claude/ → agents/ merge)
 - [x] `.githooks/pre-commit:17` — update `claude/bin/` grep to `agents/.agents/mcp/bin/`
 - [x] `zsh/.zshrc:86` — fix comment referencing `~/dotfiles/claude/bin/`
