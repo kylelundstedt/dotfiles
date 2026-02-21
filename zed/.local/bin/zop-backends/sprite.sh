@@ -16,8 +16,8 @@ backend_list() {
 }
 
 backend_start() {
+    [[ -z "$MACHINE" ]] && die "No sprite specified. Create one with: sprite create"
     # Sprites auto-wake on connection
-    :
 }
 
 backend_ensure_ssh() {

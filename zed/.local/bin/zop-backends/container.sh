@@ -8,6 +8,7 @@ backend_list() {
 }
 
 backend_start() {
+    [[ -z "$MACHINE" ]] && die "No container specified. Create one with: container create <name> <image>"
     local state
     state=$(container list 2>/dev/null | awk -v m="$MACHINE" '$1==m{print $2}') || true
     if [[ "$state" != "running" ]]; then

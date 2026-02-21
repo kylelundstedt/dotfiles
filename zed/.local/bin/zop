@@ -113,11 +113,9 @@ if [[ -z "$MACHINE" ]]; then
     fi
 fi
 
-# --- Start machine ---
+# --- Start machine and ensure SSH ---
 
 backend_start
-
-# --- Ensure SSH ---
 
 SSH_TARGET=""
 SSH_TARGET=$(backend_ensure_ssh)
