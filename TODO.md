@@ -32,7 +32,8 @@
 - [x] Test sprite backend with real Sprite
 - [x] Redesign: combined target picker, required backend + project, provisioning ([+ new] / [+ clone])
 - [ ] Test redesigned flow with orb, container, and sprite backends
-- [ ] Run install.sh on new remote machines to standardize environment (common packages beyond git+openssh)
+- [x] Bootstrap new remote machines with dotfiles clone + `install.sh --no-prompt` after provisioning
+- [ ] Fix install.sh for root containers (missing `sudo`) and add self-clone for curl one-liner
 - [ ] Investigate Zed "Error: opening project path" toast on orb backend (connection works, may be Zed race condition)
 - [ ] Add Spotlight/Shortcuts integration (osascript fallback when no tty)
 

@@ -92,6 +92,7 @@ BACKEND=""
 MACHINE=""
 PROJECT=""
 ORG=""
+IS_NEW_MACHINE=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -143,6 +144,7 @@ if [[ -z "$BACKEND" ]]; then
         BACKEND=$(pick "Backend" "${available[@]}")
         load_backend "$BACKEND"
         backend_create
+        IS_NEW_MACHINE=true
     elif [[ "$selection" == "local" ]]; then
         BACKEND="local"
         load_backend "$BACKEND"
@@ -170,6 +172,13 @@ backend_start
 
 SSH_TARGET=""
 SSH_TARGET=$(backend_ensure_ssh)
+
+# Bootstrap new remote machines with dotfiles
+if [[ "$IS_NEW_MACHINE" == true && -n "$SSH_TARGET" ]]; then
+    echo "Bootstrapping $MACHINE with dotfiles..." >&2
+    remote_exec 'git clone https://github.com/kylelundstedt/dotfiles ~/dotfiles 2>/dev/null || true; cd ~/dotfiles && bash install.sh --no-prompt' >&2
+    echo "Bootstrap complete." >&2
+fi
 
 # --- Step 2: Pick a project (required) ---
 
