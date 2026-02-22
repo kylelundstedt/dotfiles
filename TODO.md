@@ -1,10 +1,11 @@
 # TODO
 
 ## install.sh rewrite
-- [ ] Test on fresh Linux VM (`./test-linux.sh`) — verify all CLI tools install correctly
+- [ ] Test orb backend (`./test-linux.sh orb`) — verify CLI tools, stow, SSH mux, idempotency
+- [ ] Test container backend (`./test-linux.sh container`) — verify root without sudo
+- [ ] Test sprite backend (`./test-linux.sh sprite`) — verify non-root with sudo
 - [ ] Test on macOS (clean `~/.local/bin`) — verify GitHub release binary matching for arm64
 - [ ] Test `--apps` flag (brew bundle casks + MAS apps)
-- [ ] Test idempotency — run install.sh twice, confirm no errors or re-downloads
 
 ## Stale references (claude/ → agents/ merge)
 - [x] `.githooks/pre-commit:17` — update `claude/bin/` grep to `agents/.agents/mcp/bin/`
@@ -33,7 +34,8 @@
 - [x] Redesign: combined target picker, required backend + project, provisioning ([+ new] / [+ clone])
 - [x] Test redesigned flow with orb, container, and sprite backends
 - [x] Bootstrap new remote machines with dotfiles clone + `install.sh --no-prompt` after provisioning
-- [ ] Fix install.sh for root containers (missing `sudo`) and add self-clone for curl one-liner
+- [x] Fix install.sh for root containers (missing `sudo`)
+- [ ] Add self-clone for curl one-liner bootstrap
 - [ ] Investigate Zed "Error: opening project path" toast on orb backend (connection works, may be Zed race condition)
 - [ ] Add Spotlight/Shortcuts integration (osascript fallback when no tty)
 

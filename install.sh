@@ -35,7 +35,10 @@ IS_INTERACTIVE=false
 [[ -t 0 && -t 1 ]] && IS_INTERACTIVE=true
 [[ "$IS_INTERACTIVE" == false ]] && NO_PROMPT=true
 
-DOTFILES_DIR="$HOME/dotfiles"
+SUDO="sudo"
+[[ $EUID -eq 0 ]] && SUDO=""
+
+DOTFILES_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOCAL_BIN="$HOME/.local/bin"
 mkdir -p "$LOCAL_BIN"
 export PATH="$LOCAL_BIN:$PATH"
@@ -74,7 +77,9 @@ install_github_binary() {
     asset_name="${asset_url##*/}"
     tmp=$(mktemp -d)
 
-    if curl -fsSL "$asset_url" -o "$tmp/$asset_name"; then
+    local -a dl_opts=(-fsSL)
+    [[ -n "${GITHUB_TOKEN:-}" ]] && dl_opts+=(-H "Authorization: token $GITHUB_TOKEN")
+    if curl "${dl_opts[@]}" "$asset_url" -o "$tmp/$asset_name"; then
         case "$asset_name" in
             *.tar.gz|*.tgz) tar -xzf "$tmp/$asset_name" -C "$tmp" ;;
             *.zip)          unzip -qo "$tmp/$asset_name" -d "$tmp" ;;
@@ -105,8 +110,8 @@ install_system_deps() {
     echo "=== System dependencies ==="
     if [[ "$OS" == "linux" ]]; then
         echo "Installing system packages via apt..."
-        sudo apt-get update -qq 2>/dev/null || true
-        sudo apt-get install -y -qq stow zsh git curl unzip
+        $SUDO apt-get update -qq 2>/dev/null || true
+        $SUDO apt-get install -y -qq stow zsh git curl unzip
     elif [[ "$OS" == "macos" ]]; then
         if need brew; then
             echo "Homebrew is required on macOS. Install from https://brew.sh and re-run."
@@ -171,7 +176,7 @@ install_cli_tools() {
     # GitHub release binaries
     # bat/ripgrep use Rust target triples; gh/duckdb/others use Go-style os_arch
     if need bat; then
-        (install_github_binary "sharkdp/bat" "bat-v.*-${target_triple}.*\\.tar\\.gz" "bat" "") &
+        (install_github_binary "sharkdp/bat" "bat-v.*-${target_triple}.*\\.tar\\.gz" "bat") &
         pids+=($!)
     fi
     if need fzf; then
@@ -179,7 +184,7 @@ install_cli_tools() {
         pids+=($!)
     fi
     if need rg; then
-        (install_github_binary "BurntSushi/ripgrep" "ripgrep-.*-${target_triple}.*\\.tar\\.gz" "rg" "") &
+        (install_github_binary "BurntSushi/ripgrep" "ripgrep-.*-${target_triple}.*\\.tar\\.gz" "rg") &
         pids+=($!)
     fi
     if need jq; then
@@ -191,7 +196,7 @@ install_cli_tools() {
         pids+=($!)
     fi
     if need gh; then
-        (install_github_binary "cli/cli" "gh_.*_${gh_cli_os}_${gh_arch}\\.(tar\\.gz|zip)" "gh" "") &
+        (install_github_binary "cli/cli" "gh_.*_${gh_cli_os}_${gh_arch}\\.(tar\\.gz|zip)" "gh") &
         pids+=($!)
     fi
     if need duckdb; then
@@ -245,8 +250,10 @@ EOF
 
     # SSH multiplexing for GitHub
     local ssh_config="$HOME/.ssh/config"
-    if [[ -f "$ssh_config" ]] && ! grep -q 'Host github.com' "$ssh_config"; then
+    if ! grep -q 'Host github.com' "$ssh_config" 2>/dev/null; then
         mkdir -p "$HOME/.ssh/sockets"
+        chmod 700 "$HOME/.ssh"
+        touch "$ssh_config"
         cat >> "$ssh_config" <<'SSHEOF'
 
 Host github.com
@@ -377,9 +384,9 @@ setup_agents() {
     # 1Password CLI (Linux only — macOS gets it from Brewfile cask)
     if need op && [[ "$OS" == "linux" ]]; then
         echo "  Installing 1Password CLI..."
-        curl -sS https://downloads.1password.com/linux/keys/1password.asc | sudo gpg --dearmor --output /usr/share/keyrings/1password-archive-keyring.gpg 2>/dev/null || true
-        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/$(dpkg --print-architecture) stable main" | sudo tee /etc/apt/sources.list.d/1password.list >/dev/null 2>&1 || true
-        sudo apt-get update -qq >/dev/null 2>&1 && sudo apt-get install -y -qq 1password-cli >/dev/null 2>&1 && echo "  [+] 1Password CLI" || echo "  [!] 1Password CLI failed"
+        curl -sS https://downloads.1password.com/linux/keys/1password.asc | $SUDO gpg --dearmor --output /usr/share/keyrings/1password-archive-keyring.gpg 2>/dev/null || true
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/$(dpkg --print-architecture) stable main" | $SUDO tee /etc/apt/sources.list.d/1password.list >/dev/null 2>&1 || true
+        $SUDO apt-get update -qq >/dev/null 2>&1 && $SUDO apt-get install -y -qq 1password-cli >/dev/null 2>&1 && echo "  [+] 1Password CLI" || echo "  [!] 1Password CLI failed"
     fi
 
     # MCP servers (shared wrapper paths)
