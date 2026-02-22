@@ -106,8 +106,9 @@ SSHEOF
     [[ -n "${ORG:-}" ]] && proxy_args+=(-o "$ORG")
     proxy_args+=("$SPRITE_LOCAL_PORT:22")
 
-    sprite proxy "${proxy_args[@]}" &>/dev/null &
+    nohup sprite proxy "${proxy_args[@]}" &>/dev/null &
     local proxy_pid=$!
+    disown "$proxy_pid"
     sleep 2
 
     if ! kill -0 "$proxy_pid" 2>/dev/null; then
