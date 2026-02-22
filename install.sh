@@ -144,7 +144,12 @@ install_cli_tools() {
     # This ensures identical versions across macOS and Linux regardless of
     # what the system or brew already has. ~/.local/bin is first on PATH.
     local pids=()
-    local fnm_os; case "$OS" in macos) fnm_os="macos" ;; linux) fnm_os="linux" ;; esac
+    local fnm_asset
+    case "$OS-$arch" in
+        macos-*)       fnm_asset="fnm-macos" ;;
+        linux-aarch64) fnm_asset="fnm-arm64" ;;
+        linux-x86_64)  fnm_asset="fnm-linux" ;;
+    esac
 
     # Curl install scripts
     (curl -fsSL https://starship.rs/install.sh | sh -s -- --yes --bin-dir="$LOCAL_BIN" >/dev/null 2>&1 && echo "  [+] starship" || echo "  [!] starship failed") &
@@ -157,7 +162,7 @@ install_cli_tools() {
     pids+=($!)
     (curl -fsSL https://direnv.net/install.sh | bash >/dev/null 2>&1 && echo "  [+] direnv" || echo "  [!] direnv failed") &
     pids+=($!)
-    (install_github_binary "Schniz/fnm" "fnm-${fnm_os}\\.zip" "fnm" "fnm") &
+    (install_github_binary "Schniz/fnm" "${fnm_asset}\\.zip" "fnm" "fnm") &
     pids+=($!)
 
     # GitHub release binaries
