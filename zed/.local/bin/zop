@@ -175,8 +175,7 @@ SSH_TARGET=$(backend_ensure_ssh)
 # Bootstrap new remote machines with dotfiles
 if [[ "$IS_NEW_MACHINE" == true && -n "$SSH_TARGET" ]]; then
     echo "Bootstrapping $MACHINE with dotfiles..." >&2
-    gh_token="$(gh auth token 2>/dev/null || true)"
-    if remote_exec "export GITHUB_TOKEN='$gh_token'; "'SUDO="sudo"; [ "$(id -u)" = 0 ] && SUDO=""; $SUDO apt-get update -qq && $SUDO apt-get install -y -qq git curl >/dev/null; git clone https://github.com/kylelundstedt/dotfiles ~/dotfiles 2>/dev/null || true; cd ~/dotfiles && bash install.sh --no-prompt --skip-agents' >&2; then
+    if remote_exec 'SUDO="sudo"; [ "$(id -u)" = 0 ] && SUDO=""; $SUDO apt-get update -qq && $SUDO apt-get install -y -qq git curl >/dev/null; git clone https://github.com/kylelundstedt/dotfiles ~/dotfiles 2>/dev/null || true; cd ~/dotfiles && bash install.sh --no-prompt --skip-agents' >&2; then
         echo "Bootstrap complete." >&2
     else
         echo "Bootstrap failed (non-fatal). You can run install.sh manually later." >&2

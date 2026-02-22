@@ -8,7 +8,6 @@
 set -euo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "$0")" && pwd)"
-GITHUB_TOKEN="${GITHUB_TOKEN:-$(gh auth token 2>/dev/null || true)}"
 PASS=0
 FAIL=0
 
@@ -61,7 +60,6 @@ test_container() {
     echo ""
     echo "--- Installing as root ---"
     container exec "$name" bash -c "
-        export GITHUB_TOKEN='$GITHUB_TOKEN'
         apt-get update -qq && apt-get install -y -qq git curl >/dev/null
         git clone https://github.com/kylelundstedt/dotfiles ~/dotfiles 2>/dev/null || true
         cd ~/dotfiles && bash install.sh --no-prompt --skip-agents 2>&1
@@ -95,7 +93,6 @@ test_sprite() {
     echo ""
     echo "--- Installing ---"
     sprite exec -s "$name" -- bash -c "
-        export GITHUB_TOKEN='$GITHUB_TOKEN'
         sudo apt-get update -qq && sudo apt-get install -y -qq git curl >/dev/null
         git clone https://github.com/kylelundstedt/dotfiles ~/dotfiles 2>/dev/null || true
         cd ~/dotfiles && bash install.sh --no-prompt --skip-agents 2>&1
