@@ -6,7 +6,7 @@
 backend_available() { command -v container &>/dev/null; }
 
 backend_list() {
-    container list --all 2>/dev/null | tail -n +2 | awk '{print $1}'
+    container list 2>/dev/null | tail -n +2 | awk '{print $1}'
 }
 
 backend_create() {
