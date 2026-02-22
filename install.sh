@@ -6,15 +6,17 @@ INSTALL_APPS=false
 DRY_RUN=false
 NO_PROMPT=false
 SKIP_STOW=false
+SKIP_AGENTS=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --apps)       INSTALL_APPS=true; shift ;;
-        --dry-run)    DRY_RUN=true; shift ;;
-        --no-prompt)  NO_PROMPT=true; shift ;;
-        --skip-stow)  SKIP_STOW=true; shift ;;
+        --apps)          INSTALL_APPS=true; shift ;;
+        --dry-run)       DRY_RUN=true; shift ;;
+        --no-prompt)     NO_PROMPT=true; shift ;;
+        --skip-stow)     SKIP_STOW=true; shift ;;
+        --skip-agents)   SKIP_AGENTS=true; shift ;;
         *)
-            echo "Usage: $0 [--apps] [--dry-run] [--no-prompt] [--skip-stow]"
+            echo "Usage: $0 [--apps] [--dry-run] [--no-prompt] [--skip-stow] [--skip-agents]"
             exit 1
             ;;
     esac
@@ -476,7 +478,9 @@ setup_node
 setup_git
 set_shell
 run_stow
-setup_agents
+if [[ "$SKIP_AGENTS" != true ]]; then
+    setup_agents
+fi
 install_apps
 
 echo ""
