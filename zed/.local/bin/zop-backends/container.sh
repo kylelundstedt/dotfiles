@@ -92,7 +92,7 @@ SSHEOF
 }
 
 backend_list_projects() {
-    remote_exec "find ~ -mindepth 1 -maxdepth 1 -type d ! -name '.*' 2>/dev/null" || true
+    remote_exec "find ~ -mindepth 1 -maxdepth 1 -type d ! -name '.*' ! -name 'dotfiles' 2>/dev/null" || true
 }
 
 backend_clone_project() {
