@@ -6,7 +6,7 @@ GNU Stow–managed dotfiles and AI agent platform for macOS and Linux. Each top-
 
 - Install everything: `./install.sh` (or `./install.sh --no-prompt` for non-interactive)
 - Install with macOS apps (casks, Mac App Store): `./install.sh --apps`
-- Test on Linux: `./test-linux.sh` (Apple Container + Sprite)
+- Test on Linux: `./test-install.sh` (Apple Container + Sprite)
 - Stow a single package: `stow --no-folding -R -t "$HOME" <package>`
 - Dry-run stow: `stow --no-folding -R -n -t "$HOME" <package>`
 

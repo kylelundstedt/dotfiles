@@ -20,7 +20,7 @@ docker run --rm -it ghcr.io/astral-sh/uv:python3.12-bookworm bash -c "apt-get up
 Alternatively, you can use the included test script if you have OrbStack installed:
 
 ```bash
-./test-linux.sh
+./test-install.sh
 ```
 
 This uses OrbStack's Linux VM to verify the installation works on Linux.
@@ -134,7 +134,7 @@ Run a disposable session:
 container run --name sprite-session --interactive --tty --rm sprite-local:base
 ```
 
-Get code in — `git clone` from inside the VM (the agent authenticates to git, not you). For local-only repos without a remote, use the tar-copy approach from `test-linux.sh`:
+Get code in — `git clone` from inside the VM (the agent authenticates to git, not you). For local-only repos without a remote, use the tar-copy approach from `test-install.sh`:
 
 ```bash
 # From the host:
