@@ -1,6 +1,6 @@
 #!/bin/bash
 # Test install.sh across the same backends zop uses.
-# Usage: ./test-linux.sh [container|sprite|all]
+# Usage: ./test-install.sh [container|sprite|all]
 #   container — Apple Container (root, no sudo)
 #   sprite    — Fly.io Sprite (non-root, sudo available)
 #   all       — both (default)
