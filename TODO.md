@@ -9,10 +9,15 @@
 - [ ] Sprite: wait for checkpoint forking, then create golden sprite from devbox
 
 ## zop
+- [x] Exclude `dotfiles` from project list (container + sprite backends)
 - [ ] Add self-clone for curl one-liner bootstrap
 - [ ] Add Spotlight/Shortcuts integration (osascript fallback when no tty)
 
 ## install.sh
 - [x] Test on macOS (clean `~/.local/bin`) — verify GitHub release binary matching for arm64
+- [x] Test on Linux — container (root) + sprite (non-root), 40/40 passing
+- [x] Fix fnm arch on aarch64 Linux (`fnm-arm64.zip` not `fnm-linux.zip`)
+- [x] Remove `just` from CLI tools and test verify list
+- [x] Rename `test-linux.sh` → `test-install.sh`
 - [ ] Test `--apps` flag (brew bundle casks + MAS apps)
 
