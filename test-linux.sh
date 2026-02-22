@@ -17,7 +17,7 @@ log_fail() { echo "  FAIL: $1"; FAIL=$((FAIL + 1)); }
 
 # Verification script injected into remote environments
 read -r -d '' VERIFY_SCRIPT << 'VERIFY' || true
-export PATH=$HOME/.local/bin:$PATH
+export PATH=$HOME/.local/bin:$HOME/.atuin/bin:$PATH
 eval "$(fnm env 2>/dev/null)" || true
 
 for cmd in starship uv atuin zoxide direnv just fnm bat fzf rg jq yq gh duckdb carapace node; do
