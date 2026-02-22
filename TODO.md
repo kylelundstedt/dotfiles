@@ -1,9 +1,8 @@
 # TODO
 
 ## install.sh rewrite
-- [ ] Test orb backend (`./test-linux.sh orb`) — verify CLI tools, stow, SSH mux, idempotency
-- [ ] Test container backend (`./test-linux.sh container`) — verify root without sudo
-- [ ] Test sprite backend (`./test-linux.sh sprite`) — verify non-root with sudo
+- [x] Test container backend (`./test-linux.sh container`) — verify root without sudo
+- [x] Test sprite backend (`./test-linux.sh sprite`) — verify non-root with sudo
 - [ ] Test on macOS (clean `~/.local/bin`) — verify GitHub release binary matching for arm64
 - [ ] Test `--apps` flag (brew bundle casks + MAS apps)
 
@@ -26,18 +25,17 @@
 
 ## zop (unified Zed launcher)
 - [x] Create `zop` dispatcher + backend interface in `zed/.local/bin/`
-- [x] Implement local, orb, container, sprite backends
+- [x] Implement local, container, sprite backends
 - [x] Delete `scripts/` directory, remove PATH entry from `.zshrc`
-- [x] Test orb backend with real OrbStack VM
 - [x] Test container backend with Apple Container (macOS 26)
 - [x] Test sprite backend with real Sprite
 - [x] Redesign: combined target picker, required backend + project, provisioning ([+ new] / [+ clone])
-- [x] Test redesigned flow with orb, container, and sprite backends
+- [x] Test redesigned flow with container and sprite backends
 - [x] Bootstrap new remote machines with dotfiles clone + `install.sh --no-prompt` after provisioning
 - [x] Fix install.sh for root containers (missing `sudo`)
 - [ ] Add self-clone for curl one-liner bootstrap
-- [ ] Investigate Zed "Error: opening project path" toast on orb backend (connection works, may be Zed race condition)
 - [ ] Add Spotlight/Shortcuts integration (osascript fallback when no tty)
+- [ ] Build shared base image (Dockerfile) for container + sprite backends
 
 ## Minor
 - [x] `homebrew/Brewfile:105` — corrupted text `id: 1481302432ple` (fixed in Brewfile rewrite)

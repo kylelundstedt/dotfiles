@@ -44,7 +44,6 @@ cask "notion", args: { appdir: "/Applications" }
 # cask "omnigraffle", args: { appdir: "/Applications" }
 # cask "omnioutliner", args: { appdir: "/Applications" }
 # cask "omniplan", args: { appdir: "/Applications" }
-cask "orbstack"
 # cask "positron"
 cask "quarto"
 cask "rocket"

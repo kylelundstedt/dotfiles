@@ -1,10 +1,9 @@
 #!/bin/bash
 # Test install.sh across the same backends zop uses.
-# Usage: ./test-linux.sh [orb|container|sprite|all]
-#   orb       — OrbStack VM (non-root, stow + idempotency)
+# Usage: ./test-linux.sh [container|sprite|all]
 #   container — Apple Container (root, no sudo)
 #   sprite    — Fly.io Sprite (non-root, sudo available)
-#   all       — all available backends (default)
+#   all       — both (default)
 
 set -euo pipefail
 
@@ -44,49 +43,6 @@ parse_results() {
             MISSING*) log_fail "$prefix: ${line#MISSING }" ;;
         esac
     done <<< "$output"
-}
-
-# --- OrbStack VM (non-root) ---
-test_orb() {
-    if ! command -v orbctl >/dev/null 2>&1; then
-        echo "orbctl not found — skipping orb test."
-        return 0
-    fi
-
-    local vm="test-dotfiles-orb-$$"
-    echo "=== Orb test (non-root) ==="
-    orbctl create ubuntu:24.04 "$vm"
-
-    echo ""
-    echo "--- First run ---"
-    orbctl run -m "$vm" bash -c "
-        ln -sf '$DOTFILES_DIR' ~/dotfiles
-        cd ~/dotfiles && bash install.sh --no-prompt --skip-agents 2>&1
-    " || {
-        log_fail "orb: install.sh first run"
-        orbctl delete --force "$vm" 2>/dev/null || true
-        return
-    }
-    log_pass "orb: install.sh first run"
-
-    echo ""
-    echo "--- Verifying ---"
-    parse_results "orb" "$(orbctl run -m "$vm" bash -c "$VERIFY_SCRIPT" 2>&1)"
-
-    echo ""
-    echo "--- Idempotency (second run) ---"
-    orbctl run -m "$vm" bash -c "
-        cd ~/dotfiles && bash install.sh --no-prompt --skip-agents 2>&1
-    " || {
-        log_fail "orb: idempotency"
-        orbctl delete --force "$vm" 2>/dev/null || true
-        return
-    }
-    log_pass "orb: idempotency"
-
-    echo ""
-    echo "--- Tearing down VM ---"
-    orbctl delete --force "$vm" 2>/dev/null || true
 }
 
 # --- Apple Container (root, no sudo) ---
@@ -159,11 +115,10 @@ test_sprite() {
 # --- Dispatch ---
 mode="${1:-all}"
 case "$mode" in
-    orb)       test_orb ;;
     container) test_container ;;
     sprite)    test_sprite ;;
-    all)       test_orb; test_container; test_sprite ;;
-    *)         echo "Usage: $0 [orb|container|sprite|all]"; exit 1 ;;
+    all)       test_container; test_sprite ;;
+    *)         echo "Usage: $0 [container|sprite|all]"; exit 1 ;;
 esac
 
 TOTAL=$((PASS + FAIL))

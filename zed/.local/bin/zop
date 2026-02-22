@@ -2,9 +2,9 @@
 set -euo pipefail
 
 # Unified Zed project launcher.
-# Opens projects in Zed across local, OrbStack, Apple Container, and Sprite backends.
+# Opens projects in Zed across local, Apple Container, and Sprite backends.
 #
-# Usage: zop [--backend local|orb|container|sprite] [--machine <name>] [--project <path>] [--org <org>]
+# Usage: zop [--backend local|container|sprite] [--machine <name>] [--project <path>] [--org <org>]
 
 BACKENDS_DIR="$(dirname "$(readlink -f "$0")")/zop-backends"
 
@@ -101,13 +101,12 @@ while [[ $# -gt 0 ]]; do
         --project) PROJECT="$2"; shift 2 ;;
         --org)     ORG="$2"; shift 2 ;;
         --help|-h)
-            echo "Usage: zop [--backend local|orb|container|sprite] [--machine <name>] [--project <path>] [--org <org>]"
+            echo "Usage: zop [--backend local|container|sprite] [--machine <name>] [--project <path>] [--org <org>]"
             echo ""
             echo "Opens a project in Zed. Prompts interactively for missing arguments."
             echo ""
             echo "Backends:"
             echo "  local       Local macOS project"
-            echo "  orb         OrbStack Linux VM"
             echo "  container   Apple Container (macOS 26+)"
             echo "  sprite      Fly.io Sprite (remote)"
             echo ""
