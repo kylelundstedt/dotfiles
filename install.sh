@@ -267,9 +267,6 @@ EOF
 
 # --- set_shell ---
 set_shell() {
-    if [[ "$IS_INTERACTIVE" == false ]]; then
-        return 0
-    fi
     local desired_shell
     desired_shell="$(command -v zsh || true)"
     if [[ -n "$desired_shell" && "$SHELL" != "$desired_shell" ]]; then
