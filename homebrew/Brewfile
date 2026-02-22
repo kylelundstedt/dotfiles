@@ -41,6 +41,7 @@ cask "microsoft-office", args: { appdir: "/Applications" }
 cask "microsoft-teams", args: { appdir: "/Applications" }
 # cask "moom"
 cask "notion", args: { appdir: "/Applications" }
+cask "obsidian", args: { appdir: "/Applications" }
 # cask "omnigraffle", args: { appdir: "/Applications" }
 # cask "omnioutliner", args: { appdir: "/Applications" }
 # cask "omniplan", args: { appdir: "/Applications" }
