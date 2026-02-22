@@ -24,10 +24,6 @@ if [[ $(uname) == "Darwin" ]]; then
     export SSH_AUTH_SOCK=~/Library/Group\ Containers/2BUA8C4S2C.com.1password/t/agent.sock
 fi
 
-mkdir -p "$HOME/.local/bin"
-
-export PATH="$HOME/.local/bin:$HOME/.atuin/bin:$PATH"
-export PATH="$PATH:$HOME/go/bin"
 command -v starship >/dev/null && eval "$(starship init zsh)"
 command -v atuin >/dev/null && eval "$(atuin init zsh)"
 command -v uv >/dev/null && eval "$(uv generate-shell-completion zsh)"
@@ -83,7 +79,5 @@ zstyle ':completion:*:git:*' group-order 'main commands' 'alias commands' 'exter
 ### 1Password ###
 # GitHub PATs for MCP servers are fetched from 1Password at runtime via wrapper scripts.
 # See: ~/dotfiles/agents/.agents/mcp/bin/
-
-command -v fnm >/dev/null && eval "$(fnm env)"
 
 . "$HOME/.atuin/bin/env"
