@@ -1,6 +1,5 @@
 {
     "dotfiles.repository": "https://github.com/kylelundstedt/dotfiles",
-    "snowflake.snowsqlConfigPath": "/Users/klundstedt/.snowsql/config",
     "chat.editing.alwaysSaveWithGeneratedChanges": true,
     "terminal.integrated.fontFamily": "Monaspace Neon",
     "terminal.integrated.scrollback": 500,

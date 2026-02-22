@@ -140,73 +140,44 @@ install_cli_tools() {
         *) echo "  [!] Unsupported platform: $OS-$arch"; return 1 ;;
     esac
 
-    # All installs run in parallel — each writes to a unique binary/path
+    # Always install all tools to ~/.local/bin — no `need` checks.
+    # This ensures identical versions across macOS and Linux regardless of
+    # what the system or brew already has. ~/.local/bin is first on PATH.
     local pids=()
+    local fnm_os; case "$OS" in macos) fnm_os="macos" ;; linux) fnm_os="linux" ;; esac
 
     # Curl install scripts
-    if need starship; then
-        (curl -fsSL https://starship.rs/install.sh | sh -s -- --yes --bin-dir="$LOCAL_BIN" >/dev/null 2>&1 && echo "  [+] starship" || echo "  [!] starship failed") &
-        pids+=($!)
-    fi
-    if need uv; then
-        (curl -fsSL https://astral.sh/uv/install.sh | env CARGO_HOME="$HOME/.local" sh >/dev/null 2>&1 && echo "  [+] uv" || echo "  [!] uv failed") &
-        pids+=($!)
-    fi
-    if need atuin; then
-        (curl -fsSL https://setup.atuin.sh | sh -s -- --yes --no-modify-path >/dev/null 2>&1 && echo "  [+] atuin" || echo "  [!] atuin failed") &
-        pids+=($!)
-    fi
-    if need zoxide; then
-        (curl -fsSL https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | sh >/dev/null 2>&1 && echo "  [+] zoxide" || echo "  [!] zoxide failed") &
-        pids+=($!)
-    fi
-    if need direnv; then
-        (curl -fsSL https://direnv.net/install.sh | bash >/dev/null 2>&1 && echo "  [+] direnv" || echo "  [!] direnv failed") &
-        pids+=($!)
-    fi
-    if need just; then
-        (curl -fsSL https://just.systems/install.sh | bash -s -- --to "$LOCAL_BIN" >/dev/null 2>&1 && echo "  [+] just" || echo "  [!] just failed") &
-        pids+=($!)
-    fi
-    if need fnm; then
-        (curl -fsSL https://fnm.vercel.app/install | bash -s -- --skip-shell --install-dir "$LOCAL_BIN" >/dev/null 2>&1 && echo "  [+] fnm" || echo "  [!] fnm failed") &
-        pids+=($!)
-    fi
+    (curl -fsSL https://starship.rs/install.sh | sh -s -- --yes --bin-dir="$LOCAL_BIN" >/dev/null 2>&1 && echo "  [+] starship" || echo "  [!] starship failed") &
+    pids+=($!)
+    (curl -fsSL https://astral.sh/uv/install.sh | env CARGO_HOME="$HOME/.local" sh >/dev/null 2>&1 && echo "  [+] uv" || echo "  [!] uv failed") &
+    pids+=($!)
+    (curl -fsSL https://setup.atuin.sh | sh -s -- --yes --no-modify-path >/dev/null 2>&1 && echo "  [+] atuin" || echo "  [!] atuin failed") &
+    pids+=($!)
+    (curl -fsSL https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | sh >/dev/null 2>&1 && echo "  [+] zoxide" || echo "  [!] zoxide failed") &
+    pids+=($!)
+    (curl -fsSL https://direnv.net/install.sh | bash >/dev/null 2>&1 && echo "  [+] direnv" || echo "  [!] direnv failed") &
+    pids+=($!)
+    (install_github_binary "Schniz/fnm" "fnm-${fnm_os}\\.zip" "fnm" "fnm") &
+    pids+=($!)
 
     # GitHub release binaries
-    # bat/ripgrep use Rust target triples; gh/duckdb/others use Go-style os_arch
-    if need bat; then
-        (install_github_binary "sharkdp/bat" "bat-v.*-${target_triple}.*\\.tar\\.gz" "bat") &
-        pids+=($!)
-    fi
-    if need fzf; then
-        (install_github_binary "junegunn/fzf" "fzf-.*-${gh_os}_${gh_arch}\\.tar\\.gz" "fzf" "fzf") &
-        pids+=($!)
-    fi
-    if need rg; then
-        (install_github_binary "BurntSushi/ripgrep" "ripgrep-.*-${target_triple}.*\\.tar\\.gz" "rg") &
-        pids+=($!)
-    fi
-    if need jq; then
-        (install_github_binary "jqlang/jq" "jq-${gh_os}-${gh_arch}\"$" "jq" "jq-${gh_os}-${gh_arch}") &
-        pids+=($!)
-    fi
-    if need yq; then
-        (install_github_binary "mikefarah/yq" "yq_${gh_os}_${gh_arch}\"$" "yq" "yq_${gh_os}_${gh_arch}") &
-        pids+=($!)
-    fi
-    if need gh; then
-        (install_github_binary "cli/cli" "gh_.*_${gh_cli_os}_${gh_arch}\\.(tar\\.gz|zip)" "gh") &
-        pids+=($!)
-    fi
-    if need duckdb; then
-        (install_github_binary "duckdb/duckdb" "duckdb_cli-${duckdb_os}-${gh_arch}\\.zip" "duckdb" "duckdb") &
-        pids+=($!)
-    fi
-    if need carapace; then
-        (install_github_binary "carapace-sh/carapace-bin" "carapace-bin_.*_${gh_os}_${gh_arch}\\.tar\\.gz" "carapace" "carapace") &
-        pids+=($!)
-    fi
+    (install_github_binary "sharkdp/bat" "bat-v.*-${target_triple}.*\\.tar\\.gz" "bat") &
+    pids+=($!)
+    (install_github_binary "junegunn/fzf" "fzf-.*-${gh_os}_${gh_arch}\\.tar\\.gz" "fzf" "fzf") &
+    pids+=($!)
+    (install_github_binary "BurntSushi/ripgrep" "ripgrep-.*-${target_triple}.*\\.tar\\.gz" "rg") &
+    pids+=($!)
+    local jq_os; case "$OS" in macos) jq_os="macos" ;; linux) jq_os="linux" ;; esac
+    (install_github_binary "jqlang/jq" "jq-${jq_os}-${gh_arch}\"$" "jq" "jq-${jq_os}-${gh_arch}") &
+    pids+=($!)
+    (install_github_binary "mikefarah/yq" "yq_${gh_os}_${gh_arch}\"$" "yq" "yq_${gh_os}_${gh_arch}") &
+    pids+=($!)
+    (install_github_binary "cli/cli" "gh_.*_${gh_cli_os}_${gh_arch}\\.(tar\\.gz|zip)" "gh") &
+    pids+=($!)
+    (install_github_binary "duckdb/duckdb" "duckdb_cli-${duckdb_os}-${gh_arch}\\.zip" "duckdb" "duckdb") &
+    pids+=($!)
+    (install_github_binary "carapace-sh/carapace-bin" "carapace-bin_.*_${gh_os}_${gh_arch}\\.tar\\.gz" "carapace" "carapace") &
+    pids+=($!)
 
     # Wait for all parallel installs
     for pid in "${pids[@]}"; do

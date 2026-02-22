@@ -50,7 +50,7 @@ cask "rocket"
 cask "rustdesk", args: { appdir: "/Applications" }
 # cask "rstudio"
 cask "slack", args: { appdir: "/Applications" }
-cask "snowflake-snowsql", args: { appdir: "/Applications" }
+# cask "snowflake-snowsql", args: { appdir: "/Applications" }
 # cask "sublime-text", args: { appdir: "/Applications" }  # Removed - migrated to VS Code
 # cask "tableplus"
 # cask "tabula"

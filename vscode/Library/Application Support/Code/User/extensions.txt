@@ -6,5 +6,4 @@ mathematic.vscode-pdf
 mechatroner.rainbow-csv
 oderwat.indent-rainbow
 quarto.quarto
-snowflake.snowflake-vsc
 tailscale.vscode-tailscale
