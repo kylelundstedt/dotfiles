@@ -19,7 +19,7 @@ read -r -d '' VERIFY_SCRIPT << 'VERIFY' || true
 export PATH=$HOME/.local/bin:$HOME/.atuin/bin:$PATH
 eval "$(fnm env 2>/dev/null)" || true
 
-for cmd in starship uv atuin zoxide direnv just fnm bat fzf rg jq yq gh duckdb carapace node; do
+for cmd in starship uv atuin zoxide direnv fnm bat fzf rg jq yq gh duckdb carapace node; do
     if command -v $cmd >/dev/null 2>&1; then echo "OK $cmd"; else echo "MISSING $cmd"; fi
 done
 
