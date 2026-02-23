@@ -19,7 +19,7 @@ read -r -d '' VERIFY_SCRIPT << 'VERIFY' || true
 export PATH=$HOME/.local/bin:$HOME/.atuin/bin:$PATH
 eval "$(fnm env 2>/dev/null)" || true
 
-for cmd in starship uv atuin zoxide direnv fnm bat fzf rg jq yq gh duckdb carapace node; do
+for cmd in starship uv atuin zoxide direnv fnm bat fzf rg jq yq gh duckdb carapace node claude codex op; do
     if command -v $cmd >/dev/null 2>&1; then echo "OK $cmd"; else echo "MISSING $cmd"; fi
 done
 
@@ -32,6 +32,19 @@ if [ -f ~/.gitconfig_os_local ]; then echo "OK git-os-include"; else echo "MISSI
 # Stow symlinks
 for f in .zshrc .config/starship.toml; do
     if [ -L "$HOME/$f" ]; then echo "OK stow:$f"; else echo "MISSING stow:$f"; fi
+done
+
+# MCP servers registered in Claude
+if command -v claude >/dev/null 2>&1; then
+    mcp_list=$(claude mcp list 2>/dev/null || true)
+    for srv in github-home github-work motherduck dlt tigris; do
+        if echo "$mcp_list" | grep -q "$srv"; then echo "OK mcp:$srv"; else echo "MISSING mcp:$srv"; fi
+    done
+fi
+
+# Skills directories
+for skill in bootstrap-project data-pipelines sprites mviz find-skills; do
+    if [ -d "$HOME/.claude/skills/$skill" ]; then echo "OK skill:$skill"; else echo "MISSING skill:$skill"; fi
 done
 VERIFY
 
@@ -59,10 +72,25 @@ test_container() {
 
     echo ""
     echo "--- Installing as root ---"
+    # Clone dotfiles, then overwrite with local working tree via SSH
     container exec "$name" bash -c "
-        apt-get update -qq && apt-get install -y -qq git curl >/dev/null
-        git clone https://github.com/kylelundstedt/dotfiles ~/dotfiles 2>/dev/null || true
-        cd ~/dotfiles && bash install.sh --no-prompt --skip-agents 2>&1
+        apt-get update -qq && apt-get install -y -qq git curl openssh-server >/dev/null
+        mkdir -p /run/sshd ~/.ssh && chmod 700 ~/.ssh
+    "
+    # Set up SSH access for scp
+    local pubkey
+    pubkey=$(ssh-add -L 2>/dev/null | head -1)
+    container exec -e "K=$pubkey" "$name" bash -c 'echo "$K" >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys'
+    container exec --detach "$name" /usr/sbin/sshd -D -e >/dev/null 2>/dev/null
+    sleep 2
+    local ct_ip
+    ct_ip=$(container exec "$name" hostname -I 2>/dev/null | awk '{print $1}')
+    # Clone from GitHub then overlay local changes
+    container exec "$name" bash -c "git clone https://github.com/kylelundstedt/dotfiles ~/dotfiles 2>/dev/null || true"
+    # Overlay local changes onto the cloned repo via tar+ssh (rsync not available)
+    tar -C "$DOTFILES_DIR" --exclude=.git -cf - . | ssh -o StrictHostKeyChecking=no "root@${ct_ip}" "tar -C ~/dotfiles -xf -"
+    container exec "$name" bash -c "
+        cd ~/dotfiles && bash install.sh --no-prompt 2>&1
     " || {
         log_fail "container: install.sh"
         container stop "$name" 2>/dev/null; container rm "$name" 2>/dev/null || true
@@ -92,10 +120,11 @@ test_sprite() {
 
     echo ""
     echo "--- Installing ---"
+    # Copy local working tree so we test uncommitted changes
+    sprite exec -s "$name" -- bash -c "sudo apt-get update -qq && sudo apt-get install -y -qq git curl >/dev/null"
+    tar -C "$DOTFILES_DIR" -cf - --exclude=.git . | sprite exec -s "$name" -- bash -c "mkdir -p ~/dotfiles && tar -C ~/dotfiles -xf - && cd ~/dotfiles && git init -q"
     sprite exec -s "$name" -- bash -c "
-        sudo apt-get update -qq && sudo apt-get install -y -qq git curl >/dev/null
-        git clone https://github.com/kylelundstedt/dotfiles ~/dotfiles 2>/dev/null || true
-        cd ~/dotfiles && bash install.sh --no-prompt --skip-agents 2>&1
+        cd ~/dotfiles && bash install.sh --no-prompt 2>&1
     " || {
         log_fail "sprite: install.sh"
         sprite destroy -s "$name" --force 2>/dev/null || true

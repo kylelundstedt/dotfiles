@@ -338,11 +338,14 @@ setup_agents() {
     echo ""
     echo "=== Agents ==="
 
-    # Claude Code CLI
+    # Claude Code CLI (native installer, npm fallback for arm64 Linux)
     if need claude && [[ ! -f "$LOCAL_BIN/claude" ]]; then
         echo "  Installing Claude Code CLI..."
-        if curl -fsSL https://claude.ai/install.sh | bash >/dev/null 2>&1; then
+        if curl -fsSL https://claude.ai/install.sh | bash >/dev/null 2>&1 && command -v claude >/dev/null 2>&1; then
             echo "  [+] Claude Code"
+        elif command -v npm >/dev/null 2>&1; then
+            echo "  Native installer failed, trying npm..."
+            npm install -g @anthropic-ai/claude-code >/dev/null 2>&1 && echo "  [+] Claude Code (npm)" || echo "  [!] Claude Code install failed"
         else
             echo "  [!] Claude Code install failed"
         fi
@@ -357,9 +360,22 @@ setup_agents() {
     # 1Password CLI (Linux only — macOS gets it from Brewfile cask)
     if need op && [[ "$OS" == "linux" ]]; then
         echo "  Installing 1Password CLI..."
-        curl -sS https://downloads.1password.com/linux/keys/1password.asc | $SUDO gpg --dearmor --output /usr/share/keyrings/1password-archive-keyring.gpg 2>/dev/null || true
-        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/$(dpkg --print-architecture) stable main" | $SUDO tee /etc/apt/sources.list.d/1password.list >/dev/null 2>&1 || true
-        $SUDO apt-get update -qq >/dev/null 2>&1 && $SUDO apt-get install -y -qq 1password-cli >/dev/null 2>&1 && echo "  [+] 1Password CLI" || echo "  [!] 1Password CLI failed"
+        local op_arch
+        case "$(uname -m)" in
+            x86_64)  op_arch="amd64" ;;
+            aarch64) op_arch="arm64" ;;
+            *) echo "  [!] 1Password CLI: unsupported arch $(uname -m)"; op_arch="" ;;
+        esac
+        if [[ -n "$op_arch" ]]; then
+            local op_tmp
+            op_tmp=$(mktemp -d)
+            if curl -sSfo "$op_tmp/op.zip" "https://cache.agilebits.com/dist/1P/op2/pkg/v2.32.1/op_linux_${op_arch}_v2.32.1.zip"; then
+                unzip -qo "$op_tmp/op.zip" op -d "$LOCAL_BIN" && chmod +x "$LOCAL_BIN/op" && echo "  [+] 1Password CLI" || echo "  [!] 1Password CLI: extract failed"
+            else
+                echo "  [!] 1Password CLI: download failed"
+            fi
+            rm -rf "$op_tmp"
+        fi
     fi
 
     # MCP servers (shared wrapper paths)

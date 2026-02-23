@@ -18,13 +18,6 @@ amend = commit --amend -C HEAD --allow-empty-message
 default = simple
 autoSetupRemote = true
 
-[hub]
-protocol = ssh # Use SSH for better security with 1Password
-
-# Rewrite HTTPS GitHub URLs to SSH so 1Password handles auth
-[url "git@github.com:"]
-    insteadOf = https://github.com/
-
 [filter "lfs"]
 clean = git-lfs clean -- %f
 smudge = git-lfs smudge -- %f

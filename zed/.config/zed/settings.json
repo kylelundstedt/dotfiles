@@ -44,4 +44,11 @@
   "terminal": {
     "dock": "right",
   },
+  "agent_servers": {
+    "claude": {
+      "env": {
+        "CLAUDE_CODE_EXECUTABLE": "claude",
+      },
+    },
+  },
 }
