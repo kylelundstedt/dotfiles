@@ -10,6 +10,9 @@
 
 ## zp
 - [x] Exclude `dotfiles` from project list (container + sprite backends)
+- [x] Project-first design with non-interactive mode
+- [x] Consistent `~/github/owner/name` paths across all backends
+- [ ] Create `/zp` skill for agent-driven usage
 - [ ] Add self-clone for curl one-liner bootstrap
 - [ ] Add Spotlight/Shortcuts integration (osascript fallback when no tty)
 

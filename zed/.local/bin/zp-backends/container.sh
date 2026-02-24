@@ -10,10 +10,8 @@ backend_list() {
 }
 
 backend_create() {
-    local name
-    printf "Name: " >&2
-    read -r name
-    if [[ -z "$name" ]]; then die "Name required"; fi
+    local name="$1"
+    [[ -z "$name" ]] && die "Name required"
     container run --name "$name" ubuntu:25.04 sleep infinity >&2 &
     sleep 3
     MACHINE="$name"
@@ -107,16 +105,6 @@ SSHEOF
     echo "${target_user}@${ip}"
 }
 
-backend_list_projects() {
-    remote_exec "find ~ -mindepth 1 -maxdepth 1 -type d ! -name '.*' ! -name 'dotfiles' 2>/dev/null" || true
-}
-
-backend_clone_project() {
-    local repo="$1"
-    remote_exec "git clone 'git@github.com:${repo}.git' ~/${repo##*/}" >&2
-    echo "~/${repo##*/}"
-}
-
-backend_home() {
-    echo "~"
+backend_exec() {
+    container exec "$MACHINE" bash -c "$1"
 }

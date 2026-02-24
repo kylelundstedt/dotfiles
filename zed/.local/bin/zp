@@ -1,16 +1,21 @@
 #!/bin/bash
 set -euo pipefail
 
-# Unified Zed project launcher.
+# Zed project launcher.
 # Opens projects in Zed across local, Apple Container, and Sprite backends.
 #
-# Usage: zp [--backend local|container|sprite] [--machine <name>] [--project <path>] [--org <org>]
+# Usage: zp [owner/name | name] [--backend local|container|sprite] [--machine <name>] [--org <org>]
 
 BACKENDS_DIR="$(dirname "$(readlink -f "$0")")/zp-backends"
+TARGET_USER="klundstedt"
 
 # --- Helpers ---
 
 die() { echo "Error: $*" >&2; exit 1; }
+
+need_tty() {
+    [[ -t 0 ]] || die "Interactive input required but no TTY. Provide all arguments for non-interactive use."
+}
 
 # Pick from a list. Args: prompt, then items as arguments.
 pick() {
@@ -18,6 +23,7 @@ pick() {
     local items=("$@")
     [[ ${#items[@]} -eq 0 ]] && die "Nothing to pick from"
     [[ ${#items[@]} -eq 1 ]] && echo "${items[0]}" && return
+    need_tty
     printf '%s\n' "${items[@]}" | fzf --prompt="$prompt > " || exit 0
 }
 
@@ -29,6 +35,7 @@ pick_from() {
     if [[ "$count" -eq 1 ]]; then
         echo "$input"
     else
+        need_tty
         echo "$input" | fzf --prompt="$prompt > " || exit 0
     fi
 }
@@ -52,7 +59,7 @@ remote_exec() {
     fi
 }
 
-# Source a backend file, clearing previous backend functions first.
+# Source a backend file.
 load_backend() {
     local name="$1"
     local file="$BACKENDS_DIR/${name}.sh"
@@ -61,29 +68,378 @@ load_backend() {
     source "$file"
 }
 
-# Build combined target list across all available backends.
-list_all_targets() {
-    local backend bf machines
+is_owner_name() { [[ "$1" == */* ]]; }
+
+# --- Project discovery ---
+
+# List projects on a backend/machine. Returns owner/name lines.
+# For local: runs find directly. For remote: uses backend_exec (no SSH needed).
+_list_projects() {
+    local backend="$1" machine="$2"
+    local raw
+
+    if [[ "$backend" == "local" ]]; then
+        raw=$(find "$HOME/github" -mindepth 2 -maxdepth 2 -type d -not -path '*/.*' 2>/dev/null) || true
+        echo "$raw" | sed "s|^$HOME/github/||" | grep -v '^$' | sort
+    else
+        MACHINE="$machine"
+        raw=$(backend_exec "find /home/$TARGET_USER/github -mindepth 2 -maxdepth 2 -type d -not -path '*/.*' 2>/dev/null" 2>/dev/null) || true
+        echo "$raw" | sed "s|^/home/$TARGET_USER/github/||" | grep -v '^$' | sort
+    fi
+}
+
+# Discover all projects across all backends.
+# Returns lines of "owner/name (label)" where label is "local", "container: name", etc.
+discover_projects() {
+    local backend bf machines projects
+
     for bf in "$BACKENDS_DIR"/*.sh; do
         [[ -f "$bf" ]] || continue
         backend="$(basename "$bf" .sh)"
         # shellcheck source=/dev/null
         source "$bf"
-        if ! backend_available 2>/dev/null; then
-            continue
-        fi
+        backend_available 2>/dev/null || continue
+
         if [[ "$backend" == "local" ]]; then
-            echo "local"
+            projects=$(_list_projects "local" "")
+            while IFS= read -r p; do
+                [[ -z "$p" ]] && continue
+                echo "$p (local)"
+            done <<< "$projects"
         else
             machines=$(backend_list 2>/dev/null) || true
-            if [[ -n "$machines" ]]; then
-                while IFS= read -r m; do
-                    echo "$m ($backend)"
-                done <<< "$machines"
-            fi
+            [[ -z "$machines" ]] && continue
+            while IFS= read -r m; do
+                [[ -z "$m" ]] && continue
+                projects=$(_list_projects "$backend" "$m") || true
+                while IFS= read -r p; do
+                    [[ -z "$p" ]] && continue
+                    echo "$p ($backend: $m)"
+                done <<< "$projects"
+            done <<< "$machines"
         fi
     done
-    echo "[+ new]"
+}
+
+# --- Project operations ---
+
+clone_project() {
+    local repo="$1" ssh_target="$2"
+    local owner name
+    owner="${repo%/*}"
+    name="${repo#*/}"
+
+    # Ensure GitHub host keys are trusted
+    if [[ -n "$ssh_target" ]]; then
+        SSH_TARGET="$ssh_target"
+        remote_exec 'mkdir -p ~/.ssh && ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null' >/dev/null
+        remote_exec "mkdir -p ~/github/$owner && git clone 'git@github.com:${repo}.git' ~/github/$owner/$name" >&2
+    else
+        mkdir -p "$HOME/github/$owner"
+        git clone "git@github.com:${repo}.git" "$HOME/github/$owner/$name" >&2
+    fi
+}
+
+bootstrap_machine() {
+    echo "Bootstrapping $MACHINE with dotfiles..." >&2
+    if remote_exec 'SUDO="sudo"; [ "$(id -u)" = 0 ] && SUDO=""; $SUDO apt-get update -qq && $SUDO apt-get install -y -qq git curl >/dev/null; git clone https://github.com/kylelundstedt/dotfiles ~/dotfiles 2>/dev/null || true; cd ~/dotfiles && bash install.sh --no-prompt' >&2; then
+        echo "Bootstrap complete." >&2
+    else
+        echo "Bootstrap failed (non-fatal). You can run install.sh manually later." >&2
+    fi
+}
+
+# --- Open Zed ---
+
+open_zed_local() {
+    local project="$1"  # owner/name
+    zed "$HOME/github/$project"
+}
+
+open_zed_remote() {
+    local ssh_target="$1" project="$2"  # project is owner/name
+
+    if [[ "$ssh_target" == *:* ]]; then
+        local ssh_host="${ssh_target%:*}"
+        local ssh_port="${ssh_target##*:}"
+        zed "ssh://${ssh_host}:${ssh_port}/home/${TARGET_USER}/github/${project}"
+    else
+        zed "ssh://${ssh_target}/home/${TARGET_USER}/github/${project}"
+    fi
+}
+
+# Open from a parsed label like "local", "container: dev", "sprite: prod"
+open_from_label() {
+    local project="$1" label="$2"
+
+    if [[ "$label" == "local" ]]; then
+        open_zed_local "$project"
+        return
+    fi
+
+    local backend="${label%%:*}"
+    MACHINE="${label#*: }"
+
+    load_backend "$backend"
+    backend_start
+    SSH_TARGET=$(backend_ensure_ssh)
+    open_zed_remote "$SSH_TARGET" "$project"
+}
+
+# --- Parse label from selection string ---
+
+parse_selection() {
+    # Input: "owner/name (label)" — sets PROJECT_NAME and PROJECT_LABEL
+    local selection="$1"
+    PROJECT_NAME="${selection%% (*}"
+    PROJECT_LABEL="${selection##*(}"
+    PROJECT_LABEL="${PROJECT_LABEL%)}"
+}
+
+# --- Flows ---
+
+# Prompt for a target to clone/create a project on.
+# Args: owner/name repo to clone
+flow_pick_target_and_clone() {
+    local repo="$1"
+    local targets=("local")
+
+    for bf in "$BACKENDS_DIR"/*.sh; do
+        [[ -f "$bf" ]] || continue
+        local b
+        b="$(basename "$bf" .sh)"
+        [[ "$b" == "local" ]] && continue
+        # shellcheck source=/dev/null
+        source "$bf"
+        backend_available 2>/dev/null || continue
+        local machines
+        machines=$(backend_list 2>/dev/null) || true
+        if [[ -n "$machines" ]]; then
+            while IFS= read -r m; do
+                targets+=("$b: $m")
+            done <<< "$machines"
+        fi
+        targets+=("$b: [+ new]")
+    done
+
+    local target
+    target=$(pick "Target" "${targets[@]}")
+
+    if [[ "$target" == "local" ]]; then
+        clone_project "$repo" ""
+        open_zed_local "$repo"
+    elif [[ "$target" == *": [+ new]" ]]; then
+        local backend="${target%%:*}"
+        load_backend "$backend"
+        need_tty
+        printf "Name for new %s: " "$backend" >&2
+        read -r MACHINE
+        [[ -z "$MACHINE" ]] && die "Machine name required"
+        backend_create "$MACHINE"
+        backend_start
+        SSH_TARGET=$(backend_ensure_ssh)
+        bootstrap_machine
+        clone_project "$repo" "$SSH_TARGET"
+        open_zed_remote "$SSH_TARGET" "$repo"
+    else
+        local backend="${target%%:*}"
+        MACHINE="${target#*: }"
+        load_backend "$backend"
+        backend_start
+        SSH_TARGET=$(backend_ensure_ssh)
+        clone_project "$repo" "$SSH_TARGET"
+        open_zed_remote "$SSH_TARGET" "$repo"
+    fi
+}
+
+# Flow 1: zp (no args) — browse all projects
+flow_browse_all() {
+    local entries
+    entries=$(discover_projects)
+    if [[ -n "$entries" ]]; then
+        entries=$(printf '%s\n%s' "$entries" "[+ new]")
+    else
+        entries="[+ new]"
+    fi
+
+    local selection
+    selection=$(pick_from "Project" "$entries")
+
+    if [[ "$selection" == "[+ new]" ]]; then
+        need_tty
+        printf "GitHub repo (owner/name): " >&2
+        read -r repo
+        [[ -z "$repo" ]] && die "Repo required"
+        is_owner_name "$repo" || die "Must be owner/name format"
+        flow_pick_target_and_clone "$repo"
+        return
+    fi
+
+    parse_selection "$selection"
+    open_from_label "$PROJECT_NAME" "$PROJECT_LABEL"
+}
+
+# Flow 2/3: zp name or zp owner/name — search across all backends
+flow_search() {
+    local all_projects matches
+    all_projects=$(discover_projects)
+
+    if is_owner_name "$PROJECT"; then
+        matches=$(echo "$all_projects" | grep "^${PROJECT} (" || true)
+    else
+        matches=$(echo "$all_projects" | grep "/${PROJECT} (" || true)
+    fi
+
+    # Filter empty lines
+    matches=$(echo "$matches" | grep -v '^$' || true)
+
+    local count
+    count=$(echo "$matches" | grep -c . || true)
+
+    if [[ "$count" -eq 0 ]]; then
+        if is_owner_name "$PROJECT"; then
+            # owner/name not found — offer to clone
+            flow_pick_target_and_clone "$PROJECT"
+        else
+            die "No project named '$PROJECT' found across any backend"
+        fi
+    elif [[ "$count" -eq 1 ]]; then
+        parse_selection "$matches"
+        open_from_label "$PROJECT_NAME" "$PROJECT_LABEL"
+    else
+        local selection
+        selection=$(pick_from "Project" "$matches")
+        parse_selection "$selection"
+        open_from_label "$PROJECT_NAME" "$PROJECT_LABEL"
+    fi
+}
+
+# Flow 4/5: zp owner/name --backend X [--machine Y]
+flow_targeted() {
+    is_owner_name "$PROJECT" || die "Fully qualified owner/name required with --backend"
+
+    load_backend "$BACKEND"
+
+    if [[ "$BACKEND" == "local" ]]; then
+        if [[ ! -d "$HOME/github/$PROJECT" ]]; then
+            clone_project "$PROJECT" ""
+        fi
+        open_zed_local "$PROJECT"
+        return
+    fi
+
+    # Remote backend — resolve machine
+    if [[ -z "$MACHINE" ]]; then
+        local machines
+        machines=$(backend_list 2>/dev/null) || true
+        if [[ -z "$machines" ]]; then
+            need_tty
+            printf "No machines found. Name for new %s: " "$BACKEND" >&2
+            read -r MACHINE
+            [[ -z "$MACHINE" ]] && die "Machine name required"
+            backend_create "$MACHINE"
+            backend_start
+            SSH_TARGET=$(backend_ensure_ssh)
+            bootstrap_machine
+        else
+            local count
+            count=$(echo "$machines" | wc -l | tr -d ' ')
+            if [[ "$count" -eq 1 ]]; then
+                MACHINE="$machines"
+            else
+                MACHINE=$(pick_from "Machine" "$machines")
+            fi
+            backend_start
+            SSH_TARGET=$(backend_ensure_ssh)
+        fi
+    else
+        # Fully specified — create machine if it doesn't exist
+        local machines
+        machines=$(backend_list 2>/dev/null) || true
+        if [[ -z "$machines" ]] || ! echo "$machines" | grep -qx "$MACHINE"; then
+            backend_create "$MACHINE"
+            backend_start
+            SSH_TARGET=$(backend_ensure_ssh)
+            bootstrap_machine
+        else
+            backend_start
+            SSH_TARGET=$(backend_ensure_ssh)
+        fi
+    fi
+
+    # Check if project exists on this machine, clone if not
+    local exists
+    exists=$(remote_exec "test -d ~/github/$PROJECT && echo yes || echo no") || true
+    if [[ "$exists" != "yes" ]]; then
+        clone_project "$PROJECT" "$SSH_TARGET"
+    fi
+
+    open_zed_remote "$SSH_TARGET" "$PROJECT"
+}
+
+# Flow 6: zp --backend X [--machine Y] (no project) — browse projects on backend
+flow_browse_backend() {
+    load_backend "$BACKEND"
+
+    [[ "$BACKEND" == "local" && -n "$MACHINE" ]] && die "Local backend does not use machines"
+
+    if [[ "$BACKEND" == "local" ]]; then
+        local projects
+        projects=$(_list_projects "local" "")
+        if [[ -n "$projects" ]]; then
+            projects=$(printf '%s\n%s' "$projects" "[+ new]")
+        else
+            projects="[+ new]"
+        fi
+        local selection
+        selection=$(pick_from "Project" "$projects")
+        if [[ "$selection" == "[+ new]" ]]; then
+            need_tty
+            printf "GitHub repo (owner/name): " >&2
+            read -r repo
+            [[ -z "$repo" ]] && die "Repo required"
+            is_owner_name "$repo" || die "Must be owner/name format"
+            clone_project "$repo" ""
+            open_zed_local "$repo"
+        else
+            open_zed_local "$selection"
+        fi
+        return
+    fi
+
+    # Remote backend
+    if [[ -z "$MACHINE" ]]; then
+        local machines
+        machines=$(backend_list 2>/dev/null) || true
+        [[ -z "$machines" ]] && die "No machines found for backend: $BACKEND"
+        MACHINE=$(pick_from "Machine" "$machines")
+    fi
+
+    backend_start
+    SSH_TARGET=$(backend_ensure_ssh)
+
+    local projects
+    projects=$(_list_projects "$BACKEND" "$MACHINE")
+    if [[ -n "$projects" ]]; then
+        projects=$(printf '%s\n%s' "$projects" "[+ new]")
+    else
+        projects="[+ new]"
+    fi
+
+    local selection
+    selection=$(pick_from "Project" "$projects")
+
+    if [[ "$selection" == "[+ new]" ]]; then
+        need_tty
+        printf "GitHub repo (owner/name): " >&2
+        read -r repo
+        [[ -z "$repo" ]] && die "Repo required"
+        is_owner_name "$repo" || die "Must be owner/name format"
+        clone_project "$repo" "$SSH_TARGET"
+        open_zed_remote "$SSH_TARGET" "$repo"
+    else
+        open_zed_remote "$SSH_TARGET" "$selection"
+    fi
 }
 
 # --- Argument parsing ---
@@ -92,134 +448,51 @@ BACKEND=""
 MACHINE=""
 PROJECT=""
 ORG=""
-IS_NEW_MACHINE=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --backend) BACKEND="$2"; shift 2 ;;
         --machine) MACHINE="$2"; shift 2 ;;
-        --project) PROJECT="$2"; shift 2 ;;
         --org)     ORG="$2"; shift 2 ;;
         --help|-h)
-            echo "Usage: zp [--backend local|container|sprite] [--machine <name>] [--project <path>] [--org <org>]"
-            echo ""
-            echo "Opens a project in Zed. Prompts interactively for missing arguments."
-            echo ""
-            echo "Backends:"
-            echo "  local       Local macOS project"
-            echo "  container   Apple Container (macOS 26+)"
-            echo "  sprite      Fly.io Sprite (remote)"
-            echo ""
-            echo "Options:"
-            echo "  --backend   Backend type"
-            echo "  --machine   Machine/VM/container/sprite name"
-            echo "  --project   Project path on target"
-            echo "  --org       Sprite organization (sprite backend only)"
+            cat >&2 <<'EOF'
+Usage: zp [owner/name | name] [--backend local|container|sprite] [--machine <name>] [--org <org>]
+
+Opens a project in Zed. Searches across local, container, and sprite backends.
+
+Examples:
+  zp                                          Browse all projects
+  zp gitlake                                  Find repos named "gitlake"
+  zp klundstedt/gitlake                       Find or clone klundstedt/gitlake
+  zp klundstedt/gitlake --backend container --machine dev
+                                              Non-interactive: create + clone + open
+
+Backends:
+  local       Local macOS project (~/github/owner/name)
+  container   Apple Container (macOS 26+)
+  sprite      Fly.io Sprite (remote)
+
+Options:
+  --backend   Backend type
+  --machine   Machine name (created if it doesn't exist)
+  --org       Sprite organization (sprite backend only)
+EOF
             exit 0
             ;;
-        -*) die "Unknown flag: $1" ;;
-        *)  die "Unexpected argument: $1" ;;
+        -*)  die "Unknown flag: $1" ;;
+        *)   [[ -n "$PROJECT" ]] && die "Unexpected argument: $1"
+             PROJECT="$1"; shift ;;
     esac
 done
 
-# --- Step 1: Pick a target (required) ---
+# --- Dispatch ---
 
-if [[ -z "$BACKEND" ]]; then
-    targets=$(list_all_targets)
-    selection=$(pick_from "Target" "$targets")
-
-    if [[ "$selection" == "[+ new]" ]]; then
-        # Provision a new machine — pick which backend type
-        available=()
-        for bf in "$BACKENDS_DIR"/*.sh; do
-            [[ -f "$bf" ]] || continue
-            b="$(basename "$bf" .sh)"
-            [[ "$b" == "local" ]] && continue
-            # shellcheck source=/dev/null
-            source "$bf"
-            backend_available 2>/dev/null && available+=("$b")
-        done
-        [[ ${#available[@]} -eq 0 ]] && die "No remote backends available"
-        BACKEND=$(pick "Backend" "${available[@]}")
-        load_backend "$BACKEND"
-        backend_create
-        IS_NEW_MACHINE=true
-    elif [[ "$selection" == "local" ]]; then
-        BACKEND="local"
-        load_backend "$BACKEND"
-    else
-        # Parse "machine-name (backend)" format
-        MACHINE="${selection% (*}"
-        BACKEND="${selection##*(}"
-        BACKEND="${BACKEND%)}"
-        load_backend "$BACKEND"
-    fi
-else
-    load_backend "$BACKEND"
-    # If backend + no machine specified, prompt from that backend's machines
-    if [[ -z "$MACHINE" && "$BACKEND" != "local" ]]; then
-        machines=$(backend_list 2>/dev/null) || true
-        if [[ -n "$machines" ]]; then
-            MACHINE=$(pick_from "Machine" "$machines")
-        fi
-    fi
-fi
-
-# --- Start machine and ensure SSH ---
-
-backend_start
-
-SSH_TARGET=""
-SSH_TARGET=$(backend_ensure_ssh)
-
-# Bootstrap new remote machines with dotfiles
-if [[ "$IS_NEW_MACHINE" == true && -n "$SSH_TARGET" ]]; then
-    echo "Bootstrapping $MACHINE with dotfiles..." >&2
-    if remote_exec 'SUDO="sudo"; [ "$(id -u)" = 0 ] && SUDO=""; $SUDO apt-get update -qq && $SUDO apt-get install -y -qq git curl >/dev/null; git clone https://github.com/kylelundstedt/dotfiles ~/dotfiles 2>/dev/null || true; cd ~/dotfiles && bash install.sh --no-prompt' >&2; then
-        echo "Bootstrap complete." >&2
-    else
-        echo "Bootstrap failed (non-fatal). You can run install.sh manually later." >&2
-    fi
-fi
-
-# --- Step 2: Pick a project (required) ---
-
-if [[ -z "$PROJECT" ]]; then
-    projects=$(backend_list_projects 2>/dev/null) || true
-    if [[ -n "$projects" ]]; then
-        projects=$(printf '%s\n%s' "$projects" "[+ clone]")
-    else
-        projects="[+ clone]"
-    fi
-
-    PROJECT=$(pick_from "Project" "$projects")
-
-    if [[ "$PROJECT" == "[+ clone]" ]]; then
-        printf "GitHub repo (owner/name): " >&2
-        read -r repo
-        [[ -z "$repo" ]] && die "Repo required"
-        # Ensure GitHub host keys are trusted on remote targets
-        if [[ -n "$SSH_TARGET" ]]; then
-            remote_exec 'mkdir -p ~/.ssh && ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null' >/dev/null
-        fi
-        PROJECT=$(backend_clone_project "$repo")
-    fi
-fi
-
-# --- Open Zed ---
-
-if [[ -z "$SSH_TARGET" ]]; then
-    zed "$PROJECT"
-else
-    # Remote backend — build ssh:// URI
-    sep="/"
-    [[ "$PROJECT" == /* ]] && sep=""
-
-    if [[ "$SSH_TARGET" == *:* ]]; then
-        ssh_host="${SSH_TARGET%:*}"
-        ssh_port="${SSH_TARGET##*:}"
-        zed "ssh://${ssh_host}:${ssh_port}${sep}${PROJECT}"
-    else
-        zed "ssh://${SSH_TARGET}${sep}${PROJECT}"
-    fi
+if [[ -z "$PROJECT" && -z "$BACKEND" ]]; then
+    flow_browse_all
+elif [[ -z "$PROJECT" && -n "$BACKEND" ]]; then
+    flow_browse_backend
+elif [[ -n "$PROJECT" && -z "$BACKEND" ]]; then
+    flow_search
+elif [[ -n "$PROJECT" && -n "$BACKEND" ]]; then
+    flow_targeted
 fi
