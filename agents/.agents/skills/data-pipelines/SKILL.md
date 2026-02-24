@@ -1,13 +1,46 @@
 ---
 name: data-pipelines
-description: Use this skill for data pipeline work — ingestion with dlt, transformations with sqlmesh, analytics with DuckDB/MotherDuck, DataFrames with polars, notebooks with marimo, and project management with uv.
+description: Use this skill for data pipeline work — ingestion, transformation, analytics, notebooks, and exploration using a DuckDB-centric stack.
 ---
 
-You are building data pipelines using a DuckDB-centric stack. The tools, in typical execution order: **dlt** (extract + load) → **sqlmesh** (transform) → **DuckDB/MotherDuck** (query engine) → **polars** (DataFrame work) → **marimo** (notebooks/apps). **uv** manages Python projects and dependencies.
+You are building data pipelines. The general pattern is **ingest** (get data in) → **transform** (clean, model, join) → **query** (analyze) → **explore** (notebooks, apps, visualizations).
+
+The specific tools for each step depend on the project. Preferred defaults:
+
+| Step | Preferred Tool | Alternatives |
+|---|---|---|
+| Ingest | dlt | Plain Python scripts, shell + curl, custom connectors |
+| Transform | sqlmesh | Plain SQL scripts, dbt, Python scripts |
+| Query engine | DuckDB / MotherDuck | — |
+| DataFrames | polars | — |
+| Notebooks | marimo | — |
+| Project mgmt | uv | — |
 
 ## Language Preference
 
 SQL first (DuckDB dialect), then Python, then bash. Use the simplest language that gets the job done.
+
+## Project Layout
+
+Data projects should follow this structure:
+
+```
+project/
+├── ingest/              # Extraction and loading scripts
+│   ├── <source>.py      # One file per data source
+│   └── .dlt/            # dlt config (if using dlt)
+├── transform/           # Transformation logic
+│   ├── models/          # SQL models (sqlmesh or plain SQL)
+│   └── config.yaml      # sqlmesh config (if using sqlmesh)
+├── notebooks/           # Exploration and analysis
+│   └── *.py             # marimo notebooks (plain .py files)
+├── data/                # Local data files (gitignored)
+├── pyproject.toml       # Dependencies
+├── uv.lock              # Locked dependencies (committed)
+└── *.duckdb             # Local database (gitignored)
+```
+
+Not every project needs all directories — a simple analysis might only have `notebooks/` and a DuckDB file. Scale up as needed.
 
 ## uv — Project Management
 
@@ -15,9 +48,9 @@ Never use pip directly. All Python work goes through uv.
 
 ```bash
 uv init my-project                    # New project
-uv add "dlt[duckdb]" sqlmesh polars   # Add dependencies
+uv add polars duckdb                  # Add dependencies
 uv sync                               # Install into .venv
-uv run python pipeline.py             # Run in project venv
+uv run python script.py               # Run in project venv
 uv run --with requests script.py      # Ad-hoc dependency
 ```
 
@@ -33,147 +66,6 @@ uv run --with requests script.py      # Ad-hoc dependency
 Run with `uv run script.py` — deps are resolved automatically.
 
 Always commit `uv.lock`. Use `pyproject.toml` for dependency declarations, never `requirements.txt`.
-
-## dlt — Extract + Load
-
-dlt handles ingestion: API calls, pagination, schema inference, incremental loading, and state management.
-
-### Scaffold and Run
-
-```bash
-dlt init rest_api duckdb             # Scaffold pipeline
-uv run python pipeline.py           # Run extraction
-dlt pipeline <name> info             # Inspect state
-dlt pipeline <name> schema           # View inferred schema
-```
-
-### Pipeline Patterns
-
-**Minimal pipeline:**
-
-```python
-import dlt
-
-pipeline = dlt.pipeline(
-    pipeline_name="my_pipeline",
-    destination="duckdb",
-    dataset_name="raw",
-)
-info = pipeline.run(data, table_name="events")
-```
-
-**Incremental loading:**
-
-```python
-@dlt.resource(write_disposition="merge", primary_key="id")
-def users(updated_at=dlt.sources.incremental("updated_at")):
-    yield from fetch_users(since=updated_at.last_value)
-```
-
-**REST API source (declarative):**
-
-```python
-from dlt.sources.rest_api import rest_api_source
-
-source = rest_api_source({
-    "client": {"base_url": "https://api.example.com/v1"},
-    "resource_defaults": {"primary_key": "id", "write_disposition": "merge"},
-    "resources": [
-        "users",
-        {
-            "name": "events",
-            "write_disposition": "append",
-            "endpoint": {
-                "path": "events",
-                "incremental": {"cursor_path": "created_at", "initial_value": "2024-01-01"},
-            },
-        },
-    ],
-})
-```
-
-**Write dispositions:**
-
-| Disposition | Behavior | Use For |
-|---|---|---|
-| `append` | Insert rows (default) | Immutable events, logs |
-| `replace` | Drop and recreate | Small lookup tables |
-| `merge` | Upsert by `primary_key` | Mutable records |
-
-**Destinations:** `duckdb` (local file), `motherduck` (cloud). Set `motherduck_token` env var or configure in `.dlt/secrets.toml`.
-
-### Project Structure
-
-```
-.dlt/
-  config.toml          # Pipeline config
-  secrets.toml         # Credentials (gitignored)
-<source>_pipeline.py
-```
-
-## sqlmesh — Transform
-
-SQL-first transformation framework. Models are SQL files with a header block. Plan/apply workflow — no accidental production changes.
-
-### Scaffold and Run
-
-```bash
-sqlmesh init duckdb                              # New project
-sqlmesh init -t dlt --dlt-pipeline <name>        # From dlt schema
-sqlmesh plan                                     # Preview + apply (dev)
-sqlmesh plan prod                                # Promote to production
-sqlmesh fetchdf "SELECT * FROM analytics.users"  # Ad-hoc query
-sqlmesh test                                     # Run unit tests
-sqlmesh ui                                       # Web interface
-```
-
-### Model Kinds
-
-| Kind | Behavior | Use For |
-|---|---|---|
-| `FULL` | Rewrite entire table | Small dimension tables |
-| `INCREMENTAL_BY_TIME_RANGE` | Process new time intervals | Facts, events, logs |
-| `INCREMENTAL_BY_UNIQUE_KEY` | Upsert by key | Mutable dimensions |
-| `SEED` | Static CSV data | Reference/lookup data |
-| `VIEW` | SQL view | Simple pass-throughs |
-| `SCD_TYPE_2` | Slowly changing dimensions | Historical tracking |
-
-### Model Example
-
-```sql
-MODEL (
-    name analytics.stg_events,
-    kind INCREMENTAL_BY_TIME_RANGE (time_column event_date),
-    cron '@daily',
-    grain (event_id),
-    audits (NOT_NULL(columns=[event_id]))
-);
-
-SELECT
-    event_id,
-    user_id,
-    event_type,
-    event_date
-FROM raw.events
-WHERE event_date BETWEEN @start_date AND @end_date
-```
-
-### Config (`config.yaml`)
-
-```yaml
-gateways:
-  local:
-    connection:
-      type: duckdb
-      database: db.duckdb
-default_gateway: local
-model_defaults:
-  dialect: duckdb
-```
-
-### dlt Integration
-
-`sqlmesh init -t dlt` auto-generates external models and incremental staging models from dlt's inferred schema. Schema changes from dlt are detected by `sqlmesh plan`.
 
 ## DuckDB — Query Engine
 
@@ -286,12 +178,134 @@ result = mo.sql(f"""
 
 Python variables and polars DataFrames are queryable from SQL cells and vice versa.
 
-## Typical Pipeline Flow
+## dlt — Ingestion
 
-1. `uv init` + `uv add "dlt[duckdb]" "sqlmesh[duckdb]" polars marimo`
-2. `dlt init rest_api duckdb` — scaffold extraction
-3. `uv run python pipeline.py` — dlt loads raw data into DuckDB
-4. `sqlmesh init -t dlt --dlt-pipeline <name>` — generate transform models
-5. Write SQL models → `sqlmesh plan` — transform raw into analytics
-6. `marimo edit analysis.py` — explore with SQL cells and polars
-7. For production: swap destination to `motherduck`, `sqlmesh plan prod`
+When a project uses dlt for ingestion. Handles API calls, pagination, schema inference, incremental loading, and state management.
+
+### Scaffold and Run
+
+```bash
+dlt init rest_api duckdb             # Scaffold pipeline
+uv run python pipeline.py           # Run extraction
+dlt pipeline <name> info             # Inspect state
+dlt pipeline <name> schema           # View inferred schema
+```
+
+### Pipeline Patterns
+
+**Minimal pipeline:**
+
+```python
+import dlt
+
+pipeline = dlt.pipeline(
+    pipeline_name="my_pipeline",
+    destination="duckdb",
+    dataset_name="raw",
+)
+info = pipeline.run(data, table_name="events")
+```
+
+**Incremental loading:**
+
+```python
+@dlt.resource(write_disposition="merge", primary_key="id")
+def users(updated_at=dlt.sources.incremental("updated_at")):
+    yield from fetch_users(since=updated_at.last_value)
+```
+
+**REST API source (declarative):**
+
+```python
+from dlt.sources.rest_api import rest_api_source
+
+source = rest_api_source({
+    "client": {"base_url": "https://api.example.com/v1"},
+    "resource_defaults": {"primary_key": "id", "write_disposition": "merge"},
+    "resources": [
+        "users",
+        {
+            "name": "events",
+            "write_disposition": "append",
+            "endpoint": {
+                "path": "events",
+                "incremental": {"cursor_path": "created_at", "initial_value": "2024-01-01"},
+            },
+        },
+    ],
+})
+```
+
+**Write dispositions:**
+
+| Disposition | Behavior | Use For |
+|---|---|---|
+| `append` | Insert rows (default) | Immutable events, logs |
+| `replace` | Drop and recreate | Small lookup tables |
+| `merge` | Upsert by `primary_key` | Mutable records |
+
+**Destinations:** `duckdb` (local file), `motherduck` (cloud). Set `motherduck_token` env var or configure in `.dlt/secrets.toml`.
+
+## sqlmesh — Transformation
+
+When a project uses sqlmesh for transformations. SQL-first, plan/apply workflow — no accidental production changes.
+
+### Scaffold and Run
+
+```bash
+sqlmesh init duckdb                              # New project
+sqlmesh init -t dlt --dlt-pipeline <name>        # From dlt schema
+sqlmesh plan                                     # Preview + apply (dev)
+sqlmesh plan prod                                # Promote to production
+sqlmesh fetchdf "SELECT * FROM analytics.users"  # Ad-hoc query
+sqlmesh test                                     # Run unit tests
+sqlmesh ui                                       # Web interface
+```
+
+### Model Kinds
+
+| Kind | Behavior | Use For |
+|---|---|---|
+| `FULL` | Rewrite entire table | Small dimension tables |
+| `INCREMENTAL_BY_TIME_RANGE` | Process new time intervals | Facts, events, logs |
+| `INCREMENTAL_BY_UNIQUE_KEY` | Upsert by key | Mutable dimensions |
+| `SEED` | Static CSV data | Reference/lookup data |
+| `VIEW` | SQL view | Simple pass-throughs |
+| `SCD_TYPE_2` | Slowly changing dimensions | Historical tracking |
+
+### Model Example
+
+```sql
+MODEL (
+    name analytics.stg_events,
+    kind INCREMENTAL_BY_TIME_RANGE (time_column event_date),
+    cron '@daily',
+    grain (event_id),
+    audits (NOT_NULL(columns=[event_id]))
+);
+
+SELECT
+    event_id,
+    user_id,
+    event_type,
+    event_date
+FROM raw.events
+WHERE event_date BETWEEN @start_date AND @end_date
+```
+
+### Config (`config.yaml`)
+
+```yaml
+gateways:
+  local:
+    connection:
+      type: duckdb
+      database: db.duckdb
+default_gateway: local
+model_defaults:
+  dialect: duckdb
+```
+
+### dlt Integration
+
+`sqlmesh init -t dlt` auto-generates external models and incremental staging models from dlt's inferred schema. Schema changes from dlt are detected by `sqlmesh plan`.

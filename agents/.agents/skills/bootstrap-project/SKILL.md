@@ -50,6 +50,21 @@ Read (do **not** modify) the following if they exist:
 
 For new projects with no files, use the user's description from step 1 instead.
 
+### 3b. Detect data projects
+
+If the project is a data pipeline or analytics project — indicated by dependencies like dlt, sqlmesh, polars, duckdb in `pyproject.toml`, the presence of `.duckdb` files, `ingest/` or `transform/` directories, or the user's description — suggest the `/data-pipelines` skill's directory layout:
+
+```
+ingest/          # Extraction and loading scripts
+transform/       # SQL models or transformation logic
+notebooks/       # marimo notebooks (.py files)
+data/            # Local data files (gitignored)
+```
+
+Include this layout in the **Directory Structure** section of `AGENTS.md`. For new data projects, create the directories. For existing projects that already have a different layout, document what exists — don't restructure.
+
+Also mention in the **Conventions** section: "Use the `/data-pipelines` skill for ingestion, transformation, and analytics work."
+
 ### 4. Write `AGENTS.md`
 
 Create `AGENTS.md` in the project root. Use the structure below as a guide — fill every section with specifics from step 3. **Omit sections that don't apply.** Never leave placeholder text or angle-bracket tokens in the output.
