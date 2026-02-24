@@ -1,9 +1,11 @@
 ---
-name: sprites
-description: Use this skill when the user wants to interact with remote Sprites from their local machine — listing sprites, executing commands, managing checkpoints, transferring files, controlling network policy, or coordinating work across multiple sprites.
+name: sprites-remote
+description: Use this skill when the user wants to manage remote Sprites from their local machine — listing sprites, executing commands, managing checkpoints, transferring files, controlling network policy, or coordinating work across multiple sprites.
 ---
 
-You are managing remote Sprite VMs from a local machine using the `sprite` CLI. Sprites are persistent, hardware-isolated Linux VMs on Fly.io with durable filesystems backed by object storage.
+You are managing remote Sprite VMs from a local machine using the `sprite` CLI. This skill covers the local-side CLI for controlling Sprites externally. (Sprites also have built-in agent context at `/.sprite/docs/` for agents running *inside* the Sprite.)
+
+Sprites are persistent, hardware-isolated Linux VMs on Fly.io with durable filesystems backed by object storage.
 
 ## CLI Basics
 

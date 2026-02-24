@@ -40,7 +40,8 @@
 - When to use specific skills:
   - `/bootstrap-project` — always use when setting up agent context in a new or existing repo.
   - `/data-pipelines` — use for any data pipeline, analytics, or ingestion work. Covers dlt, sqlmesh, DuckDB, polars, marimo, uv.
-  - `/sprites` — use when the user wants to manage remote Sprites (Fly.io microVMs).
+  - `/sprites-remote` — use when the user wants to manage remote Sprites (Fly.io microVMs) from the local machine.
+  - `/zp` — use when the user wants to open, create, or manage projects across local macOS, Apple Containers, and Sprites.
 
 ## Writing
 - Use proper dashes in prose (em dash or spaced en dash), not unspaced hyphens.
