@@ -319,15 +319,19 @@ flow_search() {
             die "No project named '$PROJECT' found across any backend"
         fi
     else
-        # Always show picker, even for a single match
-        if is_owner_name "$PROJECT"; then
-            matches=$(printf '%s\n%s' "$matches" "[+ clone elsewhere]")
-        fi
+        # Always show picker with clone-elsewhere option
+        matches=$(printf '%s\n%s' "$matches" "[+ clone elsewhere]")
         need_tty
         local selection
         selection=$(echo "$matches" | fzf --prompt="Project > " || exit 0)
         if [[ "$selection" == "[+ clone elsewhere]" ]]; then
-            flow_pick_target_and_clone "$PROJECT"
+            # Derive owner/name from PROJECT or from the first match
+            local repo="$PROJECT"
+            if ! is_owner_name "$repo"; then
+                repo=$(echo "$matches" | head -1)
+                repo="${repo%% (*}"
+            fi
+            flow_pick_target_and_clone "$repo"
         else
             parse_selection "$selection"
             open_from_label "$PROJECT_NAME" "$PROJECT_LABEL"
