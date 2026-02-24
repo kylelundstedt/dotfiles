@@ -47,6 +47,7 @@
   "agent_servers": {
     "claude": {
       "env": {
+        "PATH": "/opt/homebrew/bin:/home/klundstedt/.local/bin:/usr/local/bin:/usr/bin:/bin",
         "CLAUDE_CODE_EXECUTABLE": "claude",
       },
     },
