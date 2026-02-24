@@ -12,7 +12,7 @@ backend_list() {
 backend_create() {
     local name="$1"
     [[ -z "$name" ]] && die "Name required"
-    container run --name "$name" ubuntu:25.04 sleep infinity >&2 &
+    container run --name "$name" --cpus 4 --memory 4G ubuntu:25.04 sleep infinity >&2 &
     sleep 3
     MACHINE="$name"
     echo "Created $MACHINE (container)" >&2
