@@ -162,6 +162,8 @@ install_cli_tools() {
     pids+=($!)
     (curl -fsSL https://direnv.net/install.sh | bash >/dev/null 2>&1 && echo "  [+] direnv" || echo "  [!] direnv failed") &
     pids+=($!)
+    (curl -fsSL https://raw.githubusercontent.com/tigrisdata/cli/main/scripts/install.sh | env TIGRIS_INSTALL_DIR="$LOCAL_BIN" sh >/dev/null 2>&1 && echo "  [+] tigris" || echo "  [!] tigris failed") &
+    pids+=($!)
     (install_github_binary "Schniz/fnm" "${fnm_asset}\\.zip" "fnm" "fnm") &
     pids+=($!)
 

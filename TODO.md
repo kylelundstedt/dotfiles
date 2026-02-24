@@ -2,6 +2,7 @@
 
 ## Remote Dev
 - [ ] Setup proxies from containers and sprites back to local
+- [ ] https://docs.sprites.dev/cli/installation/#optional-local-directory-context
 
 ## Devbox image (reproducible dev environment)
 - [ ] Build `image/Dockerfile` with pinned tool versions, `klundstedt` user
