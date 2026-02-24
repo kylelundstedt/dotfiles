@@ -270,7 +270,11 @@ set_shell() {
     local desired_shell
     desired_shell="$(command -v zsh || true)"
     if [[ -n "$desired_shell" && "$SHELL" != "$desired_shell" ]]; then
-        chsh -s "$desired_shell" 2>/dev/null || echo "  Note: could not change shell to zsh"
+        if [[ "$(id -u)" -eq 0 ]]; then
+            chsh -s "$desired_shell" 2>/dev/null || echo "  Note: could not change shell to zsh"
+        else
+            sudo chsh -s "$desired_shell" "$(whoami)" 2>/dev/null || chsh -s "$desired_shell" 2>/dev/null || echo "  Note: could not change shell to zsh"
+        fi
     fi
 }
 
