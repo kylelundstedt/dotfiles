@@ -2,9 +2,8 @@
 set -euo pipefail
 
 # Check if signed in to 1Password (fail fast instead of hanging)
-if ! op account get --account industryvault.1password.com >/dev/null 2>&1; then
+if ! timeout 5 op account get --account industryvault.1password.com >/dev/null 2>&1; then
     echo "Error: Not signed in to 1Password (industryvault.1password.com)" >&2
-    echo "Run: eval \$(op signin --account industryvault.1password.com)" >&2
     exit 1
 fi
 

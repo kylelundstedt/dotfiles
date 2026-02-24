@@ -382,15 +382,28 @@ setup_agents() {
         fi
     fi
 
-    # MCP servers (shared wrapper paths)
+    # MCP servers
     echo "  Configuring MCP servers..."
+    local op_configured=false
+    if command -v op >/dev/null 2>&1 && op account list 2>/dev/null | grep -q .; then
+        op_configured=true
+    fi
+
+    # Servers that don't need 1Password are always registered
     local mcp_wrappers=(
-        "github-home:$DOTFILES_DIR/agents/.agents/mcp/bin/github-mcp-home"
-        "github-work:$DOTFILES_DIR/agents/.agents/mcp/bin/github-mcp-work"
-        "motherduck:$DOTFILES_DIR/agents/.agents/mcp/bin/motherduck-mcp"
         "dlt:$DOTFILES_DIR/agents/.agents/mcp/bin/dlt-mcp"
-        "tigris:$DOTFILES_DIR/agents/.agents/mcp/bin/tigris-mcp"
     )
+    # Servers that need 1Password are only registered when op is configured
+    if [[ "$op_configured" == true ]]; then
+        mcp_wrappers+=(
+            "github-home:$DOTFILES_DIR/agents/.agents/mcp/bin/github-mcp-home"
+            "github-work:$DOTFILES_DIR/agents/.agents/mcp/bin/github-mcp-work"
+            "motherduck:$DOTFILES_DIR/agents/.agents/mcp/bin/motherduck-mcp"
+            "tigris:$DOTFILES_DIR/agents/.agents/mcp/bin/tigris-mcp"
+        )
+    else
+        echo "  Skipping 1Password-backed MCP servers (op not configured)"
+    fi
     for tool in claude codex; do
         command -v "$tool" >/dev/null 2>&1 || continue
         for spec in "${mcp_wrappers[@]}"; do
