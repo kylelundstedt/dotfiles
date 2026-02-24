@@ -1,5 +1,5 @@
 #!/bin/bash
-# Test install.sh across the same backends zop uses.
+# Test install.sh across the same backends zp uses.
 # Usage: ./test-install.sh [container|sprite|all]
 #   container — Apple Container (klundstedt user, sudo available)
 #   sprite    — Fly.io Sprite (klundstedt user, sudo available)
@@ -91,7 +91,7 @@ test_container() {
         chown -R "$U:$U" "$home/.ssh"
     '
     container exec "$name" bash -c '
-        cat > /etc/ssh/sshd_config.d/zop.conf <<SSHEOF
+        cat > /etc/ssh/sshd_config.d/zp.conf <<SSHEOF
 PasswordAuthentication no
 PubkeyAuthentication yes
 PermitRootLogin no

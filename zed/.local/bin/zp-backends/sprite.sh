@@ -1,5 +1,5 @@
 #!/bin/bash
-# zop backend: Fly.io Sprite (remote)
+# zp backend: Fly.io Sprite (remote)
 # Requires: sprite CLI, SSH agent with keys
 
 backend_available() { command -v sprite &>/dev/null; }

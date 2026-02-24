@@ -1,5 +1,5 @@
 #!/bin/bash
-# zop backend: local macOS
+# zp backend: local macOS
 
 GITHUB_DIR="$HOME/github"
 

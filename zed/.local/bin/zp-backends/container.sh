@@ -1,5 +1,5 @@
 #!/bin/bash
-# zop backend: Apple Container (macOS 26+)
+# zp backend: Apple Container (macOS 26+)
 # Requires: container CLI (Apple silicon, macOS Tahoe)
 # Installs openssh-server for SSH access — containers don't expose SSH by default.
 
@@ -77,7 +77,7 @@ backend_ensure_ssh() {
             chown "$U:$U" "$home/.ssh/authorized_keys"
             echo "    Key added" >&2
         fi
-        cat > /etc/ssh/sshd_config.d/zop.conf <<SSHEOF
+        cat > /etc/ssh/sshd_config.d/zp.conf <<SSHEOF
 PasswordAuthentication no
 PubkeyAuthentication yes
 PermitRootLogin no
