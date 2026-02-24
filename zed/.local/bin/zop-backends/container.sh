@@ -33,44 +33,60 @@ backend_start() {
 }
 
 backend_ensure_ssh() {
-    local pubkey
+    local pubkey target_user="klundstedt"
     pubkey=$(ssh_pubkey)
 
     echo "Setting up SSH on container: $MACHINE" >&2
 
-    # Install openssh-server + git
-    echo "  [1/3] Installing openssh-server, git..." >&2
+    # Install openssh-server + git + sudo
+    echo "  [1/4] Installing packages..." >&2
     container exec "$MACHINE" sh -c '
-        if command -v sshd >/dev/null 2>&1 && command -v git >/dev/null 2>&1; then
+        if command -v sshd >/dev/null 2>&1 && command -v git >/dev/null 2>&1 && command -v sudo >/dev/null 2>&1; then
             echo "    Already installed" >&2
         else
             export DEBIAN_FRONTEND=noninteractive
-            apt-get update -qq >/dev/null && apt-get install -y -qq openssh-server git >/dev/null
+            apt-get update -qq >/dev/null && apt-get install -y -qq openssh-server git sudo >/dev/null
         fi
         mkdir -p /run/sshd
+    ' >/dev/null
+
+    # Create non-root user with passwordless sudo
+    echo "  [2/4] Creating user $target_user..." >&2
+    container exec -e "U=$target_user" "$MACHINE" sh -c '
+        if id "$U" >/dev/null 2>&1; then
+            echo "    Already exists" >&2
+        else
+            useradd -m -s /bin/bash "$U"
+            echo "$U ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/"$U"
+            chmod 440 /etc/sudoers.d/"$U"
+            echo "    Created" >&2
+        fi
+    ' >/dev/null
+
+    # Copy SSH public key to target user + configure sshd
+    echo "  [3/4] Configuring SSH..." >&2
+    container exec -e "SSH_PUBKEY=$pubkey" -e "U=$target_user" "$MACHINE" sh -c '
+        home=$(eval echo "~$U")
+        mkdir -p "$home/.ssh" && chmod 700 "$home/.ssh"
+        touch "$home/.ssh/authorized_keys" && chmod 600 "$home/.ssh/authorized_keys"
+        chown -R "$U:$U" "$home/.ssh"
+        if grep -qF "$SSH_PUBKEY" "$home/.ssh/authorized_keys" 2>/dev/null; then
+            echo "    Key already authorized" >&2
+        else
+            echo "$SSH_PUBKEY" >> "$home/.ssh/authorized_keys"
+            chown "$U:$U" "$home/.ssh/authorized_keys"
+            echo "    Key added" >&2
+        fi
         cat > /etc/ssh/sshd_config.d/zop.conf <<SSHEOF
 PasswordAuthentication no
 PubkeyAuthentication yes
-PermitRootLogin prohibit-password
+PermitRootLogin no
 SSHEOF
         echo "    Configured" >&2
     ' >/dev/null
 
-    # Copy SSH public key
-    echo "  [2/3] Copying SSH public key..." >&2
-    container exec -e "SSH_PUBKEY=$pubkey" "$MACHINE" sh -c '
-        mkdir -p ~/.ssh && chmod 700 ~/.ssh
-        touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys
-        if grep -qF "$SSH_PUBKEY" ~/.ssh/authorized_keys 2>/dev/null; then
-            echo "    Key already authorized" >&2
-        else
-            echo "$SSH_PUBKEY" >> ~/.ssh/authorized_keys
-            echo "    Key added" >&2
-        fi
-    ' >/dev/null
-
     # Start sshd (--detach keeps it alive after exec exits)
-    echo "  [3/3] Starting sshd..." >&2
+    echo "  [4/4] Starting sshd..." >&2
     local listening
     listening=$(container exec "$MACHINE" bash -c 'echo >/dev/tcp/127.0.0.1/22 2>/dev/null && echo yes || echo no' 2>/dev/null) || true
     if [[ "$listening" == "yes" ]]; then
@@ -88,7 +104,7 @@ SSHEOF
     [[ -z "$ip" ]] && die "Could not determine container IP"
     echo "  Container IP: $ip" >&2
 
-    echo "root@${ip}"
+    echo "${target_user}@${ip}"
 }
 
 backend_list_projects() {

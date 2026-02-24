@@ -1,8 +1,8 @@
 #!/bin/bash
 # Test install.sh across the same backends zop uses.
 # Usage: ./test-install.sh [container|sprite|all]
-#   container — Apple Container (root, no sudo)
-#   sprite    — Fly.io Sprite (non-root, sudo available)
+#   container — Apple Container (klundstedt user, sudo available)
+#   sprite    — Fly.io Sprite (klundstedt user, sudo available)
 #   all       — both (default)
 
 set -euo pipefail
@@ -58,7 +58,7 @@ parse_results() {
     done <<< "$output"
 }
 
-# --- Apple Container (root, no sudo) ---
+# --- Apple Container (klundstedt user, sudo available) ---
 test_container() {
     if ! command -v container >/dev/null 2>&1; then
         echo "container CLI not found — skipping container test."
@@ -66,32 +66,49 @@ test_container() {
     fi
 
     local name="test-dotfiles-ct-$$"
-    echo "=== Container test (root) ==="
+    local target_user="klundstedt"
+    echo "=== Container test (non-root, sudo available) ==="
     container run --name "$name" ubuntu:25.04 sleep infinity &
     sleep 5
 
     echo ""
-    echo "--- Installing as root ---"
-    # Clone dotfiles, then overwrite with local working tree via SSH
+    echo "--- Setting up user and SSH ---"
     container exec "$name" bash -c "
-        apt-get update -qq && apt-get install -y -qq git curl openssh-server >/dev/null
-        mkdir -p /run/sshd ~/.ssh && chmod 700 ~/.ssh
+        apt-get update -qq && apt-get install -y -qq git curl openssh-server sudo >/dev/null
+        mkdir -p /run/sshd
+        useradd -m -s /bin/bash $target_user
+        echo '$target_user ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/$target_user
+        chmod 440 /etc/sudoers.d/$target_user
     "
-    # Set up SSH access for scp
+    # SSH key goes to the non-root user
     local pubkey
     pubkey=$(ssh-add -L 2>/dev/null | head -1)
-    container exec -e "K=$pubkey" "$name" bash -c 'echo "$K" >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys'
+    container exec -e "K=$pubkey" -e "U=$target_user" "$name" bash -c '
+        home=$(eval echo "~$U")
+        mkdir -p "$home/.ssh" && chmod 700 "$home/.ssh"
+        echo "$K" >> "$home/.ssh/authorized_keys"
+        chmod 600 "$home/.ssh/authorized_keys"
+        chown -R "$U:$U" "$home/.ssh"
+    '
+    container exec "$name" bash -c '
+        cat > /etc/ssh/sshd_config.d/zop.conf <<SSHEOF
+PasswordAuthentication no
+PubkeyAuthentication yes
+PermitRootLogin no
+SSHEOF
+    '
     container exec --detach "$name" /usr/sbin/sshd -D -e >/dev/null 2>/dev/null
     sleep 2
     local ct_ip
     ct_ip=$(container exec "$name" hostname -I 2>/dev/null | awk '{print $1}')
-    # Clone from GitHub then overlay local changes
-    container exec "$name" bash -c "git clone https://github.com/kylelundstedt/dotfiles ~/dotfiles 2>/dev/null || true"
-    # Overlay local changes onto the cloned repo via tar+ssh (rsync not available)
-    tar -C "$DOTFILES_DIR" --exclude=.git -cf - . | ssh -o StrictHostKeyChecking=no "root@${ct_ip}" "tar -C ~/dotfiles -xf -"
-    container exec "$name" bash -c "
-        cd ~/dotfiles && bash install.sh --no-prompt 2>&1
-    " || {
+    local ssh_target="${target_user}@${ct_ip}"
+
+    echo ""
+    echo "--- Installing as $target_user ---"
+    # Clone from GitHub then overlay local changes via tar+ssh
+    ssh -o StrictHostKeyChecking=no "$ssh_target" "git clone https://github.com/kylelundstedt/dotfiles ~/dotfiles 2>/dev/null || true"
+    tar -C "$DOTFILES_DIR" --exclude=.git -cf - . | ssh -o StrictHostKeyChecking=no "$ssh_target" "tar -C ~/dotfiles -xf -"
+    ssh -o StrictHostKeyChecking=no "$ssh_target" "cd ~/dotfiles && bash install.sh --no-prompt 2>&1" || {
         log_fail "container: install.sh"
         container stop "$name" 2>/dev/null; container rm "$name" 2>/dev/null || true
         return
@@ -100,14 +117,14 @@ test_container() {
 
     echo ""
     echo "--- Verifying ---"
-    parse_results "container" "$(container exec "$name" bash -c "$VERIFY_SCRIPT" 2>&1)"
+    parse_results "container" "$(ssh -o StrictHostKeyChecking=no "$ssh_target" "$VERIFY_SCRIPT" 2>&1)"
 
     echo ""
     echo "--- Tearing down container ---"
     container stop "$name" 2>/dev/null; container rm "$name" 2>/dev/null || true
 }
 
-# --- Sprite (non-root, sudo available) ---
+# --- Sprite (klundstedt user, sudo available) ---
 test_sprite() {
     if ! command -v sprite >/dev/null 2>&1; then
         echo "sprite CLI not found — skipping sprite test."
@@ -115,16 +132,31 @@ test_sprite() {
     fi
 
     local name="test-dotfiles-sp-$$"
-    echo "=== Sprite test (non-root) ==="
+    local target_user="klundstedt"
+    echo "=== Sprite test (non-root, sudo available) ==="
     sprite create --skip-console "$name"
 
     echo ""
-    echo "--- Installing ---"
-    # Copy local working tree so we test uncommitted changes
-    sprite exec -s "$name" -- bash -c "sudo apt-get update -qq && sudo apt-get install -y -qq git curl >/dev/null"
-    tar -C "$DOTFILES_DIR" -cf - --exclude=.git . | sprite exec -s "$name" -- bash -c "mkdir -p ~/dotfiles && tar -C ~/dotfiles -xf - && cd ~/dotfiles && git init -q"
+    echo "--- Setting up user ---"
+    # Create klundstedt user (sprite exec runs as platform default user with sudo)
     sprite exec -s "$name" -- bash -c "
-        cd ~/dotfiles && bash install.sh --no-prompt 2>&1
+        sudo apt-get update -qq && sudo apt-get install -y -qq git curl >/dev/null
+        sudo useradd -m -s /bin/bash $target_user
+        echo '$target_user ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/$target_user >/dev/null
+        sudo chmod 440 /etc/sudoers.d/$target_user
+    "
+
+    echo ""
+    echo "--- Installing as $target_user ---"
+    # Copy local working tree and run install as klundstedt
+    tar -C "$DOTFILES_DIR" -cf - --exclude=.git . | sprite exec -s "$name" -- bash -c "
+        sudo mkdir -p /home/$target_user/dotfiles
+        sudo tar -C /home/$target_user/dotfiles -xf -
+        sudo chown -R $target_user:$target_user /home/$target_user/dotfiles
+        cd /home/$target_user/dotfiles && sudo git init -q
+    "
+    sprite exec -s "$name" -- bash -c "
+        sudo -u $target_user bash -c 'cd ~/dotfiles && bash install.sh --no-prompt 2>&1'
     " || {
         log_fail "sprite: install.sh"
         sprite destroy -s "$name" --force 2>/dev/null || true
@@ -134,7 +166,7 @@ test_sprite() {
 
     echo ""
     echo "--- Verifying ---"
-    parse_results "sprite" "$(sprite exec -s "$name" -- bash -c "$VERIFY_SCRIPT" 2>&1)"
+    parse_results "sprite" "$(sprite exec -s "$name" -- bash -c "sudo -u $target_user bash -c '$VERIFY_SCRIPT'" 2>&1)"
 
     echo ""
     echo "--- Tearing down sprite ---"

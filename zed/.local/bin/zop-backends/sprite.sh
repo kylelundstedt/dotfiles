@@ -46,13 +46,13 @@ backend_start() {
 }
 
 backend_ensure_ssh() {
-    local pubkey
+    local pubkey target_user="klundstedt"
     pubkey=$(ssh_pubkey)
 
     echo "Setting up SSH on sprite: $MACHINE" >&2
 
     # Install openssh-server
-    echo "  [1/3] Installing openssh-server..." >&2
+    echo "  [1/4] Installing packages..." >&2
     _sprite_exec -- bash -c '
         if command -v sshd &>/dev/null; then
             echo "    Already installed" >&2
@@ -61,6 +61,35 @@ backend_ensure_ssh() {
             sudo apt-get update -qq && sudo apt-get install -y -qq openssh-server
         fi
         sudo mkdir -p /run/sshd
+    ' >&2
+
+    # Create non-root user with passwordless sudo
+    echo "  [2/4] Creating user $target_user..." >&2
+    _sprite_exec --env "U=$target_user" -- bash -c '
+        if id "$U" >/dev/null 2>&1; then
+            echo "    Already exists" >&2
+        else
+            sudo useradd -m -s /bin/bash "$U"
+            echo "$U ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/"$U" >/dev/null
+            sudo chmod 440 /etc/sudoers.d/"$U"
+            echo "    Created" >&2
+        fi
+    ' >&2
+
+    # Copy SSH public key to target user + configure sshd
+    echo "  [3/4] Configuring SSH..." >&2
+    _sprite_exec --env "SSH_PUBKEY=$pubkey" --env "U=$target_user" -- bash -c '
+        home=$(eval echo "~$U")
+        sudo mkdir -p "$home/.ssh" && sudo chmod 700 "$home/.ssh"
+        sudo touch "$home/.ssh/authorized_keys" && sudo chmod 600 "$home/.ssh/authorized_keys"
+        sudo chown -R "$U:$U" "$home/.ssh"
+        if sudo grep -qF "$SSH_PUBKEY" "$home/.ssh/authorized_keys" 2>/dev/null; then
+            echo "    Key already authorized" >&2
+        else
+            echo "$SSH_PUBKEY" | sudo tee -a "$home/.ssh/authorized_keys" >/dev/null
+            sudo chown "$U:$U" "$home/.ssh/authorized_keys"
+            echo "    Key added" >&2
+        fi
         sudo tee /etc/ssh/sshd_config.d/sprite.conf > /dev/null <<SSHEOF
 PasswordAuthentication no
 PubkeyAuthentication yes
@@ -69,21 +98,8 @@ SSHEOF
         echo "    Configured" >&2
     ' >&2
 
-    # Copy SSH public key
-    echo "  [2/3] Copying SSH public key..." >&2
-    _sprite_exec --env "SSH_PUBKEY=$pubkey" -- bash -c '
-        mkdir -p ~/.ssh && chmod 700 ~/.ssh
-        touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys
-        if grep -qF "$SSH_PUBKEY" ~/.ssh/authorized_keys 2>/dev/null; then
-            echo "    Key already authorized" >&2
-        else
-            echo "$SSH_PUBKEY" >> ~/.ssh/authorized_keys
-            echo "    Key added" >&2
-        fi
-    ' >&2
-
     # Start sshd service
-    echo "  [3/3] Starting sshd service..." >&2
+    echo "  [4/4] Starting sshd service..." >&2
     _sprite_exec -- bash -c '
         sprite_api() { sprite-env curl "$@"; }
         if sprite_api /v1/services/sshd 2>/dev/null | grep -q "running"; then
@@ -116,7 +132,7 @@ SSHEOF
     fi
     echo "  Proxy running (pid $proxy_pid)" >&2
 
-    echo "sprite@localhost:$SPRITE_LOCAL_PORT"
+    echo "${target_user}@localhost:$SPRITE_LOCAL_PORT"
 }
 
 backend_list_projects() {
