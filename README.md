@@ -4,7 +4,7 @@ One command to set up a fully configured development environment on macOS or Lin
 
 ## What You Get
 
-**AI agent platform** — [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [Codex CLI](https://github.com/openai/codex) with a shared instruction system (`AGENTS.md`), cross-agent skills (`bootstrap-project`, `data-pipelines`, `sprites`, `mviz`, `find-skills`), five MCP servers (GitHub home/work, MotherDuck, dlt, Tigris) with [1Password secret injection](agent_docs/secrets.md), and a convention for per-project agent context (`agent_docs/`)
+**AI agent platform** — [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [Codex CLI](https://github.com/openai/codex) with a shared instruction system (`AGENTS.md`), cross-agent skills (`bootstrap-project`, `data-pipelines`, `sprites-remote`, `zp`, `mviz`, `find-skills`), five MCP servers (GitHub home/work, MotherDuck, dlt, Tigris) with [1Password secret injection](agent_docs/secrets.md), and a convention for per-project agent context (`agent_docs/`)
 
 **Shell** — Zsh with [Starship](https://starship.rs/) prompt, [Atuin](https://atuin.sh/) history sync, [Zoxide](https://github.com/ajeetdsouza/zoxide) smart `cd`, [Carapace](https://carapace.sh/) completions, and [Direnv](https://direnv.net/)
 
@@ -107,9 +107,12 @@ Both Claude Code and Codex CLI share a single instruction file (`AGENTS.md`) dep
 | ------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------- |
 | `bootstrap-project` | This repo                                                   | Scaffolds per-project `AGENTS.md`, `CLAUDE.md` symlink, and `agent_docs/` |
 | `data-pipelines`    | This repo                                                   | DuckDB-centric data stack — dlt, sqlmesh, polars, marimo, uv              |
-| `sprites`           | This repo                                                   | Manage remote Sprites (Fly.io microVMs) from local machine                |
+| `sprites-remote`    | This repo                                                   | Manage remote Sprites (Fly.io microVMs) from local machine                |
+| `zp`                | This repo                                                   | Open, create, and manage projects across local, containers, and sprites   |
 | `mviz`              | [matsonj/mviz](https://github.com/matsonj/mviz)             | Chart and report builder                                                  |
 | `find-skills`       | [vercel-labs/skills](https://github.com/vercel-labs/skills) | Skill discovery and installation                                          |
+
+Invoke a skill by typing `/skill-name` in Claude Code or Codex (e.g. `/bootstrap-project`, `/zp`).
 
 **MCP servers** — Shared wrappers in `agents/.agents/mcp/bin/` use `op run` to inject 1Password secrets at runtime. `install.sh` registers them for both Claude and Codex:
 
