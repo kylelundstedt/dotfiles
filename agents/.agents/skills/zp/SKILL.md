@@ -103,6 +103,10 @@ zp owner/name --backend container --machine dev
 zp owner/name --backend container --machine fresh-env
 ```
 
+## After Opening a New Project
+
+When `zp` clones a repo that doesn't have an `AGENTS.md`, suggest using the `/bootstrap-project` skill to set up agent context. This gives Claude Code and other agents the project-specific instructions they need to be effective.
+
 ## Important Notes
 
 - GitHub owner in the path (e.g. `kylelundstedt`) is separate from the OS user (`klundstedt`).
