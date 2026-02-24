@@ -130,7 +130,10 @@ SSHEOF
     fi
     echo "  Proxy running (pid $proxy_pid)" >&2
 
-    echo "${target_user}@localhost:$SPRITE_LOCAL_PORT"
+    local alias="sprite-${MACHINE}"
+    _write_ssh_config "$alias" "localhost" "$target_user" "$SPRITE_LOCAL_PORT"
+
+    echo "$alias"
 }
 
 backend_exec() {

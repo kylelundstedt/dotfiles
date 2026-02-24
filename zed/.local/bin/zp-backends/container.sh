@@ -96,13 +96,15 @@ SSHEOF
         echo "    Started" >&2
     fi
 
-    # Get container IP
+    # Get container IP and write SSH config alias
     local ip
     ip=$(container exec "$MACHINE" hostname -I 2>/dev/null | awk '{print $1}')
     [[ -z "$ip" ]] && die "Could not determine container IP"
     echo "  Container IP: $ip" >&2
 
-    echo "${target_user}@${ip}"
+    _write_ssh_config "$MACHINE" "$ip" "$target_user"
+
+    echo "$MACHINE"
 }
 
 backend_exec() {

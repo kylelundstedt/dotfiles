@@ -11,8 +11,7 @@ cask "caffeine", args: { appdir: "/Applications" }
 cask "cardhop", args: { appdir: "/Applications" }
 cask "chatgpt"
 cask "claude"
-cask "claude-code"
-cask "codex"
+# claude-code and codex CLIs installed via install.sh (consistent across local/container/sprite)
 # cask "cursor"
 # cask "dash", args: { appdir: "/Applications" }
 cask "datagrip", args: { appdir: "/Applications" }

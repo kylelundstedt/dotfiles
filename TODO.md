@@ -1,5 +1,8 @@
 # TODO
 
+## Remote Dev
+- [ ] Setup proxies from containers and sprites back to local
+
 ## Devbox image (reproducible dev environment)
 - [ ] Build `image/Dockerfile` with pinned tool versions, `klundstedt` user
 - [ ] Build `image/build.sh` for local builds via `container build`
@@ -15,3 +18,7 @@
 ## install.sh
 - [ ] Test `--apps` flag (brew bundle casks + MAS apps)
 - [ ] Ensure timely and correct upgrades for Apple `container`
+
+## 1Password
+- [ ] Consider 1Password Connect with Tailscale
+- [ ] Decide how to handle MCP servers without 1Password

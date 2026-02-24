@@ -48,15 +48,9 @@ ssh_pubkey() {
 }
 
 # Run a command on the remote via SSH. Requires SSH_TARGET to be set.
+# SSH_TARGET is an SSH config alias written by _write_ssh_config.
 remote_exec() {
-    local ssh_host ssh_port
-    if [[ "$SSH_TARGET" == *:* ]]; then
-        ssh_host="${SSH_TARGET%:*}"
-        ssh_port="${SSH_TARGET##*:}"
-        ssh -A -o StrictHostKeyChecking=no -p "$ssh_port" "$ssh_host" "$@"
-    else
-        ssh -A -o StrictHostKeyChecking=no "$SSH_TARGET" "$@"
-    fi
+    ssh -A "$SSH_TARGET" "$@"
 }
 
 # Source a backend file.
@@ -66,6 +60,34 @@ load_backend() {
     [[ -f "$file" ]] || die "Unknown backend: $name"
     # shellcheck source=/dev/null
     source "$file"
+}
+
+# Write/update an SSH config entry for a backend machine.
+# This lets Zed display the machine name instead of a raw IP.
+# Args: host_alias, hostname, user [, port]
+_write_ssh_config() {
+    local alias="$1" hostname="$2" user="$3" port="${4:-}"
+    local config="$HOME/.ssh/config"
+    mkdir -p "$HOME/.ssh"
+    touch "$config"
+
+    # Build the new block
+    local block="Host $alias"
+    block+=$'\n'"    HostName $hostname"
+    block+=$'\n'"    User $user"
+    [[ -n "$port" ]] && block+=$'\n'"    Port $port"
+    block+=$'\n'"    StrictHostKeyChecking no"
+    block+=$'\n'"    ForwardAgent yes"
+
+    # Remove existing block for this alias, then append
+    if grep -qx "Host $alias" "$config" 2>/dev/null; then
+        awk -v alias="$alias" '
+            /^Host / { skip = ($0 == "Host " alias) }
+            !skip { print }
+        ' "$config" > "$config.tmp" && mv "$config.tmp" "$config"
+    fi
+
+    printf '\n%s\n' "$block" >> "$config"
 }
 
 is_owner_name() { [[ "$1" == */* ]]; }
@@ -157,15 +179,8 @@ open_zed_local() {
 }
 
 open_zed_remote() {
-    local ssh_target="$1" project="$2"  # project is owner/name
-
-    if [[ "$ssh_target" == *:* ]]; then
-        local ssh_host="${ssh_target%:*}"
-        local ssh_port="${ssh_target##*:}"
-        zed "ssh://${ssh_host}:${ssh_port}/home/${TARGET_USER}/github/${project}"
-    else
-        zed "ssh://${ssh_target}/home/${TARGET_USER}/github/${project}"
-    fi
+    local ssh_target="$1" project="$2"  # ssh_target is an SSH config alias
+    zed "ssh://${ssh_target}/home/${TARGET_USER}/github/${project}"
 }
 
 # Open from a parsed label like "local", "container: dev", "sprite: prod"
@@ -303,14 +318,20 @@ flow_search() {
         else
             die "No project named '$PROJECT' found across any backend"
         fi
-    elif [[ "$count" -eq 1 ]]; then
-        parse_selection "$matches"
-        open_from_label "$PROJECT_NAME" "$PROJECT_LABEL"
     else
+        # Always show picker, even for a single match
+        if is_owner_name "$PROJECT"; then
+            matches=$(printf '%s\n%s' "$matches" "[+ clone elsewhere]")
+        fi
+        need_tty
         local selection
-        selection=$(pick_from "Project" "$matches")
-        parse_selection "$selection"
-        open_from_label "$PROJECT_NAME" "$PROJECT_LABEL"
+        selection=$(echo "$matches" | fzf --prompt="Project > " || exit 0)
+        if [[ "$selection" == "[+ clone elsewhere]" ]]; then
+            flow_pick_target_and_clone "$PROJECT"
+        else
+            parse_selection "$selection"
+            open_from_label "$PROJECT_NAME" "$PROJECT_LABEL"
+        fi
     fi
 }
 
