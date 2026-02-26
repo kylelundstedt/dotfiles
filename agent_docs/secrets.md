@@ -1,34 +1,23 @@
 # Secret Management with 1Password
 
-Secrets are never stored in plaintext. Instead, `.env` files contain [1Password secret references](https://developer.1password.com/docs/cli/secret-references) (`op://` URIs) that are resolved at runtime by `op run`. These `.env` files are safe to commit — they're just pointers, not secrets.
+Secrets are never stored in plaintext. 1Password CLI (`op`) resolves secrets at runtime or install time.
 
-## How MCP Server Wrappers Work
+## MCP Servers
 
-Each MCP server has a wrapper script and a companion `.env` file in `agents/.agents/mcp/bin/`:
+MCP servers use remote HTTP transport. No local wrapper scripts or `.env` files needed.
 
-```
-agents/.agents/mcp/bin/
-├── github-mcp-home          # wrapper script
-├── github-mcp-home.env      # secret references (committed to git)
-├── motherduck-mcp
-├── motherduck-mcp.env
-└── ...
-```
+**OAuth servers** (MotherDuck, Tigris) — no 1Password involvement. Authentication happens via browser OAuth flow on first use. Works on all environments.
 
-The `.env` file contains references like:
-
-```
-GITHUB_PERSONAL_ACCESS_TOKEN=op://Private/GitHub PAT Home/token
-```
-
-The wrapper resolves them with a single `op run` call:
+**GitHub servers** (github-home, github-work) — PATs resolved from 1Password at install time via `op read` and stored in `~/.claude.json` as HTTP `Authorization` headers. Re-running `install.sh` refreshes them. Only registered on macOS where 1Password is configured.
 
 ```bash
-exec op run --env-file="$SCRIPT_DIR/github-mcp-home.env" \
-    --account lundstedts.1password.com -- npx -y @modelcontextprotocol/server-github "$@"
+# How install.sh resolves GitHub PATs
+pat=$(op read "op://Private/GitHub PAT Home/token" --account lundstedts.1password.com)
+claude mcp add-json --scope user github-home \
+    "{\"type\":\"http\",\"url\":\"https://api.githubcopilot.com/mcp/\",\"headers\":{\"Authorization\":\"Bearer $pat\"}}"
 ```
 
-## Using This Pattern in Your Own Projects
+## Using 1Password in Your Own Projects
 
 Create a `.env` file with secret references in your project root:
 
@@ -41,6 +30,12 @@ Then run any command with those secrets injected:
 
 ```bash
 op run --env-file=.env -- your-command
+```
+
+Or read a single secret value:
+
+```bash
+op read "op://Employee/SomeService/api_key"
 ```
 
 ## Platform Notes

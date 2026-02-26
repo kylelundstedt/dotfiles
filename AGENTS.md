@@ -16,7 +16,7 @@ GNU Stow–managed dotfiles and AI agent platform for macOS and Linux. Each top-
 - Secrets stay out of committed files — use 1Password (`op run`) or `.gitignore`d local configs.
 - `agents/.agents/AGENTS.md` is the canonical global agent instruction file. `agents/.claude/CLAUDE.md` and `agents/.codex/AGENTS.md` are symlinks to it.
 - Skills live in `agents/.agents/skills/` (stow-managed) or `~/.agents/skills/` (git-cloned). Both `~/.claude/skills/` and `~/.codex/skills/` symlink into `~/.agents/skills/`.
-- MCP server wrappers live in `agents/.agents/mcp/bin/` and use `op run` to inject 1Password secrets at runtime. Servers: github-home, github-work, motherduck, dlt, tigris.
+- MCP servers use remote HTTP transport. OAuth servers (motherduck, tigris) work everywhere. GitHub servers (github-home, github-work) use PATs from 1Password (macOS only).
 - Local config files (`aws/.aws/config`, `ssh/.ssh/config`, `git/.gitconfig_local`) are gitignored and created from examples or prompts during install.
 
 ## Structure
@@ -24,7 +24,7 @@ GNU Stow–managed dotfiles and AI agent platform for macOS and Linux. Each top-
 | Package | Purpose |
 |---------|---------|
 | `1Password/` | 1Password SSH agent config (macOS) |
-| `agents/` | Agent infrastructure — `AGENTS.md`, Claude/Codex symlinks, skills, MCP server wrappers (`op run`), Claude Code settings |
+| `agents/` | Agent infrastructure — `AGENTS.md`, Claude/Codex symlinks, skills, Claude Code settings |
 | `agent_docs/` | Reference docs for this repo — agent setup plans, platform notes, secret management (not stowed) |
 | `aws/` | AWS CLI configuration (Linux) |
 | `ghostty/` | Ghostty terminal configuration (macOS) |
@@ -49,7 +49,7 @@ The install script sets up a machine from scratch. It runs sequentially through:
 4. **Git config** — OS include file, SSH multiplexing for GitHub, interactive prompt for user name/email
 5. **Shell** — set default shell to zsh
 6. **Stow** — all packages (with interactive confirmation unless `--no-prompt`)
-7. **Agents** — Claude Code CLI, Codex CLI, 1Password CLI (Linux), MCP server registration, Codex startup timeout patch, agent skills
+7. **Agents** — Claude Code CLI, Codex CLI, 1Password CLI (Linux), MCP server registration (remote HTTP), agent skills
 8. **Apps** (only with `--apps`) — `brew bundle` for casks/MAS apps, Sprite CLI, LaunchAgents
 
 **Flags:** `--apps`, `--dry-run`, `--no-prompt`, `--skip-stow`

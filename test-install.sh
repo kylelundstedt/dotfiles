@@ -34,12 +34,18 @@ for f in .zshrc .config/starship.toml; do
     if [ -L "$HOME/$f" ]; then echo "OK stow:$f"; else echo "MISSING stow:$f"; fi
 done
 
-# MCP servers registered in Claude
+# MCP servers registered in Claude (remote HTTP transport)
 if command -v claude >/dev/null 2>&1; then
     mcp_list=$(claude mcp list 2>/dev/null || true)
-    for srv in github-home github-work motherduck dlt tigris; do
+    for srv in motherduck tigris; do
         if echo "$mcp_list" | grep -q "$srv"; then echo "OK mcp:$srv"; else echo "MISSING mcp:$srv"; fi
     done
+    # GitHub servers require 1Password
+    if command -v op >/dev/null 2>&1 && op account list 2>/dev/null | grep -q .; then
+        for srv in github-home github-work; do
+            if echo "$mcp_list" | grep -q "$srv"; then echo "OK mcp:$srv"; else echo "MISSING mcp:$srv"; fi
+        done
+    fi
 fi
 
 # Skills directories

@@ -4,7 +4,7 @@ One command to set up a fully configured development environment on macOS or Lin
 
 ## What You Get
 
-**AI agent platform** — [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [Codex CLI](https://github.com/openai/codex) with a shared instruction system (`AGENTS.md`), cross-agent skills (`bootstrap-project`, `data-pipelines`, `sprites-remote`, `zp`, `mviz`, `find-skills`), five MCP servers (GitHub home/work, MotherDuck, dlt, Tigris) with [1Password secret injection](agent_docs/secrets.md), and a convention for per-project agent context (`agent_docs/`)
+**AI agent platform** — [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [Codex CLI](https://github.com/openai/codex) with a shared instruction system (`AGENTS.md`), cross-agent skills (`bootstrap-project`, `data-pipelines`, `sprites-remote`, `zp`, `mviz`, `find-skills`), four remote MCP servers (GitHub home/work, MotherDuck, Tigris) via HTTP transport, and a convention for per-project agent context (`agent_docs/`)
 
 **Shell** — Zsh with [Starship](https://starship.rs/) prompt, [Atuin](https://atuin.sh/) history sync, [Zoxide](https://github.com/ajeetdsouza/zoxide) smart `cd`, [Carapace](https://carapace.sh/) completions, and [Direnv](https://direnv.net/)
 
@@ -114,15 +114,14 @@ Both Claude Code and Codex CLI share a single instruction file (`AGENTS.md`) dep
 
 Invoke a skill by typing `/skill-name` in Claude Code or Codex (e.g. `/bootstrap-project`, `/zp`).
 
-**MCP servers** — Shared wrappers in `agents/.agents/mcp/bin/` use `op run` to inject 1Password secrets at runtime. `install.sh` registers them for both Claude and Codex:
+**MCP servers** — Remote HTTP transport. OAuth servers (MotherDuck, Tigris) work on all environments after initial browser auth. GitHub servers use PATs resolved from 1Password at install time (macOS only). `install.sh` registers them for Claude Code:
 
-| Server        | Purpose                       |
-| ------------- | ----------------------------- |
-| `github-home` | GitHub API (personal account) |
-| `github-work` | GitHub API (work account)     |
-| `motherduck`  | MotherDuck / DuckDB           |
-| `dlt`         | dlt pipeline tools            |
-| `tigris`      | Tigris object storage         |
+| Server        | Purpose                       | Auth  |
+| ------------- | ----------------------------- | ----- |
+| `motherduck`  | MotherDuck / DuckDB           | OAuth |
+| `tigris`      | Tigris object storage         | OAuth |
+| `github-home` | GitHub API (personal account) | PAT   |
+| `github-work` | GitHub API (work account)     | PAT   |
 
 **Per-project context** — Use the `/bootstrap-project` skill in any repo to generate a tailored `AGENTS.md`, a `CLAUDE.md` symlink, and an `agent_docs/` directory.
 

@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-# No op run / .env needed — dlt-mcp doesn't require secrets.
-set -euo pipefail
-exec uv run --with "dlt-mcp[search]" python -m dlt_mcp "$@"

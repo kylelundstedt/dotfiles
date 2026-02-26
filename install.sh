@@ -384,61 +384,46 @@ setup_agents() {
         fi
     fi
 
-    # MCP servers
+    # MCP servers (remote HTTP transport)
     echo "  Configuring MCP servers..."
     local op_configured=false
     if command -v op >/dev/null 2>&1 && op account list 2>/dev/null | grep -q .; then
         op_configured=true
     fi
 
-    # Servers that don't need 1Password are always registered
-    local mcp_wrappers=(
-        "dlt:$DOTFILES_DIR/agents/.agents/mcp/bin/dlt-mcp"
-    )
-    # Servers that need 1Password are only registered when op is configured
-    if [[ "$op_configured" == true ]]; then
-        mcp_wrappers+=(
-            "github-home:$DOTFILES_DIR/agents/.agents/mcp/bin/github-mcp-home"
-            "github-work:$DOTFILES_DIR/agents/.agents/mcp/bin/github-mcp-work"
-            "motherduck:$DOTFILES_DIR/agents/.agents/mcp/bin/motherduck-mcp"
-            "tigris:$DOTFILES_DIR/agents/.agents/mcp/bin/tigris-mcp"
-        )
-    else
-        echo "  Skipping 1Password-backed MCP servers (op not configured)"
-    fi
-    for tool in claude codex; do
-        command -v "$tool" >/dev/null 2>&1 || continue
-        for spec in "${mcp_wrappers[@]}"; do
-            local name="${spec%%:*}" wrapper="${spec#*:}"
-            [[ ! -x "$wrapper" ]] && continue
-            local cmd
-            if [[ "$tool" == "claude" ]]; then
-                cmd=("$tool" mcp add --scope user "$name" -- "$wrapper")
-            else
-                cmd=("$tool" mcp add "$name" -- "$wrapper")
-            fi
-            "${cmd[@]}" 2>/dev/null || true
+    # --- Claude Code ---
+    if command -v claude >/dev/null 2>&1; then
+        # Remove stale servers from previous installations
+        for old in dlt github-home github-work motherduck tigris; do
+            claude mcp remove --scope user "$old" 2>/dev/null || true
         done
 
-        # Codex startup timeout patch
-        if [[ "$tool" == "codex" ]]; then
-            local codex_config="$HOME/.codex/config.toml"
-            if [[ -f "$codex_config" ]] && command -v python3 >/dev/null 2>&1; then
-                python3 -c '
-import sys, re
-p = sys.argv[1]
-t = open(p).read()
-parts = re.split(r"(?=\[mcp_servers\.)", t)
-result = []
-for s in parts:
-    if s.startswith("[mcp_servers.") and "startup_timeout_sec" not in s:
-        s = re.sub(r"(command = [^\n]+\n)", r"\1startup_timeout_sec = 30\n", s)
-    result.append(s)
-open(p, "w").write("".join(result))
-' "$codex_config"
-            fi
+        # OAuth servers (browser auth on first use)
+        claude mcp add --transport http --scope user motherduck https://api.motherduck.com/mcp 2>/dev/null || true
+        claude mcp add --transport http --scope user tigris https://mcp.storage.dev/mcp 2>/dev/null || true
+
+        # GitHub servers (PAT from 1Password)
+        if [[ "$op_configured" == true ]]; then
+            local pat_home pat_work
+            pat_home=$(op read "op://Private/GitHub PAT Home/token" --account lundstedts.1password.com 2>/dev/null) || true
+            pat_work=$(op read "op://Employee/GitHub PAT IV/token" --account industryvault.1password.com 2>/dev/null) || true
+            [[ -n "$pat_home" ]] && claude mcp add-json --scope user github-home \
+                "{\"type\":\"http\",\"url\":\"https://api.githubcopilot.com/mcp/\",\"headers\":{\"Authorization\":\"Bearer $pat_home\"}}" 2>/dev/null || true
+            [[ -n "$pat_work" ]] && claude mcp add-json --scope user github-work \
+                "{\"type\":\"http\",\"url\":\"https://api.githubcopilot.com/mcp/\",\"headers\":{\"Authorization\":\"Bearer $pat_work\"}}" 2>/dev/null || true
+        else
+            echo "  Skipping GitHub MCP servers (1Password not configured)"
         fi
-    done
+    fi
+
+    # --- Codex ---
+    if command -v codex >/dev/null 2>&1; then
+        # Remove stale servers from previous installations
+        for old in dlt github-home github-work motherduck tigris; do
+            codex mcp remove "$old" 2>/dev/null || true
+        done
+    fi
+
     echo "  [+] MCP servers configured"
 
     # Skills

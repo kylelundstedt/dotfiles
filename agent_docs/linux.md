@@ -5,7 +5,7 @@
 - Installer prefers native package managers (APT when available) for core CLI tools
 - Homebrew on Linux is optional for core tools, but used for `--include-heavy` packages
 - Shell change targets `/usr/bin/zsh`; in non-interactive mode it may be skipped without sudo/root
-- Claude MCP wrapper scripts use 1Password secret references via `op run`
+- Claude MCP servers use remote HTTP transport (OAuth for MotherDuck/Tigris, PAT from 1Password for GitHub)
 
 ## Testing on Linux
 
@@ -158,12 +158,12 @@ Exit and discard. Rebuild from the pinned image for the next task.
 
 ### When to Use Local vs Remote Sprites
 
-| | Local Sprite | Remote Sprite |
-|---|---|---|
-| **Use when** | Code is trusted, fast iteration needed, repo-local scope | Untrusted code/deps, broad autonomy, secret-adjacent workflows |
-| **Isolation** | Hypervisor on your Mac | Separate hardware, separate network |
-| **Checkpoint/restore** | Manual (rebuild discipline) | First-class platform feature |
-| **Cost** | Free | Pay per use |
+|                        | Local Sprite                                             | Remote Sprite                                                  |
+| ---------------------- | -------------------------------------------------------- | -------------------------------------------------------------- |
+| **Use when**           | Code is trusted, fast iteration needed, repo-local scope | Untrusted code/deps, broad autonomy, secret-adjacent workflows |
+| **Isolation**          | Hypervisor on your Mac                                   | Separate hardware, separate network                            |
+| **Checkpoint/restore** | Manual (rebuild discipline)                              | First-class platform feature                                   |
+| **Cost**               | Free                                                     | Pay per use                                                    |
 
 ### References
 
