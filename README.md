@@ -22,31 +22,22 @@ One command to set up a fully configured development environment on macOS or Lin
 curl -fsSL https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/install.sh | bash
 ```
 
-The script self-bootstraps from a bare machine: detects your OS, installs packages (Homebrew on macOS, apt/dnf/pacman/zypper on Linux), configures agent tooling (MCP servers, skills for both Claude and Codex), and symlinks all configuration into place. It's idempotent — safe to run again.
-
-To also install GUI apps (macOS casks, Mac App Store apps) or Linux extras:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/install.sh | bash -s -- --include-heavy
-```
+The script self-bootstraps from a bare machine: detects your OS, installs packages (Homebrew on macOS, apt on Linux), configures agent tooling (MCP servers, skills for both Claude and Codex), and symlinks all configuration into place. It's idempotent — safe to run again.
 
 Or clone and run manually:
 
 ```bash
 git clone https://github.com/kylelundstedt/dotfiles ~/dotfiles
 cd ~/dotfiles
-./install.sh                          # All layers (auto-detected)
-./install.sh --only shell,agents      # Shell + agents only (microVM)
-./install.sh --only shell --no-prompt # Shell only (non-interactive microVM)
-./install.sh --include-heavy          # + macOS casks/MAS apps or Linux extras
-./install.sh --background-apps        # Fork apps layer to background
+./install.sh                 # CLI tools, shell, git, stow, agents
+./install.sh --apps          # + macOS casks, Mac App Store apps, Sprite CLI
+./install.sh --no-prompt     # Non-interactive (auto-enabled when no TTY)
+./install.sh --skip-agents   # Skip Claude/Codex/MCP setup
+./install.sh --skip-stow     # Skip stow step
+./install.sh --dry-run       # Preview stow changes
 ```
 
-**Flags:** `--only <layers>`, `--background-apps`, `--dry-run`, `--no-prompt`, `--include-heavy`, `--skip-stow`, `--interactive`
-
-**Layers:** `shell` (CLI tools, shell config), `agents` (Claude/Codex, MCP servers, skills), `apps` (brew casks, VS Code, Sprite CLI, Apple Containers CLI)
-
-Auto-detection picks layers based on context: local machine gets all three, Sprite microVMs get shell + agents (or shell-only if non-interactive), containers get shell only. Override with `--only`.
+**Flags:** `--apps`, `--dry-run`, `--no-prompt`, `--skip-stow`, `--skip-agents`
 
 That's it — your shell, git, agent tooling, and dev tools are all configured. Start using them:
 
@@ -65,22 +56,24 @@ To bring the same agent setup to another project, use the `/bootstrap-project` s
 
 Configuration is managed with [GNU Stow](http://www.gnu.org/software/stow/), which creates symlinks from this repo into your home directory. Each top-level directory is a "package" that gets stowed independently:
 
-| Directory       | Purpose                                                                                               | Stow Target                           | Platform |
-| --------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------- | -------- |
-| `1Password/`    | 1Password SSH agent config                                                                            | `~/.config/1Password/`                | macOS    |
-| `agents/`       | Agent infrastructure — `AGENTS.md`, Claude/Codex symlinks, skills, MCP wrappers, Claude Code settings | `~/`                                  | Both     |
-| `agent_docs/`   | Reference docs for this repo — agent setup plans, platform notes, secret management                   | N/A (not stowed)                      | Both     |
-| `aws/`          | AWS CLI configuration                                                                                 | `~/.aws/`                             | Linux    |
-| `git/`          | Git configuration with OS-specific includes                                                           | `~/`                                  | Both     |
-| `homebrew/`     | Brewfile(s) for macOS + Linux                                                                         | `~/`                                  | Both     |
-| `launchd/`      | LaunchAgents — daily repo sync                                                                        | `~/Library/LaunchAgents/`             | macOS    |
-| `ssh/`          | SSH client configuration                                                                              | `~/.ssh/`                             | Both     |
-| `starship/`     | Starship prompt configuration                                                                         | `~/.config/`                          | Both     |
-| `scripts/`      | Utility scripts (e.g., `open-project.sh` for Zed + Ghostty tiling)                                    | N/A (not stowed)                      | macOS    |
-| `vscode/`       | VS Code IDE settings & keybindings                                                                    | `~/Library/Application Support/Code/` | macOS    |
-| `sync-repos.sh` | Clones/fetches all GitHub repos for personal and work accounts                                        | N/A (standalone script)               | Both     |
-| `zed/`          | Zed editor settings + `zp` project launcher with pluggable backends                                   | `~/.config/zed/`, `~/.local/bin/`     | macOS    |
-| `zsh/`          | Zsh shell configuration                                                                               | `~/`                                  | Both     |
+| Directory         | Purpose                                                                                               | Stow Target                           | Platform |
+| ----------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------- | -------- |
+| `1Password/`      | 1Password SSH agent config                                                                            | `~/.config/1Password/`                | macOS    |
+| `agents/`         | Agent infrastructure — `AGENTS.md`, Claude/Codex symlinks, skills, MCP wrappers, Claude Code settings | `~/`                                  | Both     |
+| `agent_docs/`     | Reference docs for this repo — agent setup plans, platform notes, secret management                   | N/A (not stowed)                      | Both     |
+| `aws/`            | AWS CLI configuration                                                                                 | `~/.aws/`                             | Linux    |
+| `ghostty/`        | Ghostty terminal configuration                                                                        | `~/.config/ghostty/`                  | macOS    |
+| `git/`            | Git configuration with OS-specific includes                                                           | `~/`                                  | Both     |
+| `homebrew/`       | Brewfile for macOS casks and Mac App Store apps                                                       | `~/`                                  | macOS    |
+| `launchd/`        | LaunchAgents — daily repo sync                                                                        | `~/Library/LaunchAgents/`             | macOS    |
+| `ssh/`            | SSH client configuration                                                                              | `~/.ssh/`                             | Both     |
+| `starship/`       | Starship prompt configuration                                                                         | `~/.config/`                          | Both     |
+| `vscode/`         | VS Code IDE settings & keybindings                                                                    | `~/Library/Application Support/Code/` | macOS    |
+| `sync-repos.sh`   | Clones/fetches all GitHub repos for personal and work accounts                                        | N/A (standalone script)               | Both     |
+| `test-install.sh` | Tests install.sh in an Apple Container                                                                | N/A (standalone script)               | macOS    |
+| `test-zp.sh`      | Tests zp across its supported flows                                                                   | N/A (standalone script)               | macOS    |
+| `zed/`            | Zed editor settings + `zp` project launcher with pluggable backends                                   | `~/.config/zed/`, `~/.local/bin/`     | macOS    |
+| `zsh/`            | Zsh shell configuration                                                                               | `~/`                                  | Both     |
 
 Git uses a generated OS include so only one platform-specific file is active:
 

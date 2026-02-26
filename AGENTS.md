@@ -6,7 +6,9 @@ GNU Stow–managed dotfiles and AI agent platform for macOS and Linux. Each top-
 
 - Install everything: `./install.sh` (or `./install.sh --no-prompt` for non-interactive)
 - Install with macOS apps (casks, Mac App Store): `./install.sh --apps`
-- Test on Linux: `./test-install.sh` (Apple Container + Sprite)
+- Skip agent setup: `./install.sh --skip-agents`
+- Test on Linux: `./test-install.sh` (Apple Container)
+- Test zp: `./test-zp.sh`
 - Stow a single package: `stow --no-folding -R -t "$HOME" <package>`
 - Dry-run stow: `stow --no-folding -R -n -t "$HOME" <package>`
 
@@ -21,30 +23,31 @@ GNU Stow–managed dotfiles and AI agent platform for macOS and Linux. Each top-
 
 ## Structure
 
-| Package | Purpose |
-|---------|---------|
-| `1Password/` | 1Password SSH agent config (macOS) |
-| `agents/` | Agent infrastructure — `AGENTS.md`, Claude/Codex symlinks, skills, Claude Code settings |
-| `agent_docs/` | Reference docs for this repo — agent setup plans, platform notes, secret management (not stowed) |
-| `aws/` | AWS CLI configuration (Linux) |
-| `ghostty/` | Ghostty terminal configuration (macOS) |
-| `git/` | Git configuration with OS-specific includes |
-| `homebrew/` | Brewfile for macOS casks and Mac App Store apps (CLI tools installed directly in install.sh) |
-| `launchd/` | LaunchAgents for macOS — daily repo sync (stowed) |
-| `scripts/` | Utility scripts — `open-project.sh` for Zed + Ghostty tiling (not stowed, macOS) |
-| `ssh/` | SSH client configuration (macOS) |
-| `starship/` | Starship prompt configuration |
-| `vscode/` | VS Code settings and extensions (macOS) |
-| `sync-repos.sh` | Clones/fetches all GitHub repos for personal and work accounts |
-| `zed/` | Zed editor configuration (macOS) |
-| `zsh/` | Zsh configuration, aliases, completions |
+| Package           | Purpose                                                                                          |
+| ----------------- | ------------------------------------------------------------------------------------------------ |
+| `1Password/`      | 1Password SSH agent config (macOS)                                                               |
+| `agents/`         | Agent infrastructure — `AGENTS.md`, Claude/Codex symlinks, skills, Claude Code settings          |
+| `agent_docs/`     | Reference docs for this repo — agent setup plans, platform notes, secret management (not stowed) |
+| `aws/`            | AWS CLI configuration (Linux)                                                                    |
+| `ghostty/`        | Ghostty terminal configuration (macOS)                                                           |
+| `git/`            | Git configuration with OS-specific includes                                                      |
+| `homebrew/`       | Brewfile for macOS casks and Mac App Store apps (CLI tools installed directly in install.sh)     |
+| `launchd/`        | LaunchAgents for macOS — daily repo sync (stowed)                                                |
+| `ssh/`            | SSH client configuration                                                                         |
+| `starship/`       | Starship prompt configuration                                                                    |
+| `vscode/`         | VS Code settings and extensions (macOS)                                                          |
+| `sync-repos.sh`   | Clones/fetches all GitHub repos for personal and work accounts                                   |
+| `test-install.sh` | Tests install.sh in an Apple Container                                                           |
+| `test-zp.sh`      | Tests zp across its supported flows                                                              |
+| `zed/`            | Zed editor settings + `zp` project launcher with pluggable backends (macOS)                      |
+| `zsh/`            | Zsh configuration, aliases, completions                                                          |
 
 ## install.sh
 
 The install script sets up a machine from scratch. It runs sequentially through:
 
 1. **System deps** — stow, zsh, git, curl (apt on Linux, Homebrew on macOS)
-2. **CLI tools** — installed in parallel via curl scripts and GitHub release binaries to `~/.local/bin` (starship, uv, atuin, zoxide, direnv, just, fnm, bat, fzf, rg, jq, yq, gh, duckdb, carapace)
+2. **CLI tools** — installed in parallel via curl scripts and GitHub release binaries to `~/.local/bin` (starship, uv, atuin, zoxide, direnv, tigris, fnm, bat, fzf, rg, jq, yq, gh, duckdb, carapace)
 3. **Node** — via fnm (LTS)
 4. **Git config** — OS include file, SSH multiplexing for GitHub, interactive prompt for user name/email
 5. **Shell** — set default shell to zsh
@@ -52,9 +55,10 @@ The install script sets up a machine from scratch. It runs sequentially through:
 7. **Agents** — Claude Code CLI, Codex CLI, 1Password CLI (Linux), MCP server registration (remote HTTP), agent skills
 8. **Apps** (only with `--apps`) — `brew bundle` for casks/MAS apps, Sprite CLI, LaunchAgents
 
-**Flags:** `--apps`, `--dry-run`, `--no-prompt`, `--skip-stow`
+**Flags:** `--apps`, `--dry-run`, `--no-prompt`, `--skip-stow`, `--skip-agents`
 
 Key properties:
+
 - Idempotent — safe to re-run (each tool checks `need <cmd>` before installing)
 - Works on macOS and Linux (apt-based)
 - Non-interactive mode auto-enabled when not attached to a TTY
