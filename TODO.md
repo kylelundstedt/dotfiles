@@ -24,6 +24,10 @@
 - [ ] Test `--apps` flag (brew bundle casks + MAS apps)
 - [ ] Ensure timely and correct upgrades for Apple `container`
 
+## Zed
+
+- [ ] Re-add `CLAUDE_CODE_EXECUTABLE: "claude"` to `agent_servers.claude.env` once Zed ships ACP adapter with SDK >= 0.2.61 (fix: anthropics/claude-agent-sdk-typescript#205)
+
 ## 1Password
 
 - [ ] Consider 1Password Connect with Tailscale
