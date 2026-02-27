@@ -431,6 +431,7 @@ setup_agents() {
         echo "  Installing agent skills..."
         npx -y skills add -g -y matsonj/mviz 2>/dev/null || true
         npx -y skills add -g -y vercel-labs/skills -s find-skills 2>/dev/null || true
+        npx -y skills add -g -y tigrisdata/skills 2>/dev/null || true
         npx -y skills add -g -y kylelundstedt/dotfiles -s bootstrap-project data-pipelines sprites-remote zp 2>/dev/null || true
         echo "  [+] Skills installed"
     else
