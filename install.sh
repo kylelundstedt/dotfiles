@@ -206,6 +206,16 @@ setup_node() {
     else
         echo "  node $(node --version) already installed"
     fi
+
+    # Create stable symlinks in ~/.local/bin so node/npm/npx are available
+    # without eval "$(fnm env)" — needed for shells that don't source .zshenv
+    # (e.g. Claude Code on remote containers).
+    local fnm_default="$HOME/.local/share/fnm/aliases/default/bin"
+    if [[ -d "$fnm_default" ]]; then
+        for bin in node npm npx corepack; do
+            [[ -e "$fnm_default/$bin" ]] && ln -sf "$fnm_default/$bin" "$LOCAL_BIN/$bin"
+        done
+    fi
 }
 
 # --- setup_git ---
