@@ -4,7 +4,6 @@ set -euo pipefail
 # --- Args ---
 INSTALL_APPS=false
 DRY_RUN=false
-NO_PROMPT=false
 SKIP_STOW=false
 SKIP_AGENTS=false
 
@@ -12,7 +11,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --apps)          INSTALL_APPS=true; shift ;;
         --dry-run)       DRY_RUN=true; shift ;;
-        --no-prompt)     NO_PROMPT=true; shift ;;
+        --no-prompt)     shift ;;  # accepted for backwards compat, no longer needed
         --skip-stow)     SKIP_STOW=true; shift ;;
         --skip-agents)   SKIP_AGENTS=true; shift ;;
         *)
@@ -33,7 +32,6 @@ fi
 
 IS_INTERACTIVE=false
 [[ -t 0 && -t 1 ]] && IS_INTERACTIVE=true
-[[ "$IS_INTERACTIVE" == false ]] && NO_PROMPT=true
 
 SUDO="sudo"
 [[ $EUID -eq 0 ]] && SUDO=""
@@ -45,6 +43,12 @@ export PATH="$LOCAL_BIN:$PATH"
 
 # --- Helpers ---
 need() { ! command -v "$1" >/dev/null 2>&1; }
+
+# Set GITHUB_TOKEN from gh CLI if available (raises rate limit from 60 to 5000/hr)
+if [[ -z "${GITHUB_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
+    GITHUB_TOKEN=$(gh auth token 2>/dev/null) || true
+    [[ -n "$GITHUB_TOKEN" ]] && export GITHUB_TOKEN
+fi
 
 # Fetch latest GitHub release asset, extract, and place binary in ~/.local/bin.
 # Usage: install_github_binary <owner/repo> <asset_pattern> <binary_name> [<path_inside_archive>]
@@ -156,13 +160,15 @@ install_cli_tools() {
     pids+=($!)
     (curl -fsSL https://astral.sh/uv/install.sh | env CARGO_HOME="$HOME/.local" sh >/dev/null 2>&1 && echo "  [+] uv" || echo "  [!] uv failed") &
     pids+=($!)
-    (curl -fsSL https://setup.atuin.sh | sh -s -- --yes --no-modify-path >/dev/null 2>&1 && echo "  [+] atuin" || echo "  [!] atuin failed") &
+    (curl -fsSL https://setup.atuin.sh | sh -s -- --non-interactive --no-modify-path >/dev/null 2>&1 && echo "  [+] atuin" || echo "  [!] atuin failed") &
     pids+=($!)
-    (curl -fsSL https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | sh >/dev/null 2>&1 && echo "  [+] zoxide" || echo "  [!] zoxide failed") &
+    local direnv_os; case "$OS" in macos) direnv_os="darwin" ;; linux) direnv_os="linux" ;; esac
+    (install_github_binary "direnv/direnv" "direnv\\.${direnv_os}-${gh_arch}\"$" "direnv" "direnv.${direnv_os}-${gh_arch}") &
     pids+=($!)
-    (curl -fsSL https://direnv.net/install.sh | bash >/dev/null 2>&1 && echo "  [+] direnv" || echo "  [!] direnv failed") &
+    (install_github_binary "ajeetdsouza/zoxide" "zoxide-.*-${target_triple}.*\\.tar\\.gz" "zoxide") &
     pids+=($!)
-    (curl -fsSL https://raw.githubusercontent.com/tigrisdata/cli/main/scripts/install.sh | env TIGRIS_INSTALL_DIR="$LOCAL_BIN" sh >/dev/null 2>&1 && echo "  [+] tigris" || echo "  [!] tigris failed") &
+    local tigris_arch; case "$arch" in arm64|aarch64) tigris_arch="arm64" ;; x86_64) tigris_arch="x64" ;; esac
+    (install_github_binary "tigrisdata/cli" "tigris-${direnv_os}-${tigris_arch}\\.tar\\.gz" "tigris" "tigris-${direnv_os}-${tigris_arch}") &
     pids+=($!)
     (install_github_binary "Schniz/fnm" "${fnm_asset}\\.zip" "fnm" "fnm") &
     pids+=($!)
@@ -329,10 +335,6 @@ run_stow() {
 
     echo "  Packages: ${packages[*]}"
     for folder in "${packages[@]}"; do
-        if [[ "$NO_PROMPT" != true ]]; then
-            read -rp "  Stow '$folder'? [y/N]: " reply
-            [[ "$reply" != [yY] ]] && continue
-        fi
         if [[ "$DRY_RUN" == true ]]; then
             stow --no-folding -R -n -t "$HOME" "$folder"
         elif [[ "$OS" == "macos" || "$IS_INTERACTIVE" == true ]]; then
@@ -397,7 +399,7 @@ setup_agents() {
     # MCP servers (remote HTTP transport)
     echo "  Configuring MCP servers..."
     local op_configured=false
-    if command -v op >/dev/null 2>&1 && op account list 2>/dev/null | grep -q .; then
+    if command -v op >/dev/null 2>&1 && [[ -n "$(op account list 2>/dev/null || true)" ]]; then
         op_configured=true
     fi
 
@@ -405,12 +407,12 @@ setup_agents() {
     if command -v claude >/dev/null 2>&1; then
         # Remove stale servers from previous installations
         for old in dlt github-home github-work motherduck tigris; do
-            claude mcp remove --scope user "$old" 2>/dev/null || true
+            claude mcp remove --scope user "$old" >/dev/null 2>&1 || true
         done
 
         # OAuth servers (browser auth on first use)
-        claude mcp add --transport http --scope user motherduck https://api.motherduck.com/mcp 2>/dev/null || true
-        claude mcp add --transport http --scope user tigris https://mcp.storage.dev/mcp 2>/dev/null || true
+        claude mcp add --transport http --scope user motherduck https://api.motherduck.com/mcp >/dev/null 2>&1 || true
+        claude mcp add --transport http --scope user tigris https://mcp.storage.dev/mcp >/dev/null 2>&1 || true
 
         # GitHub servers (PAT from 1Password)
         if [[ "$op_configured" == true ]]; then
@@ -418,9 +420,9 @@ setup_agents() {
             pat_home=$(op read "op://Private/GitHub PAT Home/token" --account lundstedts.1password.com 2>/dev/null) || true
             pat_work=$(op read "op://Employee/GitHub PAT IV/token" --account industryvault.1password.com 2>/dev/null) || true
             [[ -n "$pat_home" ]] && claude mcp add-json --scope user github-home \
-                "{\"type\":\"http\",\"url\":\"https://api.githubcopilot.com/mcp/\",\"headers\":{\"Authorization\":\"Bearer $pat_home\"}}" 2>/dev/null || true
+                "{\"type\":\"http\",\"url\":\"https://api.githubcopilot.com/mcp/\",\"headers\":{\"Authorization\":\"Bearer $pat_home\"}}" >/dev/null 2>&1 || true
             [[ -n "$pat_work" ]] && claude mcp add-json --scope user github-work \
-                "{\"type\":\"http\",\"url\":\"https://api.githubcopilot.com/mcp/\",\"headers\":{\"Authorization\":\"Bearer $pat_work\"}}" 2>/dev/null || true
+                "{\"type\":\"http\",\"url\":\"https://api.githubcopilot.com/mcp/\",\"headers\":{\"Authorization\":\"Bearer $pat_work\"}}" >/dev/null 2>&1 || true
         else
             echo "  Skipping GitHub MCP servers (1Password not configured)"
         fi
@@ -430,7 +432,7 @@ setup_agents() {
     if command -v codex >/dev/null 2>&1; then
         # Remove stale servers from previous installations
         for old in dlt github-home github-work motherduck tigris; do
-            codex mcp remove "$old" 2>/dev/null || true
+            codex mcp remove "$old" >/dev/null 2>&1 || true
         done
     fi
 
@@ -439,10 +441,10 @@ setup_agents() {
     # Skills
     if command -v npx >/dev/null 2>&1; then
         echo "  Installing agent skills..."
-        npx -y skills add -g -y matsonj/mviz 2>/dev/null || true
-        npx -y skills add -g -y vercel-labs/skills -s find-skills 2>/dev/null || true
-        npx -y skills add -g -y tigrisdata/skills 2>/dev/null || true
-        npx -y skills add -g -y kylelundstedt/dotfiles -s bootstrap-project data-pipelines sprites-remote zp 2>/dev/null || true
+        npx -y skills add -g -y matsonj/mviz >/dev/null 2>&1 || true
+        npx -y skills add -g -y vercel-labs/skills -s find-skills >/dev/null 2>&1 || true
+        npx -y skills add -g -y tigrisdata/skills >/dev/null 2>&1 || true
+        npx -y skills add -g -y kylelundstedt/dotfiles -s bootstrap-project data-pipelines sprites-remote zp >/dev/null 2>&1 || true
         echo "  [+] Skills installed"
     else
         echo "  [!] npx not found, skipping skill installation"
@@ -451,6 +453,45 @@ setup_agents() {
     if ! command -v op >/dev/null 2>&1; then
         echo ""
         echo "  Note: 1Password CLI is required at runtime for secret-backed MCP servers."
+    fi
+}
+
+# --- setup_tailscale ---
+setup_tailscale() {
+    if [[ "$OS" != "linux" ]]; then
+        return 0
+    fi
+
+    echo ""
+    echo "=== Tailscale ==="
+
+    if command -v tailscale >/dev/null 2>&1; then
+        echo "  Already installed"
+    else
+        echo "  Installing Tailscale..."
+        curl -fsSL https://tailscale.com/install.sh | sh >/dev/null 2>&1 || { echo "  [!] Tailscale install failed"; return 0; }
+        echo "  [+] Tailscale"
+    fi
+
+    # Start tailscaled if not running
+    if ! $SUDO systemctl is-active --quiet tailscaled 2>/dev/null; then
+        $SUDO systemctl enable --now tailscaled 2>/dev/null || true
+    fi
+
+    # Authenticate with --ssh if we have an auth key
+    local ts_key="${TS_AUTHKEY:-}"
+    if [[ -z "$ts_key" ]] && command -v op >/dev/null 2>&1; then
+        ts_key=$(op read "op://Employee/Tailscale - Dev Auth Key/credential" --account industryvault.1password.com 2>/dev/null) || true
+    fi
+
+    if [[ -n "$ts_key" ]]; then
+        $SUDO tailscale up --ssh --authkey="$ts_key" 2>/dev/null && echo "  [+] Tailscale up (SSH enabled)" || echo "  [!] tailscale up failed"
+    elif tailscale status >/dev/null 2>&1; then
+        echo "  Already authenticated"
+        # Ensure SSH is enabled
+        $SUDO tailscale set --ssh 2>/dev/null || true
+    else
+        echo "  No auth key found. Run: sudo tailscale up --ssh"
     fi
 }
 
@@ -472,6 +513,39 @@ install_apps() {
         curl -fsSL https://sprites.dev/install.sh | sh >/dev/null 2>&1 && echo "  [+] Sprite CLI" || echo "  [!] Sprite CLI failed"
     fi
 
+    # Apple Container CLI — check for updates (upgrade is manual: stops all running containers)
+    echo ""
+    echo "=== Apple Container ==="
+    if command -v container >/dev/null 2>&1; then
+        local installed_version latest_version release_json=""
+        installed_version=$(container --version 2>/dev/null | awk '{print $4}' | tr -d ')')
+        local gh_api_url="https://api.github.com/repos/apple/container/releases/latest"
+        local -a curl_opts=(-fsSL)
+        [[ -n "${GITHUB_TOKEN:-}" ]] && curl_opts+=(-H "Authorization: token $GITHUB_TOKEN")
+        local attempt
+        for attempt in 1 2; do
+            release_json=$(curl "${curl_opts[@]}" "$gh_api_url" 2>/dev/null) && break
+            [[ $attempt -eq 1 ]] && sleep $((RANDOM % 5 + 2))
+        done
+        if [[ -n "$release_json" ]]; then
+            latest_version=$(echo "$release_json" | grep -oE '"tag_name": "[^"]+"' | head -1 | sed 's/"tag_name": "//;s/"//')
+            if [[ "$installed_version" == "$latest_version" ]]; then
+                echo "  Up to date ($installed_version)"
+            else
+                echo "  Update available: $installed_version -> $latest_version"
+                if [[ -x /usr/local/bin/update-container.sh ]]; then
+                    echo "  Run: container system stop && sudo /usr/local/bin/update-container.sh && container system start"
+                else
+                    echo "  Run: container system stop && curl -fSL https://github.com/apple/container/releases/download/$latest_version/container-${latest_version}-installer-signed.pkg -o /tmp/container.pkg && sudo installer -pkg /tmp/container.pkg -target / && container system kernel set --recommended && container system start"
+                fi
+            fi
+        else
+            echo "  [!] Failed to check for updates"
+        fi
+    else
+        echo "  Not installed. Download from: https://github.com/apple/container/releases"
+    fi
+
     # Load LaunchAgents
     if [[ "$DRY_RUN" != true ]]; then
         for plist in "$HOME/Library/LaunchAgents"/com.kylelundstedt.*.plist; do
@@ -489,6 +563,7 @@ echo ""
 install_system_deps
 install_cli_tools
 setup_node
+setup_tailscale
 setup_git
 set_shell
 run_stow

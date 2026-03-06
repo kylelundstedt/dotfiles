@@ -11,6 +11,11 @@ DOTFILES_DIR="$(cd "$(dirname "$0")" && pwd)"
 PASS=0
 FAIL=0
 
+# Resolve TS_AUTHKEY from 1Password if not already set
+if [ -z "${TS_AUTHKEY:-}" ] && command -v op >/dev/null 2>&1; then
+    TS_AUTHKEY="$(op read "op://Employee/Tailscale - Dev Auth Key/credential" --account industryvault.1password.com 2>/dev/null || true)"
+fi
+
 log_pass() { echo "  PASS: $1"; PASS=$((PASS + 1)); }
 log_fail() { echo "  FAIL: $1"; FAIL=$((FAIL + 1)); }
 
@@ -19,9 +24,12 @@ read -r -d '' VERIFY_SCRIPT << 'VERIFY' || true
 export PATH=$HOME/.local/bin:$HOME/.atuin/bin:$PATH
 eval "$(fnm env 2>/dev/null)" || true
 
-for cmd in starship uv atuin zoxide direnv fnm bat fzf rg jq yq gh duckdb carapace node claude codex op; do
+for cmd in starship uv atuin zoxide direnv fnm bat fzf rg jq yq gh duckdb carapace node claude codex op tailscale; do
     if command -v $cmd >/dev/null 2>&1; then echo "OK $cmd"; else echo "MISSING $cmd"; fi
 done
+
+# Tailscale connected with SSH enabled
+if tailscale status >/dev/null 2>&1; then echo "OK tailscale-connected"; else echo "MISSING tailscale-connected"; fi
 
 # SSH multiplexing
 if grep -q "Host github.com" ~/.ssh/config 2>/dev/null; then echo "OK ssh-mux"; else echo "MISSING ssh-mux"; fi
@@ -41,7 +49,7 @@ if command -v claude >/dev/null 2>&1; then
         if echo "$mcp_list" | grep -q "$srv"; then echo "OK mcp:$srv"; else echo "MISSING mcp:$srv"; fi
     done
     # GitHub servers require 1Password
-    if command -v op >/dev/null 2>&1 && op account list 2>/dev/null | grep -q .; then
+    if command -v op >/dev/null 2>&1 && [[ -n "$(op account list 2>/dev/null || true)" ]]; then
         for srv in github-home github-work; do
             if echo "$mcp_list" | grep -q "$srv"; then echo "OK mcp:$srv"; else echo "MISSING mcp:$srv"; fi
         done
@@ -49,7 +57,7 @@ if command -v claude >/dev/null 2>&1; then
 fi
 
 # Skills directories
-for skill in bootstrap-project data-pipelines sprites mviz find-skills; do
+for skill in bootstrap-project data-pipelines sprites-remote mviz find-skills; do
     if [ -d "$HOME/.claude/skills/$skill" ]; then echo "OK skill:$skill"; else echo "MISSING skill:$skill"; fi
 done
 VERIFY
@@ -78,43 +86,27 @@ test_container() {
     sleep 5
 
     echo ""
-    echo "--- Setting up user and SSH ---"
+    echo "--- Setting up user ---"
     container exec "$name" bash -c "
-        apt-get update -qq && apt-get install -y -qq git curl openssh-server sudo >/dev/null
-        mkdir -p /run/sshd
+        apt-get update -qq && apt-get install -y -qq git curl sudo >/dev/null
         useradd -m -s /bin/bash $target_user
         echo '$target_user ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/$target_user
         chmod 440 /etc/sudoers.d/$target_user
     "
-    # SSH key goes to the non-root user
-    local pubkey
-    pubkey=$(ssh-add -L 2>/dev/null | head -1)
-    container exec -e "K=$pubkey" -e "U=$target_user" "$name" bash -c '
-        home=$(eval echo "~$U")
-        mkdir -p "$home/.ssh" && chmod 700 "$home/.ssh"
-        echo "$K" >> "$home/.ssh/authorized_keys"
-        chmod 600 "$home/.ssh/authorized_keys"
-        chown -R "$U:$U" "$home/.ssh"
-    '
-    container exec "$name" bash -c '
-        cat > /etc/ssh/sshd_config.d/zp.conf <<SSHEOF
-PasswordAuthentication no
-PubkeyAuthentication yes
-PermitRootLogin no
-SSHEOF
-    '
-    container exec --detach "$name" /usr/sbin/sshd -D -e >/dev/null 2>/dev/null
-    sleep 2
-    local ct_ip
-    ct_ip=$(container exec "$name" hostname -I 2>/dev/null | awk '{print $1}')
-    local ssh_target="${target_user}@${ct_ip}"
 
     echo ""
     echo "--- Installing as $target_user ---"
-    # Clone from GitHub then overlay local changes via tar+ssh
-    ssh -o StrictHostKeyChecking=no "$ssh_target" "git clone https://github.com/kylelundstedt/dotfiles ~/dotfiles 2>/dev/null || true"
-    tar -C "$DOTFILES_DIR" --exclude=.git -cf - . | ssh -o StrictHostKeyChecking=no "$ssh_target" "tar -C ~/dotfiles -xf -"
-    ssh -o StrictHostKeyChecking=no "$ssh_target" "cd ~/dotfiles && bash install.sh --no-prompt 2>&1" || {
+    # Clone from GitHub then overlay local changes via tar+container exec
+    container exec "$name" bash -c "
+        sudo -u $target_user git clone https://github.com/kylelundstedt/dotfiles /home/$target_user/dotfiles 2>/dev/null || true
+    "
+    tar -C "$DOTFILES_DIR" --exclude=.git -cf - . | container exec -i "$name" bash -c "
+        tar -C /home/$target_user/dotfiles -xf -
+        chown -R $target_user:$target_user /home/$target_user/dotfiles
+    "
+    container exec -e "TS_AUTHKEY=${TS_AUTHKEY:-}" "$name" bash -c "
+        sudo -u $target_user env TS_AUTHKEY=\"\$TS_AUTHKEY\" bash -c 'cd ~/dotfiles && bash install.sh --no-prompt 2>&1'
+    " || {
         log_fail "container: install.sh"
         container stop "$name" 2>/dev/null; container rm "$name" 2>/dev/null || true
         return
@@ -123,7 +115,7 @@ SSHEOF
 
     echo ""
     echo "--- Verifying ---"
-    parse_results "container" "$(ssh -o StrictHostKeyChecking=no "$ssh_target" "$VERIFY_SCRIPT" 2>&1)"
+    parse_results "container" "$(container exec "$name" bash -c "sudo -u $target_user bash -c '$VERIFY_SCRIPT'" 2>&1)"
 
     echo ""
     echo "--- Tearing down container ---"
@@ -161,8 +153,8 @@ test_sprite() {
         sudo chown -R $target_user:$target_user /home/$target_user/dotfiles
         cd /home/$target_user/dotfiles && sudo git init -q
     "
-    sprite exec -s "$name" -- bash -c "
-        sudo -u $target_user bash -c 'cd ~/dotfiles && bash install.sh --no-prompt 2>&1'
+    sprite exec -s "$name" -env "TS_AUTHKEY=${TS_AUTHKEY:-}" -- bash -c "
+        sudo -u $target_user bash -c 'cd ~/dotfiles && TS_AUTHKEY=\"\$TS_AUTHKEY\" bash install.sh --no-prompt 2>&1'
     " || {
         log_fail "sprite: install.sh"
         sprite destroy -s "$name" --force 2>/dev/null || true
