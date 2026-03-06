@@ -4,7 +4,7 @@ One command to set up a fully configured development environment on macOS or Lin
 
 ## What You Get
 
-**AI agent platform** — [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [Codex CLI](https://github.com/openai/codex) with a shared instruction system (`AGENTS.md`), cross-agent skills (`bootstrap-project`, `data-pipelines`, `sprites-remote`, `zp`, `mviz`, `find-skills`), four remote MCP servers (GitHub home/work, MotherDuck, Tigris) via HTTP transport, and a convention for per-project agent context (`agent_docs/`)
+**AI agent platform** — [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [Codex CLI](https://github.com/openai/codex) with a shared instruction system (`AGENTS.md`), cross-agent skills (`bootstrap-project`, `data-pipelines`, `sprites-remote`, `mviz`, `find-skills`), four remote MCP servers (GitHub home/work, MotherDuck, Tigris) via HTTP transport, and a convention for per-project agent context (`agent_docs/`)
 
 **Shell** — Zsh with [Starship](https://starship.rs/) prompt, [Atuin](https://atuin.sh/) history sync, [Zoxide](https://github.com/ajeetdsouza/zoxide) smart `cd`, [Carapace](https://carapace.sh/) completions, and [Direnv](https://direnv.net/)
 
@@ -12,7 +12,7 @@ One command to set up a fully configured development environment on macOS or Lin
 
 **Dev tools** — Git with 1Password SSH signing, AWS CLI v2, DuckDB, Python via [uv](https://docs.astral.sh/uv/)
 
-**`zp` — Zed project launcher** — Opens projects in Zed across local macOS, [Apple Containers](https://developer.apple.com/documentation/containerization), and [Fly.io Sprites](https://fly.io/docs/sprites/). Project-first: `zp gitlake` finds and opens, `zp owner/name --backend container --machine dev` creates a container, bootstraps dotfiles, clones the repo, and opens Zed — fully non-interactive.
+**Remote development** — Zed's [remote development](https://zed.dev/docs/remote-development) opens projects over SSH. Create a VM on [Apple Containers](https://github.com/apple/container), [exe.dev](https://exe.dev), or [Sprites](https://sprites.dev), clone dotfiles, run `install.sh`, and connect from Zed with `zed ssh://host/path`. Tailscale provides stable hostnames across all backends.
 
 ---
 
@@ -31,13 +31,12 @@ git clone https://github.com/kylelundstedt/dotfiles ~/dotfiles
 cd ~/dotfiles
 ./install.sh                 # CLI tools, shell, git, stow, agents
 ./install.sh --apps          # + macOS casks, Mac App Store apps, Sprite CLI
-./install.sh --no-prompt     # Non-interactive (auto-enabled when no TTY)
 ./install.sh --skip-agents   # Skip Claude/Codex/MCP setup
 ./install.sh --skip-stow     # Skip stow step
 ./install.sh --dry-run       # Preview stow changes
 ```
 
-**Flags:** `--apps`, `--dry-run`, `--no-prompt`, `--skip-stow`, `--skip-agents`
+**Flags:** `--apps`, `--dry-run`, `--skip-stow`, `--skip-agents`
 
 That's it — your shell, git, agent tooling, and dev tools are all configured. Start using them:
 
@@ -71,8 +70,7 @@ Configuration is managed with [GNU Stow](http://www.gnu.org/software/stow/), whi
 | `vscode/`         | VS Code IDE settings & keybindings                                                                    | `~/Library/Application Support/Code/` | macOS    |
 | `sync-repos.sh`   | Clones/fetches all GitHub repos for personal and work accounts                                        | N/A (standalone script)               | Both     |
 | `test-install.sh` | Tests install.sh in an Apple Container                                                                | N/A (standalone script)               | macOS    |
-| `test-zp.sh`      | Tests zp across its supported flows                                                                   | N/A (standalone script)               | macOS    |
-| `zed/`            | Zed editor settings + `zp` project launcher with pluggable backends                                   | `~/.config/zed/`, `~/.local/bin/`     | macOS    |
+| `zed/`            | Zed editor settings                                                                                   | `~/.config/zed/`                      | macOS    |
 | `zsh/`            | Zsh shell configuration                                                                               | `~/`                                  | Both     |
 
 Git uses a generated OS include so only one platform-specific file is active:
@@ -101,7 +99,6 @@ Both Claude Code and Codex CLI share a single instruction file (`AGENTS.md`) dep
 | `bootstrap-project` | This repo                                                   | Scaffolds per-project `AGENTS.md`, `CLAUDE.md` symlink, and `agent_docs/` |
 | `data-pipelines`    | This repo                                                   | DuckDB-centric data stack — dlt, sqlmesh, polars, marimo, uv              |
 | `sprites-remote`    | This repo                                                   | Manage remote Sprites (Fly.io microVMs) from local machine                |
-| `zp`                | This repo                                                   | Open, create, and manage projects across local, containers, and sprites   |
 | `mviz`              | [matsonj/mviz](https://github.com/matsonj/mviz)             | Chart and report builder                                                  |
 | `find-skills`       | [vercel-labs/skills](https://github.com/vercel-labs/skills) | Skill discovery and installation                                          |
 | 6 Tigris skills     | [tigrisdata/skills](https://github.com/tigrisdata/skills)   | Tigris object storage — install, buckets, objects, snapshots              |
