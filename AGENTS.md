@@ -4,11 +4,10 @@ GNU Stow–managed dotfiles and AI agent platform for macOS and Linux. Each top-
 
 ## Key Commands
 
-- Install everything: `./install.sh` (or `./install.sh --no-prompt` for non-interactive)
+- Install everything: `./install.sh`
 - Install with macOS apps (casks, Mac App Store): `./install.sh --apps`
 - Skip agent setup: `./install.sh --skip-agents`
 - Test on Linux: `./test-install.sh` (Apple Container)
-- Test zp: `./test-zp.sh`
 - Stow a single package: `stow --no-folding -R -t "$HOME" <package>`
 - Dry-run stow: `stow --no-folding -R -n -t "$HOME" <package>`
 
@@ -38,8 +37,7 @@ GNU Stow–managed dotfiles and AI agent platform for macOS and Linux. Each top-
 | `vscode/`         | VS Code settings and extensions (macOS)                                                          |
 | `sync-repos.sh`   | Clones/fetches all GitHub repos for personal and work accounts                                   |
 | `test-install.sh` | Tests install.sh in an Apple Container                                                           |
-| `test-zp.sh`      | Tests zp across its supported flows                                                              |
-| `zed/`            | Zed editor settings + `zp` project launcher with pluggable backends (macOS)                      |
+| `zed/`            | Zed editor settings (macOS)                                                                      |
 | `zsh/`            | Zsh configuration, aliases, completions                                                          |
 
 ## install.sh
@@ -51,11 +49,11 @@ The install script sets up a machine from scratch. It runs sequentially through:
 3. **Node** — via fnm (LTS)
 4. **Git config** — OS include file, SSH multiplexing for GitHub, interactive prompt for user name/email
 5. **Shell** — set default shell to zsh
-6. **Stow** — all packages (with interactive confirmation unless `--no-prompt`)
+6. **Stow** — all packages
 7. **Agents** — Claude Code CLI, Codex CLI, 1Password CLI (Linux), MCP server registration (remote HTTP), agent skills
-8. **Apps** (only with `--apps`) — `brew bundle` for casks/MAS apps, Sprite CLI, LaunchAgents
+8. **Apps** (only with `--apps`) — `brew bundle` for casks/MAS apps, Sprite CLI, Apple Container CLI, LaunchAgents
 
-**Flags:** `--apps`, `--dry-run`, `--no-prompt`, `--skip-stow`, `--skip-agents`
+**Flags:** `--apps`, `--dry-run`, `--skip-stow`, `--skip-agents`
 
 Key properties:
 
