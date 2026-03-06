@@ -103,7 +103,7 @@ Both Claude Code and Codex CLI share a single instruction file (`AGENTS.md`) dep
 | `find-skills`       | [vercel-labs/skills](https://github.com/vercel-labs/skills) | Skill discovery and installation                                          |
 | 6 Tigris skills     | [tigrisdata/skills](https://github.com/tigrisdata/skills)   | Tigris object storage — install, buckets, objects, snapshots              |
 
-Invoke a skill by typing `/skill-name` in Claude Code or Codex (e.g. `/bootstrap-project`, `/zp`).
+Invoke a skill by typing `/skill-name` in Claude Code or Codex (e.g. `/bootstrap-project`).
 
 **MCP servers** — Remote HTTP transport. OAuth servers (MotherDuck, Tigris) work on all environments after initial browser auth. GitHub servers use PATs resolved from 1Password at install time (macOS only). `install.sh` registers them for Claude Code:
 

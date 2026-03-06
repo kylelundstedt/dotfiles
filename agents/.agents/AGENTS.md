@@ -19,9 +19,10 @@
 
 ## Data Work
 - Prefer SQL first, then Python, then bash. Use the simplest language that gets the job done.
-- SQL dialect: DuckDB. Use DuckDB-specific syntax (EXCLUDE, REPLACE, GROUP BY ALL, list/struct literals, etc.).
+- SQL dialect: Use DuckDB for data manipulation, including DuckDB-specific syntax (EXCLUDE, REPLACE, GROUP BY ALL, list/struct literals, etc.).
 - Python package/project management: uv. Never use pip directly.
 - Preferred Python libraries: polars (not pandas), dlt for ingestion, sqlmesh for transformations, duckdb for local analytics, marimo for notebooks, altair/seaborn for visualization.
+- Use node+npm for javascript environment management.
 
 ## TODO
 - At the start of a session, check for `TODO.md` in the project root. If it exists, read it to understand outstanding work.
@@ -41,7 +42,6 @@
   - `/bootstrap-project` — always use when setting up agent context in a new or existing repo.
   - `/data-pipelines` — use for any data pipeline, analytics, or ingestion work. Covers dlt, sqlmesh, DuckDB, polars, marimo, uv.
   - `/sprites-remote` — use when the user wants to manage remote Sprites (Fly.io microVMs) from the local machine.
-  - `/zp` — use when the user wants to open, create, or manage projects across local macOS, Apple Containers, and Sprites.
 
 ## Writing
 - Use proper dashes in prose (em dash or spaced en dash), not unspaced hyphens.
