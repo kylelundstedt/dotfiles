@@ -42,6 +42,8 @@
   - `/bootstrap-project` — always use when setting up agent context in a new or existing repo.
   - `/data-pipelines` — use for any data pipeline, analytics, or ingestion work. Covers dlt, sqlmesh, DuckDB, polars, marimo, uv.
   - `/sprites-remote` — use when the user wants to manage remote Sprites (Fly.io microVMs) from the local machine.
+  - `/using-exe-dev` — use when the user wants to manage exe.dev VMs.
+- **Remote VMs** — For remote dev environments, use Apple Containers (local macOS), Sprites (`/sprites-remote`), or exe.dev (`/using-exe-dev`). All three give a full Linux VM with sudo and Tailscale; pick whichever is convenient.
 
 ## Writing
 - Use proper dashes in prose (em dash or spaced en dash), not unspaced hyphens.

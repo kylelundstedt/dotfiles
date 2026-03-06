@@ -9,6 +9,7 @@
 - [ ] Test end-to-end with devbox image in Apple Container
 - [ ] Sprite: wait for checkpoint forking, then create golden sprite from devbox
 
-## 1Password
+## Secrets
 
-- [ ] Consider 1Password Connect with Tailscale
+- [ ] Consider single-repo GitHub PATs — https://exe.dev/docs/faq/github-token
+- Current workaround: resolve secrets on Mac, pass as ephemeral env vars (like TS_AUTHKEY)
