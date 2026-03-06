@@ -1,9 +1,4 @@
 # Minimal environment for all zsh sessions (interactive + non-interactive SSH).
-# Keep this light — heavy init (completions, prompts, etc.) stays in .zshrc.
+# Shared PATH setup lives in .profile (also read by bash login shells).
 
-mkdir -p "$HOME/.local/bin"
-
-export PATH="$HOME/.local/bin:$HOME/.atuin/bin:$PATH"
-export PATH="$PATH:$HOME/go/bin"
-
-command -v fnm >/dev/null && eval "$(fnm env)"
+. "$HOME/.profile"
