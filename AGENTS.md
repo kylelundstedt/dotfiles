@@ -36,7 +36,7 @@ GNU Stow–managed dotfiles and AI agent platform for macOS and Linux. Each top-
 | `starship/`       | Starship prompt configuration                                                                    |
 | `vscode/`         | VS Code settings and extensions (macOS)                                                          |
 | `sync-repos.sh`   | Clones/fetches all GitHub repos for personal and work accounts                                   |
-| `test-install.sh` | Tests install.sh in an Apple Container                                                           |
+| `test-install.sh` | Tests install.sh across Apple Container, Sprite, and exe.dev                                     |
 | `zed/`            | Zed editor settings (macOS)                                                                      |
 | `zsh/`            | Zsh configuration, aliases, completions                                                          |
 

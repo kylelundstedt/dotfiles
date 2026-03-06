@@ -1,9 +1,10 @@
 #!/bin/bash
-# Test install.sh across the same backends zp uses.
-# Usage: ./test-install.sh [container|sprite|all]
+# Test install.sh across VM backends.
+# Usage: ./test-install.sh [container|sprite|exe|all]
 #   container — Apple Container (klundstedt user, sudo available)
 #   sprite    — Fly.io Sprite (klundstedt user, sudo available)
-#   all       — both (default)
+#   exe       — exe.dev VM (default user, sudo available)
+#   all       — all backends (default)
 
 set -euo pipefail
 
@@ -57,7 +58,7 @@ if command -v claude >/dev/null 2>&1; then
 fi
 
 # Skills directories
-for skill in bootstrap-project data-pipelines sprites-remote mviz find-skills; do
+for skill in bootstrap-project data-pipelines sprites-remote mviz find-skills using-exe-dev; do
     if [ -d "$HOME/.claude/skills/$skill" ]; then echo "OK skill:$skill"; else echo "MISSING skill:$skill"; fi
 done
 VERIFY
@@ -171,13 +172,78 @@ test_sprite() {
     sprite destroy -s "$name" --force 2>/dev/null || true
 }
 
+# --- exe.dev VM (default user, sudo available) ---
+# exe.dev has two SSH destinations:
+#   ssh exe.dev <cmd>    — lobby for VM lifecycle (no scp/sftp/shell)
+#   ssh <vm>.exe.xyz     — direct VM access (full SSH)
+test_exe() {
+    if ! ssh -o ConnectTimeout=10 exe.dev ls >/dev/null 2>&1; then
+        echo "exe.dev not reachable — skipping exe test."
+        return 0
+    fi
+
+    local name="test-dotfiles-exe-$$"
+    local target_user="klundstedt"
+    local ssh_vm="ssh -o StrictHostKeyChecking=accept-new"
+    echo "=== exe.dev test (non-root, sudo available) ==="
+    local vm_host
+    vm_host=$(ssh exe.dev new --name "$name" --image ubuntu:24.04 --json 2>/dev/null | grep -oE '"ssh_dest":"[^"]+"' | head -1 | sed 's/"ssh_dest":"//;s/"//') || true
+    if [[ -z "$vm_host" ]]; then
+        log_fail "exe: create VM"
+        return
+    fi
+    echo "  Created VM: $vm_host"
+
+    # Wait for SSH to become available
+    local attempt
+    for attempt in 1 2 3 4 5; do
+        $ssh_vm -o ConnectTimeout=5 "$vm_host" true 2>/dev/null && break
+        sleep 3
+    done
+
+    echo ""
+    echo "--- Setting up user ---"
+    $ssh_vm "$vm_host" "
+        sudo apt-get update -qq && sudo apt-get install -y -qq git curl >/dev/null
+        sudo useradd -m -s /bin/bash $target_user
+        echo '$target_user ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/$target_user >/dev/null
+        sudo chmod 440 /etc/sudoers.d/$target_user
+    "
+
+    echo ""
+    echo "--- Installing as $target_user ---"
+    tar -C "$DOTFILES_DIR" --exclude=.git -cf - . | $ssh_vm "$vm_host" "
+        sudo mkdir -p /home/$target_user/dotfiles
+        sudo tar -C /home/$target_user/dotfiles -xf -
+        sudo chown -R $target_user:$target_user /home/$target_user/dotfiles
+        cd /home/$target_user/dotfiles && sudo git init -q
+    "
+    $ssh_vm "$vm_host" "
+        sudo -u $target_user env TS_AUTHKEY='${TS_AUTHKEY:-}' bash -c 'cd ~/dotfiles && bash install.sh 2>&1'
+    " || {
+        log_fail "exe: install.sh"
+        ssh exe.dev rm "$name" 2>/dev/null || true
+        return
+    }
+    log_pass "exe: install.sh"
+
+    echo ""
+    echo "--- Verifying ---"
+    parse_results "exe" "$($ssh_vm "$vm_host" "sudo -u $target_user bash -c '$VERIFY_SCRIPT'" 2>&1)"
+
+    echo ""
+    echo "--- Tearing down exe.dev VM ---"
+    ssh exe.dev rm "$name" 2>/dev/null || true
+}
+
 # --- Dispatch ---
 mode="${1:-all}"
 case "$mode" in
     container) test_container ;;
     sprite)    test_sprite ;;
-    all)       test_container; test_sprite ;;
-    *)         echo "Usage: $0 [container|sprite|all]"; exit 1 ;;
+    exe)       test_exe ;;
+    all)       test_container; test_sprite; test_exe ;;
+    *)         echo "Usage: $0 [container|sprite|exe|all]"; exit 1 ;;
 esac
 
 TOTAL=$((PASS + FAIL))

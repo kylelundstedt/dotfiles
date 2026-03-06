@@ -69,7 +69,7 @@ Configuration is managed with [GNU Stow](http://www.gnu.org/software/stow/), whi
 | `starship/`       | Starship prompt configuration                                                                         | `~/.config/`                          | Both     |
 | `vscode/`         | VS Code IDE settings & keybindings                                                                    | `~/Library/Application Support/Code/` | macOS    |
 | `sync-repos.sh`   | Clones/fetches all GitHub repos for personal and work accounts                                        | N/A (standalone script)               | Both     |
-| `test-install.sh` | Tests install.sh in an Apple Container                                                                | N/A (standalone script)               | macOS    |
+| `test-install.sh` | Tests install.sh across Apple Container, Sprite, and exe.dev                                          | N/A (standalone script)               | macOS    |
 | `zed/`            | Zed editor settings                                                                                   | `~/.config/zed/`                      | macOS    |
 | `zsh/`            | Zsh shell configuration                                                                               | `~/`                                  | Both     |
 
@@ -101,6 +101,7 @@ Both Claude Code and Codex CLI share a single instruction file (`AGENTS.md`) dep
 | `sprites-remote`    | This repo                                                   | Manage remote Sprites (Fly.io microVMs) from local machine                |
 | `mviz`              | [matsonj/mviz](https://github.com/matsonj/mviz)             | Chart and report builder                                                  |
 | `find-skills`       | [vercel-labs/skills](https://github.com/vercel-labs/skills) | Skill discovery and installation                                          |
+| `using-exe-dev`     | [boldsoftware/exe.dev](https://github.com/boldsoftware/exe.dev) | exe.dev VM management guide                                           |
 | 6 Tigris skills     | [tigrisdata/skills](https://github.com/tigrisdata/skills)   | Tigris object storage — install, buckets, objects, snapshots              |
 
 Invoke a skill by typing `/skill-name` in Claude Code or Codex (e.g. `/bootstrap-project`).
