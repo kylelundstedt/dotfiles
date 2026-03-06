@@ -514,9 +514,10 @@ install_apps() {
         curl -fsSL https://sprites.dev/install.sh | sh >/dev/null 2>&1 && echo "  [+] Sprite CLI" || echo "  [!] Sprite CLI failed"
     fi
 
-    # Apple Container CLI — check for updates (upgrade is manual: stops all running containers)
+    # Apple Container CLI — install or upgrade
     echo ""
     echo "=== Apple Container ==="
+    local container_changed=false
     if command -v container >/dev/null 2>&1; then
         local installed_version latest_version release_json=""
         installed_version=$(container --version 2>/dev/null | awk '{print $4}' | tr -d ')')
@@ -533,18 +534,53 @@ install_apps() {
             if [[ "$installed_version" == "$latest_version" ]]; then
                 echo "  Up to date ($installed_version)"
             else
-                echo "  Update available: $installed_version -> $latest_version"
+                echo "  Upgrading $installed_version -> $latest_version"
+                container system stop 2>/dev/null || true
                 if [[ -x /usr/local/bin/update-container.sh ]]; then
-                    echo "  Run: container system stop && sudo /usr/local/bin/update-container.sh && container system start"
+                    sudo /usr/local/bin/update-container.sh && container_changed=true || echo "  [!] Upgrade failed"
                 else
-                    echo "  Run: container system stop && curl -fSL https://github.com/apple/container/releases/download/$latest_version/container-${latest_version}-installer-signed.pkg -o /tmp/container.pkg && sudo installer -pkg /tmp/container.pkg -target / && container system kernel set --recommended && container system start"
+                    # Pre-0.10.0: no bundled update script, install pkg directly
+                    local pkg_url="https://github.com/apple/container/releases/download/${latest_version}/container-${latest_version}-installer-signed.pkg"
+                    if curl -fSL "$pkg_url" -o /tmp/container.pkg 2>/dev/null; then
+                        sudo installer -pkg /tmp/container.pkg -target / && container_changed=true || echo "  [!] Upgrade failed"
+                        rm -f /tmp/container.pkg
+                    else
+                        echo "  [!] Failed to download pkg"
+                    fi
                 fi
+                container system start 2>/dev/null || true
             fi
         else
             echo "  [!] Failed to check for updates"
         fi
     else
-        echo "  Not installed. Download from: https://github.com/apple/container/releases"
+        # Fresh install
+        echo "  Installing..."
+        local release_json="" latest_version=""
+        local gh_api_url="https://api.github.com/repos/apple/container/releases/latest"
+        local -a curl_opts=(-fsSL)
+        [[ -n "${GITHUB_TOKEN:-}" ]] && curl_opts+=(-H "Authorization: token $GITHUB_TOKEN")
+        local attempt
+        for attempt in 1 2; do
+            release_json=$(curl "${curl_opts[@]}" "$gh_api_url" 2>/dev/null) && break
+            [[ $attempt -eq 1 ]] && sleep $((RANDOM % 5 + 2))
+        done
+        if [[ -n "$release_json" ]]; then
+            latest_version=$(echo "$release_json" | grep -oE '"tag_name": "[^"]+"' | head -1 | sed 's/"tag_name": "//;s/"//')
+            local pkg_url="https://github.com/apple/container/releases/download/${latest_version}/container-${latest_version}-installer-signed.pkg"
+            if curl -fSL "$pkg_url" -o /tmp/container.pkg 2>/dev/null; then
+                sudo installer -pkg /tmp/container.pkg -target / && container_changed=true || echo "  [!] Install failed"
+                rm -f /tmp/container.pkg
+            else
+                echo "  [!] Failed to download pkg"
+            fi
+        else
+            echo "  [!] Failed to fetch release info"
+        fi
+    fi
+    if [[ "$container_changed" == true ]]; then
+        container system kernel set --recommended 2>/dev/null && echo "  [+] Kernel set to recommended" || true
+        echo "  [+] Apple Container $(container --version 2>/dev/null | awk '{print $4}' | tr -d ')')"
     fi
 
     # Load LaunchAgents
