@@ -108,20 +108,15 @@ For work repos, use the work PAT and account:
 GITHUB_TOKEN=$(op item get 'GitHub PAT Work' --fields token --reveal --account industryvault.1password.com)
 ```
 
-### 6. Add to Zed SSH connections (if needed)
+### 6. Connect from Zed
 
-Edit `zed/.config/zed/settings.json` and add an entry to `ssh_connections`:
+Open the project in Zed via CLI using the Tailscale hostname:
 
-```json
-{
-  "host": "<tailscale-hostname>",
-  "username": "klundstedt",
-  "args": [],
-  "projects": [
-    { "paths": ["/home/klundstedt/<repo>"] }
-  ]
-}
+```bash
+zed ssh://klundstedt@<name>/home/klundstedt/<repo>
 ```
+
+Do not add `ssh_connections` to `zed/settings.json` — those are ephemeral VM references that don't belong in the dotfiles repo.
 
 ## CLI Quick Reference
 
