@@ -475,8 +475,14 @@ setup_tailscale() {
     fi
 
     # Start tailscaled if not running
-    if ! $SUDO systemctl is-active --quiet tailscaled 2>/dev/null; then
-        $SUDO systemctl enable --now tailscaled 2>/dev/null || true
+    if ! pgrep -x tailscaled >/dev/null 2>&1; then
+        if command -v systemctl >/dev/null 2>&1; then
+            $SUDO systemctl enable --now tailscaled 2>/dev/null || true
+        else
+            # No systemd (e.g. Apple Containers) — start directly
+            $SUDO sh -c 'nohup tailscaled --tun=userspace-networking >/dev/null 2>&1 &'
+            sleep 2
+        fi
     fi
 
     # Authenticate with --ssh if we have an auth key
