@@ -4,6 +4,13 @@ Shared infrastructure for running Claude Code (primary) and Codex CLI (backup) w
 
 See `agent_docs/agents-recommendations.md` for dual-agent workflow patterns (draft/review, parallel debugging, task routing).
 
+## Two levels of AGENTS.md
+
+There are two `AGENTS.md` files with different scopes:
+
+- **Global** (`agents/.agents/AGENTS.md`) — rules that apply in every repo: honesty, communication style, code conventions, skill usage, data work preferences. Stow deploys it as `~/.agents/AGENTS.md`, with symlinks at `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md` so both agents read it.
+- **Project-level** (`AGENTS.md` at repo root) — context specific to this repo: stow conventions, package structure, install.sh steps, key commands. Claude Code reads this as `CLAUDE.md` (symlinked at repo root).
+
 ## What gets deployed
 
 Stow deploys the core agent infrastructure:
@@ -16,16 +23,7 @@ Stow deploys the core agent infrastructure:
 
 MCP servers are registered as remote HTTP endpoints by `install.sh` — no local wrappers needed. OAuth servers (MotherDuck, Tigris) work on all environments. GitHub servers use PATs from 1Password (macOS only).
 
-Skills are deployed by `npx -y skills add -g -y` (the [skills CLI](https://github.com/vercel-labs/skills)), which installs them directly into `~/.claude/skills/` and `~/.codex/skills/`. The `.stow-local-ignore` file excludes skills from the stow package.
-
-```
-~/.agents/skills/bootstrap-project/          ← scaffolds per-project agent context
-~/.agents/skills/data-pipelines/             ← DuckDB-centric data stack (dlt, sqlmesh, polars, marimo)
-~/.agents/skills/sprites/                    ← manage remote Sprites (Fly.io microVMs)
-~/.claude/skills/bootstrap-project → ../../.agents/skills/bootstrap-project
-~/.codex/skills/bootstrap-project → ../../.agents/skills/bootstrap-project
-(same pattern for all skills)
-```
+Skills are deployed by `npx -y skills add -g -y` (the [skills CLI](https://github.com/vercel-labs/skills)), which installs them directly into `~/.claude/skills/` and `~/.codex/skills/`. The `.stow-local-ignore` file excludes skills from the stow package. Canonical skill source files live in `agents/.agents/skills/` in this repo.
 
 ## Editing
 

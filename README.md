@@ -90,9 +90,12 @@ Git uses a generated OS include so only one platform-specific file is active:
 
 Both Claude Code and Codex CLI share a single instruction file (`AGENTS.md`) deployed via stow symlinks. The install script configures everything for both agents automatically.
 
-**Shared instructions** — `agents/.agents/AGENTS.md` is the canonical source. Stow creates `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md` as symlinks so both agents read the same file.
+**Two levels of instructions:**
 
-**Skills** — Installed to `~/.agents/skills/` and symlinked into both `~/.claude/skills/` and `~/.codex/skills/`:
+- **Global** (`agents/.agents/AGENTS.md`) — rules for every repo: honesty, communication, code conventions, skill usage. Stow creates `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md` as symlinks so both agents read the same file.
+- **Per-project** (`AGENTS.md` at repo root) — context specific to each repo. In this repo, `CLAUDE.md` is a symlink to `AGENTS.md`. Use `/bootstrap-project` to generate these for other repos.
+
+**Skills** — Installed by `npx -y skills add -g -y` (the [skills CLI](https://github.com/vercel-labs/skills)) directly into `~/.claude/skills/` and `~/.codex/skills/`. Canonical source files live in `agents/.agents/skills/`:
 
 | Skill               | Source                                                      | Purpose                                                                   |
 | ------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------- |
