@@ -10,7 +10,7 @@
 
 ### Deploy per backend
 
-- [ ] Apple Container: update `container.sh` to use devbox image instead of `ubuntu:25.04`
+- [ ] Apple Container: update `container` to use devbox image instead of `ubuntu:25.04`
 - [ ] exe.dev: use devbox image via `new --image`
 - [ ] Sprite: wait for checkpoint forking, then create golden sprite from devbox (no custom image support yet)
 
