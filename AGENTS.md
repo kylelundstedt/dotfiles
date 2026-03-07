@@ -42,17 +42,18 @@ GNU Stow–managed dotfiles and AI agent platform for macOS and Linux. Each top-
 
 ## install.sh
 
-The install script sets up a machine from scratch. It runs sequentially through:
+The install script sets up a machine from scratch. It self-bootstraps — when piped via `curl | bash`, it installs git, clones the repo to `~/dotfiles`, and re-execs from the cloned copy. If already running from inside the repo, it skips straight to the install steps:
 
-1. **System deps** — stow, zsh, git, curl (apt on Linux, Homebrew on macOS)
-2. **CLI tools** — installed in parallel via curl scripts and GitHub release binaries to `~/.local/bin` (starship, uv, atuin, zoxide, direnv, tigris, fnm, bat, fzf, rg, jq, yq, gh, duckdb, carapace)
-3. **Node** — via fnm (LTS)
-4. **Git config** — OS include file, SSH multiplexing for GitHub, interactive prompt for user name/email
-5. **Shell** — set default shell to zsh
-6. **Stow** — all packages
-7. **Tailscale** — install, start tailscaled (Sprite Service / systemd / bare nohup), authenticate with `--ssh`. Detects environment: Sprites use `sprite-env services create` so tailscaled survives sleep/wake; systemd uses `systemctl enable --now`; Apple Containers and exe.dev use `nohup tailscaled --tun=userspace-networking`.
-8. **Agents** — Claude Code CLI, Codex CLI, 1Password CLI (Linux), MCP server registration (remote HTTP), agent skills
-9. **Apps** (only with `--apps`) — `brew bundle` for casks/MAS apps, Sprite CLI, Apple Container CLI, LaunchAgents
+1. **Bootstrap** — (only when not in repo) install git, clone to `~/dotfiles`, re-exec
+2. **System deps** — stow, zsh, git, curl (apt on Linux, Homebrew on macOS)
+3. **CLI tools** — installed in parallel via curl scripts and GitHub release binaries to `~/.local/bin` (starship, uv, atuin, zoxide, direnv, tigris, fnm, bat, fzf, rg, jq, yq, gh, duckdb, carapace)
+4. **Node** — via fnm (LTS)
+5. **Git config** — OS include file, SSH multiplexing for GitHub, interactive prompt for user name/email
+6. **Shell** — set default shell to zsh
+7. **Stow** — all packages
+8. **Tailscale** — install, start tailscaled (Sprite Service / systemd / bare nohup), authenticate with `--ssh`. Detects environment: Sprites use `sprite-env services create` so tailscaled survives sleep/wake; systemd uses `systemctl enable --now`; Apple Containers and exe.dev use `nohup tailscaled --tun=userspace-networking`.
+9. **Agents** — Claude Code CLI, Codex CLI, 1Password CLI (Linux), MCP server registration (remote HTTP), agent skills
+10. **Apps** (only with `--apps`) — `brew bundle` for casks/MAS apps, Sprite CLI, Apple Container CLI, LaunchAgents
 
 **Flags:** `--apps`, `--dry-run`, `--skip-stow`, `--skip-agents`
 

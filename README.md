@@ -22,7 +22,7 @@ One command to set up a fully configured development environment on macOS or Lin
 curl -fsSL https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/install.sh | bash
 ```
 
-The script self-bootstraps from a bare machine: detects your OS, installs packages (Homebrew on macOS, apt on Linux), configures agent tooling (MCP servers, skills for both Claude and Codex), and symlinks all configuration into place. It's idempotent — safe to run again.
+The script self-bootstraps from a bare machine: installs git if needed, clones the repo to `~/dotfiles`, then re-runs from the cloned copy. From there it detects your OS, installs packages (Homebrew on macOS, apt on Linux), configures agent tooling (MCP servers, skills for both Claude and Codex), and symlinks all configuration into place. It's idempotent — safe to run again.
 
 Or clone and run manually:
 

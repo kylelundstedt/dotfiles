@@ -101,24 +101,18 @@ test_container() {
     echo ""
     echo "--- Setting up user ---"
     container exec "$name" bash -c "
-        apt-get update -qq && apt-get install -y -qq git curl sudo >/dev/null
+        apt-get update -qq && apt-get install -y -qq curl sudo >/dev/null
         useradd -m -s /bin/bash $target_user
         echo '$target_user ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/$target_user
         chmod 440 /etc/sudoers.d/$target_user
     "
 
     echo ""
-    echo "--- Installing as $target_user ---"
-    # Clone from GitHub then overlay local changes via tar+container exec
-    container exec "$name" bash -c "
-        sudo -u $target_user git clone https://github.com/kylelundstedt/dotfiles /home/$target_user/dotfiles 2>/dev/null || true
-    "
-    COPYFILE_DISABLE=1 tar -C "$DOTFILES_DIR" --exclude=.git -cf - . | container exec -i "$name" bash -c "
-        tar --warning=no-unknown-keyword -C /home/$target_user/dotfiles -xf -
-        chown -R $target_user:$target_user /home/$target_user/dotfiles
-    "
-    container exec -e "TS_AUTHKEY=${TS_AUTHKEY:-}" -e "GITHUB_TOKEN=${GITHUB_TOKEN:-}" "$name" bash -c "
-        sudo -u $target_user env TS_AUTHKEY=\"\$TS_AUTHKEY\" GITHUB_TOKEN=\"\$GITHUB_TOKEN\" bash -c 'cd ~/dotfiles && bash install.sh 2>&1'
+    echo "--- Installing via pipe (bootstrap path) ---"
+    # Pipe local install.sh into bash — simulates `curl | bash`.
+    # BASH_SOURCE is empty when piped, so bootstrap triggers: installs git, clones repo, re-execs.
+    cat "$DOTFILES_DIR/install.sh" | container exec -i -e "TS_AUTHKEY=${TS_AUTHKEY:-}" -e "GITHUB_TOKEN=${GITHUB_TOKEN:-}" "$name" bash -c "
+        sudo -u $target_user env TS_AUTHKEY=\"\$TS_AUTHKEY\" GITHUB_TOKEN=\"\$GITHUB_TOKEN\" bash 2>&1
     " || {
         log_fail "container: install.sh"
         container stop "$name" 2>/dev/null; container rm "$name" 2>/dev/null || true
@@ -151,23 +145,17 @@ test_sprite() {
     echo "--- Setting up user ---"
     # Create klundstedt user (sprite exec runs as platform default user with sudo)
     sprite exec -s "$name" -- bash -c "
-        sudo apt-get update -qq && sudo apt-get install -y -qq git curl >/dev/null
+        sudo apt-get update -qq && sudo apt-get install -y -qq curl >/dev/null
         sudo useradd -m -s /bin/bash $target_user
         echo '$target_user ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/$target_user >/dev/null
         sudo chmod 440 /etc/sudoers.d/$target_user
     "
 
     echo ""
-    echo "--- Installing as $target_user ---"
-    # Copy local working tree and run install as klundstedt
-    COPYFILE_DISABLE=1 tar -C "$DOTFILES_DIR" -cf - --exclude=.git . | sprite exec -s "$name" -- bash -c "
-        sudo mkdir -p /home/$target_user/dotfiles
-        sudo tar --warning=no-unknown-keyword -C /home/$target_user/dotfiles -xf -
-        sudo chown -R $target_user:$target_user /home/$target_user/dotfiles
-        cd /home/$target_user/dotfiles && sudo git init -q
-    "
-    sprite exec -s "$name" -env "TS_AUTHKEY=${TS_AUTHKEY:-},GITHUB_TOKEN=${GITHUB_TOKEN:-}" -- bash -c "
-        sudo -u $target_user env TS_AUTHKEY=\"\$TS_AUTHKEY\" GITHUB_TOKEN=\"\$GITHUB_TOKEN\" bash -c 'cd ~/dotfiles && bash install.sh 2>&1'
+    echo "--- Installing via pipe (bootstrap path) ---"
+    # Pipe local install.sh — bootstrap clones repo from GitHub and re-execs
+    cat "$DOTFILES_DIR/install.sh" | sprite exec -s "$name" -env "TS_AUTHKEY=${TS_AUTHKEY:-},GITHUB_TOKEN=${GITHUB_TOKEN:-}" -- bash -c "
+        sudo -u $target_user env TS_AUTHKEY=\"\$TS_AUTHKEY\" GITHUB_TOKEN=\"\$GITHUB_TOKEN\" bash 2>&1
     " || {
         log_fail "sprite: install.sh"
         sprite destroy -s "$name" --force 2>/dev/null || true
@@ -232,22 +220,17 @@ test_exe() {
     echo "--- Setting up user ---"
     # exe.dev default user is root (no sudo preinstalled)
     $ssh_vm "$vm_host" "
-        apt-get update -qq && apt-get install -y -qq git curl sudo >/dev/null
+        apt-get update -qq && apt-get install -y -qq curl sudo >/dev/null
         useradd -m -s /bin/bash $target_user
         echo '$target_user ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/$target_user
         chmod 440 /etc/sudoers.d/$target_user
     "
 
     echo ""
-    echo "--- Installing as $target_user ---"
-    COPYFILE_DISABLE=1 tar -C "$DOTFILES_DIR" --exclude=.git -cf - . | $ssh_vm "$vm_host" "
-        mkdir -p /home/$target_user/dotfiles
-        tar --warning=no-unknown-keyword -C /home/$target_user/dotfiles -xf -
-        chown -R $target_user:$target_user /home/$target_user/dotfiles
-        cd /home/$target_user/dotfiles && git init -q
-    "
-    $ssh_vm "$vm_host" "
-        sudo -u $target_user env TS_AUTHKEY='${TS_AUTHKEY:-}' GITHUB_TOKEN='${GITHUB_TOKEN:-}' bash -c 'cd ~/dotfiles && bash install.sh 2>&1'
+    echo "--- Installing via pipe (bootstrap path) ---"
+    # Pipe local install.sh — bootstrap clones repo from GitHub and re-execs
+    cat "$DOTFILES_DIR/install.sh" | $ssh_vm "$vm_host" "
+        sudo -u $target_user env TS_AUTHKEY='${TS_AUTHKEY:-}' GITHUB_TOKEN='${GITHUB_TOKEN:-}' bash 2>&1
     " || {
         log_fail "exe: install.sh"
         exe_api "rm $name" >/dev/null || true

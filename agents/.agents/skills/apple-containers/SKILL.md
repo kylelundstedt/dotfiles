@@ -72,21 +72,15 @@ ssh -o StrictHostKeyChecking=accept-new <name> echo ok
 
 Do not proceed until this succeeds.
 
-### 4. Clone dotfiles and run install.sh
+### 4. Install dotfiles
 
-The dotfiles repo is public — no auth needed:
-
-```bash
-container exec -u klundstedt <name> bash -c "git clone https://github.com/kylelundstedt/dotfiles ~/dotfiles"
-```
-
-Run install.sh (non-interactive, no TTY):
+A single command clones the dotfiles repo and runs the full install (CLI tools, stow, Claude Code, MCP servers, skills). The script self-bootstraps — no prior `git clone` needed:
 
 ```bash
-container exec -u klundstedt <name> bash -c "cd ~/dotfiles && bash install.sh"
+container exec -u klundstedt <name> bash -c "curl -fsSL https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/install.sh | bash"
 ```
 
-This installs all CLI tools, stows config, sets up Claude Code, MCP servers, and skills. **Do not skip this step** — without it, Zed's Claude agent will fail with "Query closed before response received."
+**Do not skip this step** — without it, Zed's Claude agent will fail with "Query closed before response received."
 
 ### 5. Clone project repos
 

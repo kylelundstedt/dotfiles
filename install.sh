@@ -21,6 +21,46 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# --- Self-bootstrap ---
+# When piped via `curl | bash`, the script isn't inside the dotfiles repo.
+# Detect this, install git, clone the repo, and re-exec from the real copy.
+DOTFILES_REPO="https://github.com/kylelundstedt/dotfiles.git"
+DOTFILES_TARGET="$HOME/dotfiles"
+
+if [[ "${_DOTFILES_BOOTSTRAPPED:-}" != "1" ]]; then
+    # Check if we're running from inside the dotfiles repo (AGENTS.md is a reliable marker).
+    # When piped via curl|bash, BASH_SOURCE is empty and $0 is "bash" — treat that as not-in-repo.
+    script_dir=""
+    if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+        script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || script_dir=""
+    fi
+    if [[ -z "$script_dir" || ! -f "$script_dir/AGENTS.md" ]]; then
+        echo "=== Bootstrap ==="
+        # Ensure git is available
+        if ! command -v git >/dev/null 2>&1; then
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                echo "Xcode Command Line Tools (includes git) are required. Install them and re-run."
+                exit 1
+            else
+                sudo_cmd="sudo"; [[ $EUID -eq 0 ]] && sudo_cmd=""
+                $sudo_cmd apt-get update -qq 2>/dev/null || true
+                $sudo_cmd apt-get install -y -qq git curl >/dev/null 2>&1
+            fi
+        fi
+        # Clone or pull
+        if [[ -d "$DOTFILES_TARGET/.git" ]]; then
+            echo "  Updating $DOTFILES_TARGET..."
+            git -C "$DOTFILES_TARGET" pull --ff-only --quiet 2>/dev/null || true
+        else
+            echo "  Cloning to $DOTFILES_TARGET..."
+            git clone --quiet "$DOTFILES_REPO" "$DOTFILES_TARGET"
+        fi
+        # Re-exec from the cloned copy
+        export _DOTFILES_BOOTSTRAPPED=1
+        exec "$DOTFILES_TARGET/install.sh" "$@"
+    fi
+fi
+
 # --- OS detection ---
 if [[ "$OSTYPE" == "darwin"* ]]; then
     OS="macos"
@@ -36,7 +76,7 @@ IS_INTERACTIVE=false
 SUDO="sudo"
 [[ $EUID -eq 0 ]] && SUDO=""
 
-DOTFILES_DIR="$(cd "$(dirname "$0")" && pwd)"
+DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 LOCAL_BIN="$HOME/.local/bin"
 mkdir -p "$LOCAL_BIN"
 export PATH="$LOCAL_BIN:$PATH"
