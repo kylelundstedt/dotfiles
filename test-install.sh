@@ -12,11 +12,23 @@ DOTFILES_DIR="$(cd "$(dirname "$0")" && pwd)"
 PASS=0
 FAIL=0
 
+# Resolve GITHUB_TOKEN from gh CLI if not already set (5000 req/hr vs 60)
+if [ -z "${GITHUB_TOKEN:-}" ] && command -v gh >/dev/null 2>&1; then
+    GITHUB_TOKEN="$(gh auth token 2>/dev/null || true)"
+fi
+if [ -z "${GITHUB_TOKEN:-}" ]; then
+    echo "WARNING: No GITHUB_TOKEN — GitHub downloads will hit 60 req/hr rate limit"
+fi
+
 # Resolve TS_AUTHKEY from 1Password if not already set
 if [ -z "${TS_AUTHKEY:-}" ] && command -v op >/dev/null 2>&1; then
     TS_AUTHKEY="$(op read "op://Employee/Tailscale - Dev Auth Key/credential" --account industryvault.1password.com 2>/dev/null || true)"
 fi
-
+if [ -z "${TS_AUTHKEY:-}" ]; then
+    echo "ERROR: No TS_AUTHKEY — Tailscale auth will fail. Set TS_AUTHKEY or sign in to 1Password."
+    exit 1
+fi
+export TS_AUTHKEY GITHUB_TOKEN
 log_pass() { echo "  PASS: $1"; PASS=$((PASS + 1)); }
 log_fail() { echo "  FAIL: $1"; FAIL=$((FAIL + 1)); }
 
@@ -83,8 +95,8 @@ test_container() {
     local name="test-dotfiles-ct-$$"
     local target_user="klundstedt"
     echo "=== Container test (non-root, sudo available) ==="
-    container run --name "$name" ubuntu:25.04 sleep infinity &
-    sleep 5
+    container run --name "$name" -d --cpus 4 --memory 4G ubuntu:25.04 sleep infinity
+    sleep 3
 
     echo ""
     echo "--- Setting up user ---"
@@ -101,12 +113,12 @@ test_container() {
     container exec "$name" bash -c "
         sudo -u $target_user git clone https://github.com/kylelundstedt/dotfiles /home/$target_user/dotfiles 2>/dev/null || true
     "
-    tar -C "$DOTFILES_DIR" --exclude=.git -cf - . | container exec -i "$name" bash -c "
-        tar -C /home/$target_user/dotfiles -xf -
+    COPYFILE_DISABLE=1 tar -C "$DOTFILES_DIR" --exclude=.git -cf - . | container exec -i "$name" bash -c "
+        tar --warning=no-unknown-keyword -C /home/$target_user/dotfiles -xf -
         chown -R $target_user:$target_user /home/$target_user/dotfiles
     "
-    container exec -e "TS_AUTHKEY=${TS_AUTHKEY:-}" "$name" bash -c "
-        sudo -u $target_user env TS_AUTHKEY=\"\$TS_AUTHKEY\" bash -c 'cd ~/dotfiles && bash install.sh --no-prompt 2>&1'
+    container exec -e "TS_AUTHKEY=${TS_AUTHKEY:-}" -e "GITHUB_TOKEN=${GITHUB_TOKEN:-}" "$name" bash -c "
+        sudo -u $target_user env TS_AUTHKEY=\"\$TS_AUTHKEY\" GITHUB_TOKEN=\"\$GITHUB_TOKEN\" bash -c 'cd ~/dotfiles && bash install.sh 2>&1'
     " || {
         log_fail "container: install.sh"
         container stop "$name" 2>/dev/null; container rm "$name" 2>/dev/null || true
@@ -148,14 +160,14 @@ test_sprite() {
     echo ""
     echo "--- Installing as $target_user ---"
     # Copy local working tree and run install as klundstedt
-    tar -C "$DOTFILES_DIR" -cf - --exclude=.git . | sprite exec -s "$name" -- bash -c "
+    COPYFILE_DISABLE=1 tar -C "$DOTFILES_DIR" -cf - --exclude=.git . | sprite exec -s "$name" -- bash -c "
         sudo mkdir -p /home/$target_user/dotfiles
-        sudo tar -C /home/$target_user/dotfiles -xf -
+        sudo tar --warning=no-unknown-keyword -C /home/$target_user/dotfiles -xf -
         sudo chown -R $target_user:$target_user /home/$target_user/dotfiles
         cd /home/$target_user/dotfiles && sudo git init -q
     "
-    sprite exec -s "$name" -env "TS_AUTHKEY=${TS_AUTHKEY:-}" -- bash -c "
-        sudo -u $target_user bash -c 'cd ~/dotfiles && TS_AUTHKEY=\"\$TS_AUTHKEY\" bash install.sh --no-prompt 2>&1'
+    sprite exec -s "$name" -env "TS_AUTHKEY=${TS_AUTHKEY:-},GITHUB_TOKEN=${GITHUB_TOKEN:-}" -- bash -c "
+        sudo -u $target_user env TS_AUTHKEY=\"\$TS_AUTHKEY\" GITHUB_TOKEN=\"\$GITHUB_TOKEN\" bash -c 'cd ~/dotfiles && bash install.sh 2>&1'
     " || {
         log_fail "sprite: install.sh"
         sprite destroy -s "$name" --force 2>/dev/null || true
@@ -173,21 +185,36 @@ test_sprite() {
 }
 
 # --- exe.dev VM (default user, sudo available) ---
-# exe.dev has two SSH destinations:
-#   ssh exe.dev <cmd>    — lobby for VM lifecycle (no scp/sftp/shell)
-#   ssh <vm>.exe.xyz     — direct VM access (full SSH)
+# exe.dev lobby uses HTTPS API (reliable) for VM lifecycle.
+# VM access uses SSH directly to <vm>.exe.xyz.
 test_exe() {
-    if ! ssh -o ConnectTimeout=10 exe.dev ls >/dev/null 2>&1; then
-        echo "exe.dev not reachable — skipping exe test."
+    local name="tst-install-exe"
+    local target_user="klundstedt"
+
+    # Mint a bearer token from the 1Password-managed exe.dev SSH key
+    local perms='{"cmds":["ls","new","rm","whoami"]}'
+    local b64url_payload b64url_sig exe_token
+    b64url_payload=$(printf '%s' "$perms" | base64 | tr -d '\n=' | tr '+/' '-_')
+    b64url_sig=$(printf '%s' "$perms" | ssh-keygen -Y sign -f ~/.ssh/exe_dev.pub -n v0@exe.dev 2>/dev/null | sed '1d;$d' | tr -d '\n' | tr '+/' '-_' | tr -d '=')
+    exe_token="exe0.$b64url_payload.$b64url_sig"
+
+    # Helper: call exe.dev lobby via HTTPS API
+    exe_api() { curl -s -X POST https://exe.dev/exec -H "Authorization: Bearer $exe_token" -d "$1"; }
+
+    if ! exe_api "whoami" | grep -q '"email"'; then
+        echo "exe.dev API not reachable — skipping exe test."
         return 0
     fi
 
-    local name="test-dotfiles-exe-$$"
-    local target_user="klundstedt"
-    local ssh_vm="ssh -o StrictHostKeyChecking=accept-new"
+    # SSH options for VM access (multiplexed)
+    local ssh_mux_dir="/tmp/test-install-ssh-$$"
+    mkdir -p "$ssh_mux_dir"
+    local ssh_vm="ssh -o StrictHostKeyChecking=accept-new -o ControlMaster=auto -o ControlPath=$ssh_mux_dir/%r@%h-%p -o ControlPersist=300 -o ConnectTimeout=30"
+
     echo "=== exe.dev test (non-root, sudo available) ==="
-    local vm_host
-    vm_host=$(ssh exe.dev new --name "$name" --image ubuntu:24.04 --json 2>/dev/null | grep -oE '"ssh_dest":"[^"]+"' | head -1 | sed 's/"ssh_dest":"//;s/"//') || true
+    local vm_json vm_host
+    vm_json=$(exe_api "new --name $name --image ubuntu:24.04" || true)
+    vm_host=$(echo "$vm_json" | grep -oE '"ssh_dest":"[^"]+"' | head -1 | sed 's/"ssh_dest":"//;s/"//')
     if [[ -z "$vm_host" ]]; then
         log_fail "exe: create VM"
         return
@@ -203,26 +230,28 @@ test_exe() {
 
     echo ""
     echo "--- Setting up user ---"
+    # exe.dev default user is root (no sudo preinstalled)
     $ssh_vm "$vm_host" "
-        sudo apt-get update -qq && sudo apt-get install -y -qq git curl >/dev/null
-        sudo useradd -m -s /bin/bash $target_user
-        echo '$target_user ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/$target_user >/dev/null
-        sudo chmod 440 /etc/sudoers.d/$target_user
+        apt-get update -qq && apt-get install -y -qq git curl sudo >/dev/null
+        useradd -m -s /bin/bash $target_user
+        echo '$target_user ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/$target_user
+        chmod 440 /etc/sudoers.d/$target_user
     "
 
     echo ""
     echo "--- Installing as $target_user ---"
-    tar -C "$DOTFILES_DIR" --exclude=.git -cf - . | $ssh_vm "$vm_host" "
-        sudo mkdir -p /home/$target_user/dotfiles
-        sudo tar -C /home/$target_user/dotfiles -xf -
-        sudo chown -R $target_user:$target_user /home/$target_user/dotfiles
-        cd /home/$target_user/dotfiles && sudo git init -q
+    COPYFILE_DISABLE=1 tar -C "$DOTFILES_DIR" --exclude=.git -cf - . | $ssh_vm "$vm_host" "
+        mkdir -p /home/$target_user/dotfiles
+        tar --warning=no-unknown-keyword -C /home/$target_user/dotfiles -xf -
+        chown -R $target_user:$target_user /home/$target_user/dotfiles
+        cd /home/$target_user/dotfiles && git init -q
     "
     $ssh_vm "$vm_host" "
-        sudo -u $target_user env TS_AUTHKEY='${TS_AUTHKEY:-}' bash -c 'cd ~/dotfiles && bash install.sh 2>&1'
+        sudo -u $target_user env TS_AUTHKEY='${TS_AUTHKEY:-}' GITHUB_TOKEN='${GITHUB_TOKEN:-}' bash -c 'cd ~/dotfiles && bash install.sh 2>&1'
     " || {
         log_fail "exe: install.sh"
-        ssh exe.dev rm "$name" 2>/dev/null || true
+        exe_api "rm $name" >/dev/null || true
+        rm -rf "$ssh_mux_dir"
         return
     }
     log_pass "exe: install.sh"
@@ -233,7 +262,8 @@ test_exe() {
 
     echo ""
     echo "--- Tearing down exe.dev VM ---"
-    ssh exe.dev rm "$name" 2>/dev/null || true
+    exe_api "rm $name" >/dev/null || true
+    rm -rf "$ssh_mux_dir"
 }
 
 # --- Dispatch ---
