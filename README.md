@@ -4,7 +4,7 @@ One command to set up a fully configured development environment on macOS or Lin
 
 ## What You Get
 
-**AI agent platform** — [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [Codex CLI](https://github.com/openai/codex) with a shared instruction system (`AGENTS.md`), cross-agent skills (`bootstrap-project`, `data-pipelines`, `sprites-remote`, `mviz`, `find-skills`), four remote MCP servers (GitHub home/work, MotherDuck, Tigris) via HTTP transport, and a convention for per-project agent context (`agent_docs/`)
+**AI agent platform** — [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [Codex CLI](https://github.com/openai/codex) with a shared instruction system (`AGENTS.md`), cross-agent skills (`bootstrap-project`, `data-pipelines`, `sprites-dev`, `exe-dev`, `mviz`, `find-skills`), four remote MCP servers (GitHub home/work, MotherDuck, Tigris) via HTTP transport, and a convention for per-project agent context (`agent_docs/`)
 
 **Shell** — Zsh with [Starship](https://starship.rs/) prompt, [Atuin](https://atuin.sh/) history sync, [Zoxide](https://github.com/ajeetdsouza/zoxide) smart `cd`, [Carapace](https://carapace.sh/) completions, and [Direnv](https://direnv.net/)
 
@@ -98,10 +98,10 @@ Both Claude Code and Codex CLI share a single instruction file (`AGENTS.md`) dep
 | ------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------- |
 | `bootstrap-project` | This repo                                                   | Scaffolds per-project `AGENTS.md`, `CLAUDE.md` symlink, and `agent_docs/` |
 | `data-pipelines`    | This repo                                                   | DuckDB-centric data stack — dlt, sqlmesh, polars, marimo, uv              |
-| `sprites-remote`    | This repo                                                   | Manage remote Sprites (Fly.io microVMs) from local machine                |
+| `sprites-dev`       | This repo                                                   | Manage remote Sprites (Fly.io microVMs) from local machine                |
+| `exe-dev`           | This repo                                                   | exe.dev VM management guide                                               |
 | `mviz`              | [matsonj/mviz](https://github.com/matsonj/mviz)             | Chart and report builder                                                  |
 | `find-skills`       | [vercel-labs/skills](https://github.com/vercel-labs/skills) | Skill discovery and installation                                          |
-| `using-exe-dev`     | [boldsoftware/exe.dev](https://github.com/boldsoftware/exe.dev) | exe.dev VM management guide                                           |
 | 6 Tigris skills     | [tigrisdata/skills](https://github.com/tigrisdata/skills)   | Tigris object storage — install, buckets, objects, snapshots              |
 
 Invoke a skill by typing `/skill-name` in Claude Code or Codex (e.g. `/bootstrap-project`).

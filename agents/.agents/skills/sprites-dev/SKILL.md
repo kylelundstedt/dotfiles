@@ -1,5 +1,5 @@
 ---
-name: sprites-remote
+name: sprites-dev
 description: Use this skill when the user wants to manage remote Sprites from their local machine — listing sprites, executing commands, managing checkpoints, transferring files, controlling network policy, or coordinating work across multiple sprites.
 ---
 

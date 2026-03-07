@@ -70,7 +70,7 @@ if command -v claude >/dev/null 2>&1; then
 fi
 
 # Skills directories
-for skill in bootstrap-project data-pipelines sprites-remote mviz find-skills using-exe-dev; do
+for skill in bootstrap-project data-pipelines sprites-dev exe-dev mviz find-skills; do
     if [ -d "$HOME/.claude/skills/$skill" ]; then echo "OK skill:$skill"; else echo "MISSING skill:$skill"; fi
 done
 VERIFY
