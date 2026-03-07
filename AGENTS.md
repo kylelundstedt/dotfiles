@@ -50,8 +50,9 @@ The install script sets up a machine from scratch. It runs sequentially through:
 4. **Git config** — OS include file, SSH multiplexing for GitHub, interactive prompt for user name/email
 5. **Shell** — set default shell to zsh
 6. **Stow** — all packages
-7. **Agents** — Claude Code CLI, Codex CLI, 1Password CLI (Linux), MCP server registration (remote HTTP), agent skills
-8. **Apps** (only with `--apps`) — `brew bundle` for casks/MAS apps, Sprite CLI, Apple Container CLI, LaunchAgents
+7. **Tailscale** — install, start tailscaled (Sprite Service / systemd / bare nohup), authenticate with `--ssh`. Detects environment: Sprites use `sprite-env services create` so tailscaled survives sleep/wake; systemd uses `systemctl enable --now`; Apple Containers and exe.dev use `nohup tailscaled --tun=userspace-networking`.
+8. **Agents** — Claude Code CLI, Codex CLI, 1Password CLI (Linux), MCP server registration (remote HTTP), agent skills
+9. **Apps** (only with `--apps`) — `brew bundle` for casks/MAS apps, Sprite CLI, Apple Container CLI, LaunchAgents
 
 **Flags:** `--apps`, `--dry-run`, `--skip-stow`, `--skip-agents`
 
