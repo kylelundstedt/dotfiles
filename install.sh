@@ -313,7 +313,7 @@ run_stow() {
     if [[ "$OS" == "macos" ]]; then
         packages+=("1Password" "ghostty" "launchd" "vscode" "zed" "homebrew" "ssh")
     else
-        packages+=("aws")
+        packages+=("aws" "ssh")
     fi
 
     # Backup files that conflict with the agents stow package
@@ -385,10 +385,11 @@ setup_agents() {
             *) echo "  [!] 1Password CLI: unsupported arch $(uname -m)"; op_arch="" ;;
         esac
         if [[ -n "$op_arch" ]]; then
-            local op_tmp
+            local op_tmp op_version
             op_tmp=$(mktemp -d)
-            if curl -sSfo "$op_tmp/op.zip" "https://cache.agilebits.com/dist/1P/op2/pkg/v2.32.1/op_linux_${op_arch}_v2.32.1.zip"; then
-                unzip -qo "$op_tmp/op.zip" op -d "$LOCAL_BIN" && chmod +x "$LOCAL_BIN/op" && echo "  [+] 1Password CLI" || echo "  [!] 1Password CLI: extract failed"
+            op_version=$(curl -sS "https://app-updates.agilebits.com/check/1/0/CLI2/en/0.0.0/N" 2>/dev/null | grep -oE '"version":"[^"]+"' | head -1 | cut -d'"' -f4 || echo "2.32.1")
+            if curl -sSfo "$op_tmp/op.zip" "https://cache.agilebits.com/dist/1P/op2/pkg/v${op_version}/op_linux_${op_arch}_v${op_version}.zip"; then
+                unzip -qo "$op_tmp/op.zip" op -d "$LOCAL_BIN" && chmod +x "$LOCAL_BIN/op" && echo "  [+] 1Password CLI (v${op_version})" || echo "  [!] 1Password CLI: extract failed"
             else
                 echo "  [!] 1Password CLI: download failed"
             fi
@@ -445,6 +446,7 @@ setup_agents() {
         npx -y skills add -g -y vercel-labs/skills -s find-skills >/dev/null 2>&1 || true
         npx -y skills add -g -y tigrisdata/skills >/dev/null 2>&1 || true
         npx -y skills add -g -y kylelundstedt/dotfiles -s bootstrap-project data-pipelines sprites-dev exe-dev >/dev/null 2>&1 || true
+        # apple-containers is private — installed locally on macOS only (npx -y skills add -g -y . -s apple-containers)
         echo "  [+] Skills installed"
     else
         echo "  [!] npx not found, skipping skill installation"

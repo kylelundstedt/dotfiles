@@ -70,7 +70,7 @@ if command -v claude >/dev/null 2>&1; then
 fi
 
 # Skills directories
-for skill in bootstrap-project data-pipelines sprites-dev exe-dev mviz find-skills; do
+for skill in bootstrap-project data-pipelines sprites-dev exe-dev mviz find-skills installing-tigris-storage tigris-bucket-management tigris-object-operations tigris-snapshots-forking; do
     if [ -d "$HOME/.claude/skills/$skill" ]; then echo "OK skill:$skill"; else echo "MISSING skill:$skill"; fi
 done
 VERIFY
