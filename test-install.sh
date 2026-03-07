@@ -22,7 +22,7 @@ fi
 
 # Resolve TS_AUTHKEY from 1Password if not already set
 if [ -z "${TS_AUTHKEY:-}" ] && command -v op >/dev/null 2>&1; then
-    TS_AUTHKEY="$(op read "op://Employee/Tailscale - Dev Auth Key/credential" --account industryvault.1password.com 2>/dev/null || true)"
+    TS_AUTHKEY="$(op read "op://Employee/Tailscale - iv-internal-test/credential" --account industryvault.1password.com 2>/dev/null || true)"
 fi
 if [ -z "${TS_AUTHKEY:-}" ]; then
     echo "ERROR: No TS_AUTHKEY — Tailscale auth will fail. Set TS_AUTHKEY or sign in to 1Password."

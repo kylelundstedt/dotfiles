@@ -475,10 +475,14 @@ setup_tailscale() {
 
     # Start tailscaled if not running
     if ! pgrep -x tailscaled >/dev/null 2>&1; then
-        if command -v systemctl >/dev/null 2>&1; then
+        if [ -d "/.sprite" ] && command -v sprite-env >/dev/null 2>&1; then
+            # Sprite — register as a service so it survives sleep/wake
+            sprite-env services create tailscaled --cmd /usr/sbin/tailscaled --args "--tun=userspace-networking" --no-stream 2>/dev/null || true
+            sleep 2
+        elif command -v systemctl >/dev/null 2>&1; then
             $SUDO systemctl enable --now tailscaled 2>/dev/null || true
         else
-            # No systemd (e.g. Apple Containers) — start directly
+            # No systemd, no Sprite (e.g. Apple Containers) — start directly
             $SUDO sh -c 'nohup tailscaled --tun=userspace-networking >/dev/null 2>&1 &'
             sleep 2
         fi
@@ -487,7 +491,7 @@ setup_tailscale() {
     # Authenticate with --ssh if we have an auth key
     local ts_key="${TS_AUTHKEY:-}"
     if [[ -z "$ts_key" ]] && command -v op >/dev/null 2>&1; then
-        ts_key=$(op read "op://Employee/Tailscale - Dev Auth Key/credential" --account industryvault.1password.com 2>/dev/null) || true
+        ts_key=$(op read "op://Employee/Tailscale - iv-internal-dev/credential" --account industryvault.1password.com 2>/dev/null) || true
     fi
 
     if [[ -n "$ts_key" ]]; then

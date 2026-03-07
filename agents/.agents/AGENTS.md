@@ -45,7 +45,7 @@
 - Project-level: `.claude/skills/<name>/SKILL.md` in the repo root.
 - Each skill needs a `SKILL.md` with YAML frontmatter (`name`, `description`) and markdown instructions.
 - Put always-on rules in `AGENTS.md`. Put on-demand workflows and domain knowledge in skills.
-- **Read skills before writing code.** Before modifying or creating code that touches a platform with a skill (VMs, data pipelines, etc.), read the relevant SKILL.md first. Skills contain hard-won configuration details and gotchas — ignoring them leads to hours of avoidable debugging.
+- **Read skills before touching a platform.** Before writing code, running commands, or creating/managing VMs on any platform that has a skill, you MUST read the relevant SKILL.md file first. Do not proceed from memory — skills contain platform-specific gotchas that cause hours of debugging when ignored. This applies to both code changes (e.g. editing install.sh) and interactive work (e.g. creating a Sprite or exe.dev VM).
 - When to use specific skills:
   - `/bootstrap-project` — always use when setting up agent context in a new or existing repo.
   - `/data-pipelines` — use for any data pipeline, analytics, or ingestion work. Covers dlt, sqlmesh, DuckDB, polars, marimo, uv.

@@ -58,7 +58,7 @@ sleep 2
 Resolve the auth key and bring Tailscale up:
 
 ```bash
-TS_AUTHKEY="$(op read 'op://Employee/Tailscale - Dev Auth Key/credential' --account industryvault.1password.com)"
+TS_AUTHKEY="$(op read 'op://Employee/Tailscale - iv-internal-dev/credential' --account industryvault.1password.com)"
 container exec -e "TS_AUTHKEY=$TS_AUTHKEY" <name> tailscale up --authkey "$TS_AUTHKEY" --hostname <name> --ssh
 ```
 
