@@ -3,7 +3,7 @@ name: sprites-remote
 description: Use this skill when the user wants to manage remote Sprites from their local machine — listing sprites, executing commands, managing checkpoints, transferring files, controlling network policy, or coordinating work across multiple sprites.
 ---
 
-You are managing remote Sprite VMs from a local machine using the `sprite` CLI. This skill covers the local-side CLI for controlling Sprites externally. (Sprites also have built-in agent context at `/.sprite/docs/` for agents running *inside* the Sprite.)
+You are managing remote Sprite VMs from a local machine using the `sprite` CLI. This skill covers the local-side CLI for controlling Sprites externally. (Sprites also have built-in agent context at `/.sprite/docs/` for agents running _inside_ the Sprite.)
 
 Sprites are persistent, hardware-isolated Linux VMs on Fly.io with durable filesystems backed by object storage.
 
@@ -43,6 +43,16 @@ sprite exec -s mysprite -- cat /path/to/file > local-copy.txt
 ```
 
 **Important:** Each `sprite exec` invocation is a separate session. Environment variables, working directory, and shell state do not persist between calls. For stateful work, use `bash -c "..."` to chain commands, or use `sprite console` for interactive sessions.
+
+**Environment variables:** The `-env` flag passes env vars to the remote session, but multiple `-env` flags only apply the **last** one. Use comma-separated format for multiple vars:
+
+```bash
+# WRONG — only BAR is set
+sprite exec -s mysprite -env "FOO=1" -env "BAR=2" -- env
+
+# RIGHT — both are set
+sprite exec -s mysprite -env "FOO=1,BAR=2" -- env
+```
 
 ## File Transfer
 
