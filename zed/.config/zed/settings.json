@@ -38,6 +38,19 @@
   "terminal": {
     "dock": "right",
   },
+  "auto_install_extensions": {
+    "dockerfile": true,
+    "env": true,
+    "github-theme": true,
+    "graphviz": true,
+    "jinja2": true,
+    "mermaid": true,
+    "quarto": true,
+    "rainbow-csv": true,
+    "sql": true,
+    "toml": true,
+    "typst": true
+  },
   "agent_servers": {
     "claude": {
       "env": {
