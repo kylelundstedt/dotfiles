@@ -301,14 +301,14 @@ SSHEOF
             echo "  [+] SSH multiplexing for github.com"
         fi
 
-        # Forward SSH agent to Tailscale VMs
-        if ! grep -q 'Host \*.ts.net' "$ssh_config" 2>/dev/null; then
+        # Forward SSH agent to Tailscale VMs (MagicDNS short names + FQDNs)
+        if ! grep -q 'ForwardAgent yes' "$ssh_config" 2>/dev/null; then
             cat >> "$ssh_config" <<'SSHEOF'
 
-Host *.ts.net
+Host ivs-* *.ts.net
   ForwardAgent yes
 SSHEOF
-            echo "  [+] SSH agent forwarding for *.ts.net"
+            echo "  [+] SSH agent forwarding for ivs-* *.ts.net"
         fi
     fi
 
