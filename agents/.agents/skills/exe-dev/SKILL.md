@@ -91,3 +91,16 @@ The private key lives in 1Password ("SSH Key - exe.dev" in Employee vault). Only
   ```
 - **Accept new host keys** non-interactively: `-o StrictHostKeyChecking=accept-new`
 - **Connection timeout:** Use `-o ConnectTimeout=30` for VM SSH — new VMs take a few seconds to become reachable.
+
+## SSH Agent Forwarding and Git
+
+The Mac's SSH config forwards the 1Password SSH agent to `*.ts.net` hosts (exe.dev VMs with Tailscale). This enables:
+
+- **SSH git operations** — clone, push, and pull private repos directly over SSH without PATs
+- **Commit signing** — `install.sh` enables `commit.gpgsign = true` when a forwarded agent is detected, using the first key from the agent
+
+Clone repos via the Tailscale hostname:
+
+```bash
+ssh <vm-hostname> git clone git@github.com:<org>/<repo>.git ~/<repo>
+```

@@ -170,6 +170,19 @@ sprite destroy <name>
 
 Sprites auto-sleep when idle (no active commands, TCP connections, TTY sessions, or running Services). They wake automatically on the next `sprite exec`, `sprite console`, or HTTP request to their URL. Anything on disk persists across sleep cycles. Running processes do not — use Services for daemons.
 
+## SSH Agent Forwarding and Git
+
+The Mac's SSH config forwards the 1Password SSH agent to `*.ts.net` hosts (Sprites with Tailscale). This enables:
+
+- **SSH git operations** — clone, push, and pull private repos directly over SSH without PATs
+- **Commit signing** — `install.sh` enables `commit.gpgsign = true` when a forwarded agent is detected, using the first key from the agent
+
+Clone repos via the Tailscale hostname:
+
+```bash
+ssh <sprite-hostname> git clone git@github.com:<org>/<repo>.git /home/sprite/<repo>
+```
+
 ## Internal Sprite Paths
 
 When running commands on a Sprite, these paths are useful:

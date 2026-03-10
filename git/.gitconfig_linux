@@ -1,2 +1,8 @@
 [core]
 editor = micro
+
+[gpg]
+format = ssh
+
+[gpg "ssh"]
+defaultKeyCommand = sh -c 'ssh-add -L | head -1 | cut -d\" \" -f1-2'

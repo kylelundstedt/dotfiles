@@ -84,7 +84,13 @@ container exec -u klundstedt <name> bash -c "curl -fsSL https://raw.githubuserco
 
 ### 5. Clone project repos
 
-For private repos, resolve a GitHub PAT on the Mac, pass it as an ephemeral env var, clone, then scrub the token from the remote URL. The token never touches disk on the VM.
+**SSH agent forwarding (preferred):** The Mac's SSH config forwards the 1Password agent to `*.ts.net` hosts. `install.sh` configures GitHub SSH over port 443 on Linux (port 22 is blocked on Apple Containers) and enables git commit signing when the forwarded agent is available. Clone directly over SSH:
+
+```bash
+ssh <name> git clone git@github.com:<org>/<repo>.git /home/klundstedt/<repo>
+```
+
+**PAT fallback** (if agent forwarding isn't set up): Resolve a GitHub PAT on the Mac, pass it as an ephemeral env var, clone, then scrub the token from the remote URL:
 
 ```bash
 GITHUB_TOKEN=$(op item get 'GitHub PAT Home' --fields token --reveal --account lundstedts.1password.com)

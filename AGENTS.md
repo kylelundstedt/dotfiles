@@ -48,7 +48,7 @@ The install script sets up a machine from scratch. It self-bootstraps — when p
 2. **System deps** — stow, zsh, git, curl (apt on Linux, Homebrew on macOS)
 3. **CLI tools** — installed in parallel via curl scripts and GitHub release binaries to `~/.local/bin` (starship, uv, atuin, zoxide, direnv, tigris, fnm, bat, fzf, rg, jq, yq, gh, duckdb, carapace)
 4. **Node** — via fnm (LTS)
-5. **Git config** — OS include file, SSH multiplexing for GitHub, interactive prompt for user name/email
+5. **Git config** — OS include file, SSH config (macOS: multiplexing + agent forwarding for `*.ts.net`; Linux: GitHub over port 443 + known hosts), identity (interactive prompt or default for non-interactive Linux), conditional commit signing when SSH agent is forwarded
 6. **Shell** — set default shell to zsh
 7. **Stow** — all packages
 8. **Tailscale** — install, start tailscaled (Sprite Service / systemd / bare nohup), authenticate with `--ssh`. Detects environment: Sprites use `sprite-env services create` so tailscaled survives sleep/wake; systemd uses `systemctl enable --now`; Apple Containers and exe.dev use `nohup tailscaled --tun=userspace-networking`.

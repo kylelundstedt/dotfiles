@@ -8,6 +8,12 @@ protocol = ssh
 [url "git@github.com:"]
     insteadOf = https://github.com/
 
+[gpg]
+format = ssh
+
+[commit]
+gpgsign = true
+
 [gpg "ssh"]
 program = "/Applications/1Password.app/Contents/MacOS/op-ssh-sign"
 # Automatically use GitHub Signing Key from 1Password, or fall back to first available key

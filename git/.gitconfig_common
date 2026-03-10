@@ -26,11 +26,5 @@ required = true
 [pull]
 ff = only
 
-[gpg]
-  format = ssh
-
 [gui]
 # editor set by shell $EDITOR; VS Code overrides via .gitconfig_macos
-
-[commit]
-  gpgsign = true

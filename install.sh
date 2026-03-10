@@ -282,31 +282,62 @@ setup_git() {
     path = $include_path
 EOF
 
-    # SSH multiplexing for GitHub
+    # SSH config
     local ssh_config="$HOME/.ssh/config"
-    if ! grep -q 'Host github.com' "$ssh_config" 2>/dev/null; then
-        mkdir -p "$HOME/.ssh/sockets"
-        chmod 700 "$HOME/.ssh"
-        touch "$ssh_config"
-        cat >> "$ssh_config" <<'SSHEOF'
+    mkdir -p "$HOME/.ssh/sockets"
+    chmod 700 "$HOME/.ssh"
+    touch "$ssh_config"
+
+    if [[ "$OS" == "macos" ]]; then
+        # SSH multiplexing for GitHub
+        if ! grep -q 'Host github.com' "$ssh_config" 2>/dev/null; then
+            cat >> "$ssh_config" <<'SSHEOF'
 
 Host github.com
   ControlMaster auto
   ControlPath ~/.ssh/sockets/%r@%h-%p
   ControlPersist 600
 SSHEOF
-        echo "  [+] SSH multiplexing for github.com"
+            echo "  [+] SSH multiplexing for github.com"
+        fi
+
+        # Forward SSH agent to Tailscale VMs
+        if ! grep -q 'Host \*.ts.net' "$ssh_config" 2>/dev/null; then
+            cat >> "$ssh_config" <<'SSHEOF'
+
+Host *.ts.net
+  ForwardAgent yes
+SSHEOF
+            echo "  [+] SSH agent forwarding for *.ts.net"
+        fi
+    fi
+
+    if [[ "$OS" == "linux" ]]; then
+        # GitHub SSH over port 443 (port 22 blocked on Apple Containers)
+        if ! grep -q 'Host github.com' "$ssh_config" 2>/dev/null; then
+            cat >> "$ssh_config" <<'SSHEOF'
+
+Host github.com
+  Hostname ssh.github.com
+  Port 443
+  User git
+SSHEOF
+            echo "  [+] GitHub SSH over port 443"
+        fi
+
+        # Add GitHub known host (idempotent)
+        if ! grep -q 'ssh.github.com' "$HOME/.ssh/known_hosts" 2>/dev/null; then
+            ssh-keyscan -p 443 ssh.github.com >> "$HOME/.ssh/known_hosts" 2>/dev/null
+            echo "  [+] GitHub known host"
+        fi
     fi
 
     # Ensure local config exists
     touch "$git_config_local"
     if [[ -s "$git_config_local" ]]; then
         echo "  Git user config already set"
-        return 0
-    fi
-
-    # Prompt for name/email
-    if [[ "$IS_INTERACTIVE" == true ]]; then
+    elif [[ "$IS_INTERACTIVE" == true ]]; then
+        # Prompt for name/email
         echo "  Git user not configured yet."
         read -rp "  Git user name: " git_name
         read -rp "  Git email: " git_email
@@ -318,8 +349,28 @@ email = $git_email
 EOF
             echo "  [+] Wrote git/.gitconfig_local"
         fi
+    elif [[ "$OS" == "linux" ]]; then
+        # Non-interactive Linux VM — use default identity
+        cat > "$git_config_local" <<'EOF'
+[user]
+name = Kyle G. Lundstedt
+email = kyle@lundstedt.us
+EOF
+        echo "  [+] Wrote git/.gitconfig_local (default identity)"
     else
         echo "  Skipping git user setup (non-interactive). Run install.sh interactively to configure."
+    fi
+
+    # Enable commit signing on Linux when SSH agent is forwarded
+    if [[ "$OS" == "linux" && -n "${SSH_AUTH_SOCK:-}" ]]; then
+        if ! grep -q 'gpgsign' "$git_config_local" 2>/dev/null; then
+            cat >> "$git_config_local" <<'EOF'
+
+[commit]
+gpgsign = true
+EOF
+            echo "  [+] Commit signing enabled (SSH agent forwarded)"
+        fi
     fi
 }
 
