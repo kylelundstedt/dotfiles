@@ -501,13 +501,14 @@ setup_agents() {
     # --- Claude Code ---
     if command -v claude >/dev/null 2>&1; then
         # Remove stale servers from previous installations
-        for old in dlt github-home github-work motherduck tigris; do
+        for old in dlt github-home github-work motherduck readwise tigris; do
             claude mcp remove --scope user "$old" >/dev/null 2>&1 || true
         done
 
         # OAuth servers (browser auth on first use)
         claude mcp add --transport http --scope user motherduck https://api.motherduck.com/mcp >/dev/null 2>&1 || true
         claude mcp add --transport http --scope user tigris https://mcp.storage.dev/mcp >/dev/null 2>&1 || true
+        claude mcp add --transport http --scope user readwise https://mcp2.readwise.io/mcp >/dev/null 2>&1 || true
 
         # GitHub servers (PAT from 1Password)
         if [[ "$op_configured" == true ]]; then
@@ -526,7 +527,7 @@ setup_agents() {
     # --- Codex ---
     if command -v codex >/dev/null 2>&1; then
         # Remove stale servers from previous installations
-        for old in dlt github-home github-work motherduck tigris; do
+        for old in dlt github-home github-work motherduck readwise tigris; do
             codex mcp remove "$old" >/dev/null 2>&1 || true
         done
     fi
