@@ -579,9 +579,14 @@ setup_tailscale() {
         elif command -v systemctl >/dev/null 2>&1; then
             $SUDO systemctl enable --now tailscaled 2>/dev/null || true
         else
-            # No systemd, no Sprite (e.g. Apple Containers) — start directly
+            # No systemd, no Sprite (e.g. Apple Containers, exe.dev) — start directly
             $SUDO sh -c 'nohup tailscaled --tun=userspace-networking >/dev/null 2>&1 &'
             sleep 2
+            # Add @reboot cron entry so tailscaled survives container/VM restarts
+            local cron_cmd='@reboot nohup tailscaled --tun=userspace-networking >/dev/null 2>&1 &'
+            if ! ($SUDO crontab -l 2>/dev/null | grep -qF 'tailscaled'); then
+                ($SUDO crontab -l 2>/dev/null; echo "$cron_cmd") | $SUDO crontab -
+            fi
         fi
     fi
 
