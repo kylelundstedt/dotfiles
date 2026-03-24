@@ -763,12 +763,6 @@ install_apps() {
         echo "  [+] Apple Container $(container --version 2>/dev/null | awk '{print $4}' | tr -d ')')"
     fi
 
-    # Ensure kernel is installed and system is running (also installs the LaunchDaemon for boot persistence)
-    if command -v container >/dev/null 2>&1; then
-        container system kernel set --recommended 2>/dev/null && echo "  [+] Kernel set to recommended" || true
-        container system start </dev/null 2>/dev/null || true
-    fi
-
     # Load LaunchAgents
     if [[ "$DRY_RUN" != true ]]; then
         for plist in "$HOME/Library/LaunchAgents"/com.kylelundstedt.*.plist; do
@@ -794,6 +788,14 @@ if [[ "$SKIP_AGENTS" != true ]]; then
     setup_agents
 fi
 install_apps
+
+# Ensure Apple Container kernel is installed and system is running
+if command -v container >/dev/null 2>&1; then
+    echo ""
+    echo "=== Apple Container System ==="
+    container system kernel set --recommended 2>/dev/null && echo "  [+] Kernel set to recommended" || true
+    container system start </dev/null 2>/dev/null || true
+fi
 
 echo ""
 echo "Done. Start a new shell session (or run: exec zsh)"
