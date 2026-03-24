@@ -202,7 +202,7 @@ install_cli_tools() {
     pids+=($!)
     (curl -fsSL https://astral.sh/uv/install.sh | env CARGO_HOME="$HOME/.local" sh >/dev/null 2>&1 && echo "  [+] uv" || echo "  [!] uv failed") &
     pids+=($!)
-    (curl -fsSL https://setup.atuin.sh | sh -s -- --non-interactive --no-modify-path >/dev/null 2>&1 && echo "  [+] atuin" || echo "  [!] atuin failed") &
+    (curl -fsSL https://github.com/atuinsh/atuin/releases/latest/download/atuin-installer.sh | sh -s -- --no-modify-path >/dev/null 2>&1 && echo "  [+] atuin" || echo "  [!] atuin failed") &
     pids+=($!)
     local direnv_os; case "$OS" in macos) direnv_os="darwin" ;; linux) direnv_os="linux" ;; esac
     (install_github_binary "direnv/direnv" "direnv\\.${direnv_os}-${gh_arch}\"$" "direnv" "direnv.${direnv_os}-${gh_arch}") &
