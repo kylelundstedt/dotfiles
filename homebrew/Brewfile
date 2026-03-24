@@ -60,9 +60,7 @@ cask "visual-studio-code", args: { appdir: "/Applications" }
 cask "zed"
 cask "zoom"
 mas "1Password for Safari", id: 1569813296
-mas "GarageBand", id: 682658836
 # mas "Instapaper Save", id: 1481302432
 mas "Keynote", id: 409183694
-mas "Notion Web Clipper", id: 1559269364
 mas 'Pages', id: 409201541
 # mas "Tailscale", id: 1475387142
