@@ -6,6 +6,7 @@ GNU Stow–managed dotfiles and AI agent platform for macOS and Linux. Each top-
 
 - Install everything: `./install.sh`
 - Install with macOS apps (casks, Mac App Store): `./install.sh --apps`
+- Install open-source tailscaled for incoming SSH (macOS): `./install.sh --tailscale-ssh`
 - Skip agent setup: `./install.sh --skip-agents`
 - Test on Linux: `./test-install.sh` (Apple Container, Sprite, exe.dev)
 - Stow a single package: `stow --no-folding -R -t "$HOME" <package>`
@@ -51,11 +52,11 @@ The install script sets up a machine from scratch. It self-bootstraps — when p
 5. **Git config** — OS include file, SSH config (macOS: multiplexing + agent forwarding for `*.ts.net`; Linux: GitHub over port 443 + known hosts), identity (interactive prompt or default for non-interactive Linux), conditional commit signing when SSH agent is forwarded
 6. **Shell** — set default shell to zsh
 7. **Stow** — all packages
-8. **Tailscale** — install, start tailscaled (Sprite Service / systemd / bare nohup), authenticate with `--ssh`. Detects environment: Sprites use `sprite-env services create` so tailscaled survives sleep/wake; systemd uses `systemctl enable --now`; Apple Containers and exe.dev use `nohup tailscaled --tun=userspace-networking`.
+8. **Tailscale** — On Linux: install, start tailscaled (Sprite Service / systemd / bare nohup), authenticate with `--ssh`. On macOS with `--tailscale-ssh`: install open-source tailscale via brew formula, start tailscaled as a system daemon via `sudo brew services`, authenticate with `--ssh`. Without the flag on macOS: expects the standard Tailscale app. Once the brew formula is installed, subsequent runs auto-detect and maintain it.
 9. **Agents** — Claude Code CLI, Codex CLI, 1Password CLI (Linux), MCP server registration (remote HTTP), agent skills
 10. **Apps** (only with `--apps`) — `brew bundle` for casks/MAS apps, Sprite CLI, Apple Container CLI, LaunchAgents
 
-**Flags:** `--apps`, `--dry-run`, `--skip-stow`, `--skip-agents`
+**Flags:** `--apps`, `--dry-run`, `--skip-stow`, `--skip-agents`, `--tailscale-ssh`
 
 Key properties:
 

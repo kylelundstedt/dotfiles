@@ -6,16 +6,18 @@ INSTALL_APPS=false
 DRY_RUN=false
 SKIP_STOW=false
 SKIP_AGENTS=false
+TAILSCALE_SSH=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --apps)          INSTALL_APPS=true; shift ;;
-        --dry-run)       DRY_RUN=true; shift ;;
-        --no-prompt)     shift ;;  # accepted for backwards compat, no longer needed
-        --skip-stow)     SKIP_STOW=true; shift ;;
-        --skip-agents)   SKIP_AGENTS=true; shift ;;
+        --apps)           INSTALL_APPS=true; shift ;;
+        --dry-run)        DRY_RUN=true; shift ;;
+        --no-prompt)      shift ;;  # accepted for backwards compat, no longer needed
+        --skip-stow)      SKIP_STOW=true; shift ;;
+        --skip-agents)    SKIP_AGENTS=true; shift ;;
+        --tailscale-ssh)  TAILSCALE_SSH=true; shift ;;
         *)
-            echo "Usage: $0 [--apps] [--dry-run] [--no-prompt] [--skip-stow] [--skip-agents]"
+            echo "Usage: $0 [--apps] [--dry-run] [--no-prompt] [--skip-stow] [--skip-agents] [--tailscale-ssh]"
             exit 1
             ;;
     esac
@@ -559,13 +561,56 @@ setup_agents() {
 
 # --- setup_tailscale ---
 setup_tailscale() {
-    if [[ "$OS" != "linux" ]]; then
-        return 0
-    fi
-
     echo ""
     echo "=== Tailscale ==="
 
+    if [[ "$OS" == "macos" ]]; then
+        # On macOS, open-source tailscaled is needed for incoming Tailscale SSH.
+        # Use --tailscale-ssh on first run; subsequent runs auto-detect the brew formula.
+        if brew list tailscale &>/dev/null || [[ "$TAILSCALE_SSH" == true ]]; then
+            # Open-source tailscale via Homebrew formula (not the cask/App Store app)
+            if ! brew list tailscale &>/dev/null; then
+                echo "  Installing open-source tailscale (brew formula)..."
+                brew install tailscale
+                echo "  [+] tailscale (open-source)"
+            else
+                echo "  Open-source tailscale already installed"
+            fi
+
+            # Start tailscaled as a system daemon (needs root for real tun device)
+            if ! pgrep -x tailscaled >/dev/null 2>&1; then
+                sudo brew services start tailscale 2>/dev/null || true
+                sleep 2
+                echo "  [+] tailscaled started via brew services"
+            fi
+
+            # Authenticate with SSH enabled
+            local ts_key="${TS_AUTHKEY:-}"
+            if [[ -z "$ts_key" ]] && command -v op >/dev/null 2>&1; then
+                ts_key=$(op read "op://Employee/Tailscale - iv-internal-dev/credential" --account industryvault.1password.com 2>/dev/null) || true
+            fi
+
+            if [[ -n "$ts_key" ]]; then
+                sudo tailscale up --ssh --authkey="$ts_key" 2>/dev/null && echo "  [+] Tailscale up (SSH enabled)" || echo "  [!] tailscale up failed"
+            elif tailscale status >/dev/null 2>&1; then
+                echo "  Already authenticated"
+                sudo tailscale set --ssh 2>/dev/null || true
+            else
+                echo "  No auth key found. Run: sudo tailscale up --ssh"
+            fi
+        else
+            # Standard Tailscale app (GUI with sandboxed network extension)
+            if ! brew list --cask tailscale &>/dev/null && ! ls /Applications/Tailscale.app &>/dev/null 2>&1; then
+                echo "  Installing Tailscale app (cask)..."
+                brew install --cask tailscale && echo "  [+] Tailscale app" || echo "  [!] Tailscale cask install failed"
+            else
+                echo "  Tailscale app already installed"
+            fi
+        fi
+        return 0
+    fi
+
+    # --- Linux ---
     if command -v tailscale >/dev/null 2>&1; then
         echo "  Already installed"
     else
