@@ -231,6 +231,8 @@ install_cli_tools() {
     pids+=($!)
     (install_github_binary "carapace-sh/carapace-bin" "carapace-bin_.*_${gh_os}_${gh_arch}\\.tar\\.gz" "carapace" "carapace") &
     pids+=($!)
+    (install_github_binary "stephenleo/cship" "cship-${target_triple}" "cship" "cship-${target_triple}") &
+    pids+=($!)
 
     # Wait for all parallel installs
     for pid in "${pids[@]}"; do
