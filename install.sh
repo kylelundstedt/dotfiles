@@ -579,24 +579,34 @@ setup_tailscale() {
 
             # Start tailscaled as a system daemon (needs root for real tun device)
             if ! pgrep -x tailscaled >/dev/null 2>&1; then
-                sudo brew services start tailscale 2>/dev/null || true
-                sleep 2
-                echo "  [+] tailscaled started via brew services"
+                if sudo -n true 2>/dev/null; then
+                    sudo brew services start tailscale 2>/dev/null || true
+                    sleep 2
+                    echo "  [+] tailscaled started via brew services"
+                else
+                    echo "  [!] tailscaled not running. Run: sudo brew services start tailscale"
+                fi
             fi
 
             # Authenticate with SSH enabled
-            local ts_key="${TS_AUTHKEY:-}"
-            if [[ -z "$ts_key" ]] && command -v op >/dev/null 2>&1; then
-                ts_key=$(op read "op://Employee/Tailscale - iv-internal-dev/credential" --account industryvault.1password.com 2>/dev/null) || true
-            fi
+            if sudo -n true 2>/dev/null; then
+                local ts_key="${TS_AUTHKEY:-}"
+                if [[ -z "$ts_key" ]] && command -v op >/dev/null 2>&1; then
+                    ts_key=$(op read "op://Employee/Tailscale - iv-internal-dev/credential" --account industryvault.1password.com 2>/dev/null) || true
+                fi
 
-            if [[ -n "$ts_key" ]]; then
-                sudo tailscale up --ssh --authkey="$ts_key" 2>/dev/null && echo "  [+] Tailscale up (SSH enabled)" || echo "  [!] tailscale up failed"
+                if [[ -n "$ts_key" ]]; then
+                    sudo tailscale up --ssh --authkey="$ts_key" 2>/dev/null && echo "  [+] Tailscale up (SSH enabled)" || echo "  [!] tailscale up failed"
+                elif tailscale status >/dev/null 2>&1; then
+                    echo "  Already authenticated"
+                    sudo tailscale set --ssh 2>/dev/null || true
+                else
+                    echo "  No auth key found. Run: sudo tailscale up --ssh"
+                fi
             elif tailscale status >/dev/null 2>&1; then
                 echo "  Already authenticated"
-                sudo tailscale set --ssh 2>/dev/null || true
             else
-                echo "  No auth key found. Run: sudo tailscale up --ssh"
+                echo "  [!] sudo required. Run interactively: sudo tailscale up --ssh"
             fi
         else
             # Standard Tailscale app (GUI with sandboxed network extension)
