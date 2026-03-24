@@ -314,6 +314,17 @@ Host ivs-* *.ts.net
 SSHEOF
             echo "  [+] SSH agent forwarding for ivs-* *.ts.net"
         fi
+
+        # 1Password SSH agent
+        local op_agent_sock="$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
+        if [[ -S "$op_agent_sock" ]] && ! grep -q 'IdentityAgent' "$ssh_config" 2>/dev/null; then
+            cat >> "$ssh_config" <<'SSHEOF'
+
+Host *
+  IdentityAgent "~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
+SSHEOF
+            echo "  [+] 1Password SSH agent"
+        fi
     fi
 
     if [[ "$OS" == "linux" ]]; then
