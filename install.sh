@@ -543,6 +543,7 @@ setup_agents() {
         npx -y skills add -g -y vercel-labs/skills -s find-skills >/dev/null 2>&1 || true
         npx -y skills add -g -y tigrisdata/skills >/dev/null 2>&1 || true
         npx -y skills add -g -y duckdb/duckdb-skills >/dev/null 2>&1 || true
+        npx -y skills add -g -y marimo-team/skills -s marimo-notebook marimo-batch >/dev/null 2>&1 || true
         npx -y skills add -g -y kylelundstedt/dotfiles -s bootstrap-project data-pipelines sprites-dev exe-dev >/dev/null 2>&1 || true
         # apple-containers is private — installed locally on macOS only (npx -y skills add -g -y . -s apple-containers)
         echo "  [+] Skills installed"
