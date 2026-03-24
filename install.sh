@@ -760,13 +760,13 @@ install_apps() {
         fi
     fi
     if [[ "$container_changed" == true ]]; then
-        container system kernel set --recommended 2>/dev/null && echo "  [+] Kernel set to recommended" || true
         echo "  [+] Apple Container $(container --version 2>/dev/null | awk '{print $4}' | tr -d ')')"
     fi
 
-    # Ensure container system is running (also installs the LaunchDaemon for boot persistence)
+    # Ensure kernel is installed and system is running (also installs the LaunchDaemon for boot persistence)
     if command -v container >/dev/null 2>&1; then
-        container system start 2>/dev/null || true
+        container system kernel set --recommended 2>/dev/null && echo "  [+] Kernel set to recommended" || true
+        container system start </dev/null 2>/dev/null || true
     fi
 
     # Load LaunchAgents
