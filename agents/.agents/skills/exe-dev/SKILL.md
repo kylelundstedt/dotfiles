@@ -92,6 +92,23 @@ The private key lives in 1Password ("SSH Key - exe.dev" in Employee vault). Only
 - **Accept new host keys** non-interactively: `-o StrictHostKeyChecking=accept-new`
 - **Connection timeout:** Use `-o ConnectTimeout=30` for VM SSH — new VMs take a few seconds to become reachable.
 
+## Install Dotfiles
+
+After creating a new VM, install dotfiles to get CLI tools, shell config, Claude Code, MCP servers, and skills. The script self-bootstraps — no prior `git clone` needed:
+
+```bash
+ssh <vm>.exe.xyz "curl -fsSL https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/install.sh | bash"
+```
+
+For persistent dev environments, pass a Tailscale auth key:
+
+```bash
+TS_AUTHKEY="$(op read 'op://Employee/Tailscale - iv-internal-dev/credential' --account industryvault.1password.com)"
+ssh <vm>.exe.xyz "TS_AUTHKEY='$TS_AUTHKEY' bash -c 'curl -fsSL https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/install.sh | bash'"
+```
+
+**Do not skip this step** — without it, Claude Code and other agent tooling won't be available on the VM.
+
 ## SSH Agent Forwarding and Git
 
 The Mac's SSH config forwards the 1Password SSH agent to `*.ts.net` hosts (exe.dev VMs with Tailscale). This enables:

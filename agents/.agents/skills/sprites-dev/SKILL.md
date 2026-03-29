@@ -170,6 +170,23 @@ sprite destroy <name>
 
 Sprites auto-sleep when idle (no active commands, TCP connections, TTY sessions, or running Services). They wake automatically on the next `sprite exec`, `sprite console`, or HTTP request to their URL. Anything on disk persists across sleep cycles. Running processes do not — use Services for daemons.
 
+## Install Dotfiles
+
+After creating a new Sprite, install dotfiles to get CLI tools, shell config, Claude Code, MCP servers, and skills. The script self-bootstraps — no prior `git clone` needed:
+
+```bash
+sprite exec -s <name> -- bash -c "curl -fsSL https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/install.sh | bash"
+```
+
+For persistent dev environments, pass a Tailscale auth key so the Sprite is reachable via SSH:
+
+```bash
+TS_AUTHKEY="$(op read 'op://Employee/Tailscale - iv-internal-dev/credential' --account industryvault.1password.com)"
+sprite exec -s <name> -env "TS_AUTHKEY=$TS_AUTHKEY" -- bash -c "curl -fsSL https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/install.sh | bash"
+```
+
+**Do not skip this step** — without it, Claude Code and other agent tooling won't be available on the Sprite.
+
 ## SSH Agent Forwarding and Git
 
 The Mac's SSH config forwards the 1Password SSH agent to `*.ts.net` hosts (Sprites with Tailscale). This enables:
