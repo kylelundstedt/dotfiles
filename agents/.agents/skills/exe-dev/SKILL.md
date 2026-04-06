@@ -92,32 +92,41 @@ The private key lives in 1Password ("SSH Key - exe.dev" in Employee vault). Only
 - **Accept new host keys** non-interactively: `-o StrictHostKeyChecking=accept-new`
 - **Connection timeout:** Use `-o ConnectTimeout=30` for VM SSH — new VMs take a few seconds to become reachable.
 
-## Install Dotfiles
+## Setting Up a Dev VM
 
-After creating a new VM, install dotfiles to get CLI tools, shell config, Claude Code, MCP servers, and skills. The script self-bootstraps — no prior `git clone` needed:
+After creating a new VM, set up Tailscale and install dotfiles. Tailscale provides a stable hostname for SSH and enables agent forwarding from the Mac's 1Password SSH agent.
 
-```bash
-ssh <vm>.exe.xyz "curl -fsSL https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/install.sh | bash"
-```
+### 1. Install Tailscale and dotfiles
 
-For persistent dev environments, pass a Tailscale auth key:
+Pass `TS_AUTHKEY` and `TS_HOSTNAME` so install.sh handles Tailscale end-to-end:
 
 ```bash
 TS_AUTHKEY="$(op read 'op://Employee/Tailscale - iv-internal-dev/credential' --account industryvault.1password.com)"
-ssh <vm>.exe.xyz "TS_AUTHKEY='$TS_AUTHKEY' bash -c 'curl -fsSL https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/install.sh | bash'"
+ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new <vm>.exe.xyz "TS_AUTHKEY='$TS_AUTHKEY' TS_HOSTNAME='<vm>' bash -c 'curl -fsSL https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/install.sh | bash'"
 ```
 
-**Do not skip this step** — without it, Claude Code and other agent tooling won't be available on the VM.
-
-## SSH Agent Forwarding and Git
-
-The Mac's SSH config forwards the 1Password SSH agent to `*.ts.net` hosts (exe.dev VMs with Tailscale). This enables:
-
-- **SSH git operations** — clone, push, and pull private repos directly over SSH without PATs
-- **Commit signing** — `install.sh` enables `commit.gpgsign = true` when a forwarded agent is detected, using the first key from the agent
-
-Clone repos via the Tailscale hostname:
+Verify Tailscale SSH connectivity from the Mac:
 
 ```bash
-ssh <vm-hostname> git clone git@github.com:<org>/<repo>.git ~/<repo>
+ssh -o StrictHostKeyChecking=accept-new <vm> echo ok
+```
+
+Do not proceed until this succeeds.
+
+### 2. Clone project repos
+
+The Mac's SSH config forwards the 1Password agent to `*.ts.net` hosts (`ForwardAgent yes`). This means `ssh <vm>` (via Tailscale) gives the VM access to your GitHub SSH keys — no tokens needed. Clone directly:
+
+```bash
+ssh <vm> git clone git@github.com:<org>/<repo>.git ~/<repo>
+```
+
+Git commit signing is automatically enabled on first login via Tailscale SSH (the shell detects the forwarded agent).
+
+**Alternative:** The exe.dev [GitHub integration](https://exe.dev/docs/integrations-github) provides clone/push access to private repos without tokens or Tailscale, but does not support commit signing.
+
+### 3. Connect from Zed
+
+```bash
+zed ssh://<vm>/root/<repo>
 ```

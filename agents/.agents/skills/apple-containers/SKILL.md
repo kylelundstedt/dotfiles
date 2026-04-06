@@ -39,20 +39,15 @@ container exec <name> bash -c "
 
 Passwordless sudo is required — `install.sh` uses `sudo` for apt, chsh, systemctl, and tailscale commands. Without `NOPASSWD`, it hangs waiting for a password with no TTY.
 
-### 3. Install and start Tailscale
+### 3. Install Tailscale and dotfiles
 
-Tailscale is **required** — it provides the stable hostname for SSH and Zed remote dev. Without it, the container is unreachable from the host.
+Tailscale is **required** — it provides the stable hostname for SSH, Zed remote dev, and SSH agent forwarding from the Mac's 1Password agent.
 
-```bash
-# Install Tailscale
-container exec <name> bash -c "curl -fsSL https://tailscale.com/install.sh | sh"
-```
-
-Start `tailscaled` as a **detached process** — do NOT use `&` inside `container exec` (it creates zombies). Use `container exec -d` instead:
+Start `tailscaled` as a **detached process** first — do NOT use `&` inside `container exec` (it creates zombies). Use `container exec -d` instead:
 
 ```bash
-container exec -d <name> tailscaled --tun=userspace-networking
-sleep 2
+container exec -d <name> bash -c "curl -fsSL https://tailscale.com/install.sh | sh && tailscaled --tun=userspace-networking"
+sleep 3
 ```
 
 Resolve the auth key and bring Tailscale up:
@@ -62,9 +57,7 @@ TS_AUTHKEY="$(op read 'op://Employee/Tailscale - iv-internal-dev/credential' --a
 container exec -e "TS_AUTHKEY=$TS_AUTHKEY" <name> tailscale up --authkey "$TS_AUTHKEY" --hostname <name> --ssh
 ```
 
-The `--ssh` flag is critical — it enables Tailscale SSH, which allows passwordless login to the container using your Tailscale identity. This is how Zed and `ssh <hostname>` connect without needing SSH keys on the container.
-
-Verify connectivity from the host:
+Verify SSH connectivity from the host:
 
 ```bash
 ssh -o StrictHostKeyChecking=accept-new <name> echo ok
@@ -72,43 +65,25 @@ ssh -o StrictHostKeyChecking=accept-new <name> echo ok
 
 Do not proceed until this succeeds.
 
-### 4. Install dotfiles
-
-A single command clones the dotfiles repo and runs the full install (CLI tools, stow, Claude Code, MCP servers, skills). The script self-bootstraps — no prior `git clone` needed:
+Now install dotfiles **via Tailscale SSH** so the Mac's 1Password agent is forwarded. This gives install.sh access to GitHub over SSH and enables git commit signing automatically on first login:
 
 ```bash
-container exec -u klundstedt <name> bash -c "curl -fsSL https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/install.sh | bash"
+ssh <name> -l klundstedt "curl -fsSL https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/install.sh | bash"
 ```
 
 **Do not skip this step** — without it, Zed's Claude agent will fail with "Query closed before response received."
 
-### 5. Clone project repos
+### 4. Clone project repos
 
-**SSH agent forwarding (preferred):** The Mac's SSH config forwards the 1Password agent to `*.ts.net` hosts. `install.sh` configures GitHub SSH over port 443 on Linux (port 22 is blocked on Apple Containers) and enables git commit signing when the forwarded agent is available. Clone directly over SSH:
-
-```bash
-ssh <name> git clone git@github.com:<org>/<repo>.git /home/klundstedt/<repo>
-```
-
-**PAT fallback** (if agent forwarding isn't set up): Resolve a GitHub PAT on the Mac, pass it as an ephemeral env var, clone, then scrub the token from the remote URL:
+The Mac's SSH config forwards the 1Password agent to `*.ts.net` hosts (`ForwardAgent yes`). This means `ssh <name>` gives the container access to your GitHub SSH keys — no tokens needed. `install.sh` configures GitHub SSH over port 443 on Linux (port 22 is blocked on Apple Containers). Clone directly:
 
 ```bash
-GITHUB_TOKEN=$(op item get 'GitHub PAT Home' --fields token --reveal --account lundstedts.1password.com)
-container exec -u klundstedt -e "GITHUB_TOKEN=$GITHUB_TOKEN" <name> bash -l -c '
-    git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/<org>/<repo>.git" ~/<repo>
-    git -C ~/<repo> remote set-url origin git@github.com:<org>/<repo>.git
-'
+ssh <name> -l klundstedt git clone git@github.com:<org>/<repo>.git /home/klundstedt/<repo>
 ```
 
-The `bash -l` ensures `~/.profile` is sourced so PATH includes `~/.local/bin`.
+Git commit signing is automatically enabled on first login via Tailscale SSH (the shell detects the forwarded agent).
 
-For work repos, use the work PAT and account:
-
-```bash
-GITHUB_TOKEN=$(op item get 'GitHub PAT Work' --fields token --reveal --account industryvault.1password.com)
-```
-
-### 6. Connect from Zed
+### 5. Connect from Zed
 
 Open the project in Zed via CLI using the Tailscale hostname:
 

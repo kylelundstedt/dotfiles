@@ -24,6 +24,11 @@ if [[ $(uname) == "Darwin" ]]; then
     export SSH_AUTH_SOCK=~/Library/Group\ Containers/2BUA8C4S2C.com.1password/t/agent.sock
 fi
 
+# Enable git commit signing when SSH agent is forwarded (Linux VMs via Tailscale)
+if [[ -n "${SSH_AUTH_SOCK:-}" ]] && ! git config --global commit.gpgsign >/dev/null 2>&1; then
+    git config --file ~/.gitconfig_local commit.gpgsign true
+fi
+
 command -v starship >/dev/null && eval "$(starship init zsh)"
 command -v atuin >/dev/null && eval "$(atuin init zsh)"
 command -v uv >/dev/null && eval "$(uv generate-shell-completion zsh)"

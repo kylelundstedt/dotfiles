@@ -293,6 +293,26 @@ EOF
     touch "$ssh_config"
 
     if [[ "$OS" == "macos" ]]; then
+        # Canonicalize MagicDNS short names to FQDNs (must be at top of config)
+        if ! grep -q 'CanonicalizeHostname' "$ssh_config" 2>/dev/null && tailscale status >/dev/null 2>&1; then
+            local tailnet_domain
+            tailnet_domain=$(tailscale status --json 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin)['Self']['DNSName']; parts=d.rstrip('.').split('.'); print('.'.join(parts[1:]))" 2>/dev/null)
+            if [[ -n "$tailnet_domain" ]]; then
+                local tmp_config
+                tmp_config=$(mktemp)
+                cat > "$tmp_config" <<SSHEOF
+CanonicalizeHostname yes
+CanonicalDomains $tailnet_domain
+CanonicalizeMaxDots 0
+
+SSHEOF
+                cat "$ssh_config" >> "$tmp_config"
+                mv "$tmp_config" "$ssh_config"
+                chmod 600 "$ssh_config"
+                echo "  [+] SSH hostname canonicalization for $tailnet_domain"
+            fi
+        fi
+
         # SSH multiplexing for GitHub
         if ! grep -q 'Host github.com' "$ssh_config" 2>/dev/null; then
             cat >> "$ssh_config" <<'SSHEOF'
@@ -305,14 +325,14 @@ SSHEOF
             echo "  [+] SSH multiplexing for github.com"
         fi
 
-        # Forward SSH agent to Tailscale VMs (MagicDNS short names + FQDNs)
+        # Forward SSH agent to Tailscale VMs
         if ! grep -q 'ForwardAgent yes' "$ssh_config" 2>/dev/null; then
             cat >> "$ssh_config" <<'SSHEOF'
 
-Host ivs-* *.ts.net
+Host *.ts.net
   ForwardAgent yes
 SSHEOF
-            echo "  [+] SSH agent forwarding for ivs-* *.ts.net"
+            echo "  [+] SSH agent forwarding for *.ts.net"
         fi
 
         # 1Password SSH agent
@@ -379,17 +399,7 @@ EOF
         echo "  Skipping git user setup (non-interactive). Run install.sh interactively to configure."
     fi
 
-    # Enable commit signing on Linux when SSH agent is forwarded
-    if [[ "$OS" == "linux" && -n "${SSH_AUTH_SOCK:-}" ]]; then
-        if ! grep -q 'gpgsign' "$git_config_local" 2>/dev/null; then
-            cat >> "$git_config_local" <<'EOF'
-
-[commit]
-gpgsign = true
-EOF
-            echo "  [+] Commit signing enabled (SSH agent forwarded)"
-        fi
-    fi
+    # Commit signing is enabled at login time by .zshrc when SSH agent is forwarded
 }
 
 # --- set_shell ---
@@ -668,7 +678,8 @@ setup_tailscale() {
     fi
 
     if [[ -n "$ts_key" ]]; then
-        $SUDO tailscale up --ssh --authkey="$ts_key" 2>/dev/null && echo "  [+] Tailscale up (SSH enabled)" || echo "  [!] tailscale up failed"
+        local ts_hostname="${TS_HOSTNAME:-}"
+        $SUDO tailscale up --ssh --authkey="$ts_key" ${ts_hostname:+--hostname "$ts_hostname"} 2>/dev/null && echo "  [+] Tailscale up (SSH enabled${ts_hostname:+, hostname=$ts_hostname})" || echo "  [!] tailscale up failed"
     elif tailscale status >/dev/null 2>&1; then
         echo "  Already authenticated"
         # Ensure SSH is enabled
