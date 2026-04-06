@@ -22,10 +22,16 @@
 
 ## Secrets on remote VMs
 
-- Current pattern: resolve on Mac, pass as ephemeral env vars (`GITHUB_TOKEN` via `gh auth token`, `TS_AUTHKEY` via `op read`)
-- [ ] Consider single-repo GitHub PATs for scoped VM access — https://exe.dev/docs/faq/github-token
+- GitHub: SSH agent forwarding via Tailscale handles clone/push/signing — no tokens needed (implemented 2026-04-06)
+- Tailscale: `TS_AUTHKEY` resolved on Mac via `op read`, passed as env var at VM creation
+- [x] GitHub access on VMs — solved via SSH agent forwarding (ForwardAgent + CanonicalizeHostname)
+- [x] Git commit signing on VMs — solved via .zshrc login-time hook (detects forwarded agent)
 - [ ] Evaluate Tailscale OAuth clients for reusable, non-expiring auth keys
 - [ ] Decide on 1Password strategy for VMs:
   - Mac-side resolution (current) — simple, works for test/ephemeral VMs
   - Service Accounts — one `OP_SERVICE_ACCOUNT_TOKEN` env var, needs `op` on each VM
   - Connect Server on tailnet — one persistent VM runs Docker containers, other VMs query via HTTP + `OP_CONNECT_TOKEN`. No `op` needed on clients. Worth it when VMs need autonomous secret access (long-lived devboxes, unattended agents).
+
+## Apple Containers
+
+- [ ] New containers fail to provision after Tailscale system extension update — need to test if a reboot fixes it (2026-04-06)
