@@ -34,4 +34,4 @@
 
 ## Apple Containers
 
-- [ ] New containers fail to provision after Tailscale system extension update — need to test if a reboot fixes it (2026-04-06)
+- [ ] `container create` broken in 0.11.0 — rootfs never provisioned (apple/container#1398). Workaround: `container run -d`. Skill already uses the workaround.
