@@ -212,8 +212,11 @@ install_cli_tools() {
     local tigris_arch; case "$arch" in arm64|aarch64) tigris_arch="arm64" ;; x86_64) tigris_arch="x64" ;; esac
     (install_github_binary "tigrisdata/cli" "tigris-${direnv_os}-${tigris_arch}\\.tar\\.gz" "tigris" "tigris-${direnv_os}-${tigris_arch}") &
     pids+=($!)
-    (if need archil; then curl -fsSL https://archil.com/install | sh >/dev/null 2>&1 && echo "  [+] archil" || echo "  [!] archil failed"; fi) &
-    pids+=($!)
+    # archil: CLI on Linux, macOS app installed separately (interactive prompt)
+    if [[ "$OS" == "linux" ]]; then
+        (if need archil; then curl -fsSL https://archil.com/install | sh >/dev/null 2>&1 && echo "  [+] archil" || echo "  [!] archil failed"; fi) &
+        pids+=($!)
+    fi
     (install_github_binary "Schniz/fnm" "${fnm_asset}\\.zip" "fnm" "fnm") &
     pids+=($!)
 
