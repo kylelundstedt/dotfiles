@@ -35,3 +35,14 @@
 ## Apple Containers
 
 - [ ] `container create` broken in 0.11.0 — rootfs never provisioned (apple/container#1398). Workaround: `container run -d`. Skill already uses the workaround.
+
+## Done (2026-04-12)
+
+- [x] Unified SSH agent forwarding across all three VM platforms (Apple Containers, exe.dev, Sprites)
+- [x] Login-time commit signing hook in .zshrc (moved from install-time)
+- [x] SSH hostname canonicalization for MagicDNS short names
+- [x] Fixed Tailscale macOS detection (`brew list --formula` vs `brew list`)
+- [x] Switched Tigris skills to `tigrisdata/tigris-agents-plugins`
+- [x] Added Archil CLI (Linux) and Archil.app (macOS --apps)
+- [x] Added flux-markdown QuickLook extension to Brewfile
+- [x] Updated README and CLAUDE.md with current skills, flags, and architecture
