@@ -22,10 +22,8 @@
 
 ## Secrets on remote VMs
 
-- GitHub: SSH agent forwarding via Tailscale handles clone/push/signing — no tokens needed (implemented 2026-04-06)
+- GitHub: SSH agent forwarding via Tailscale handles clone/push/signing — no tokens needed (implemented 2026-04-12)
 - Tailscale: `TS_AUTHKEY` resolved on Mac via `op read`, passed as env var at VM creation
-- [x] GitHub access on VMs — solved via SSH agent forwarding (ForwardAgent + CanonicalizeHostname)
-- [x] Git commit signing on VMs — solved via .zshrc login-time hook (detects forwarded agent)
 - [ ] Evaluate Tailscale OAuth clients for reusable, non-expiring auth keys
 - [ ] Decide on 1Password strategy for VMs:
   - Mac-side resolution (current) — simple, works for test/ephemeral VMs
