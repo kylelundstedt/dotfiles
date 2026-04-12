@@ -600,9 +600,9 @@ setup_tailscale() {
     if [[ "$OS" == "macos" ]]; then
         # On macOS, open-source tailscaled is needed for incoming Tailscale SSH.
         # Use --tailscale-ssh on first run; subsequent runs auto-detect the brew formula.
-        if brew list tailscale &>/dev/null || [[ "$TAILSCALE_SSH" == true ]]; then
+        if brew list --formula tailscale &>/dev/null || [[ "$TAILSCALE_SSH" == true ]]; then
             # Open-source tailscale via Homebrew formula (not the cask/App Store app)
-            if ! brew list tailscale &>/dev/null; then
+            if ! brew list --formula tailscale &>/dev/null; then
                 echo "  Installing open-source tailscale (brew formula)..."
                 brew install tailscale
                 echo "  [+] tailscale (open-source)"
