@@ -212,6 +212,8 @@ install_cli_tools() {
     local tigris_arch; case "$arch" in arm64|aarch64) tigris_arch="arm64" ;; x86_64) tigris_arch="x64" ;; esac
     (install_github_binary "tigrisdata/cli" "tigris-${direnv_os}-${tigris_arch}\\.tar\\.gz" "tigris" "tigris-${direnv_os}-${tigris_arch}") &
     pids+=($!)
+    (if need archil; then curl -fsSL https://archil.com/install | sh >/dev/null 2>&1 && echo "  [+] archil" || echo "  [!] archil failed"; fi) &
+    pids+=($!)
     (install_github_binary "Schniz/fnm" "${fnm_asset}\\.zip" "fnm" "fnm") &
     pids+=($!)
 
@@ -570,6 +572,12 @@ setup_agents() {
         npx -y skills add -g -y marimo-team/skills -s marimo-notebook marimo-batch >/dev/null 2>&1 || true
         npx -y skills add -g -y kylelundstedt/dotfiles -s bootstrap-project data-pipelines sprites-dev exe-dev >/dev/null 2>&1 || true
         # apple-containers is private — installed locally on macOS only (npx -y skills add -g -y . -s apple-containers)
+        # archil-guide — no GitHub repo, download skill file directly
+        mkdir -p "$HOME/.agents/skills/archil-guide"
+        curl -fsSL https://archil.com/skill.md -o "$HOME/.agents/skills/archil-guide/SKILL.md" 2>/dev/null || true
+        for agent_dir in "$HOME/.claude/skills" "$HOME/.codex/skills"; do
+            [ -d "$agent_dir" ] && ln -sf "../../.agents/skills/archil-guide" "$agent_dir/archil-guide" 2>/dev/null || true
+        done
         echo "  [+] Skills installed"
     else
         echo "  [!] npx not found, skipping skill installation"
