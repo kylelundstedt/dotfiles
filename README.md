@@ -12,7 +12,7 @@ One command to set up a fully configured development environment on macOS or Lin
 
 **Dev tools** — Git with 1Password SSH signing, AWS CLI v2, DuckDB, Python via [uv](https://docs.astral.sh/uv/)
 
-**Remote development** — Zed's [remote development](https://zed.dev/docs/remote-development) opens projects over SSH. Create a VM on [Apple Containers](https://github.com/apple/container), [exe.dev](https://exe.dev), or [Sprites](https://sprites.dev), clone dotfiles, run `install.sh`, and connect from Zed with `zed ssh://host/path`. Tailscale provides stable hostnames across all backends.
+**Remote development** — Zed's [remote development](https://zed.dev/docs/remote-development) opens projects over SSH. Create a VM on [Apple Containers](https://github.com/apple/container), [exe.dev](https://exe.dev), or [Sprites](https://sprites.dev), run `install.sh` with a Tailscale auth key, and connect from Zed with `zed ssh://host/path`. Tailscale provides stable hostnames, and SSH agent forwarding from the Mac's 1Password agent enables git clone/push and commit signing on all three platforms — no tokens needed on the VMs.
 
 ---
 
@@ -36,7 +36,7 @@ cd ~/dotfiles
 ./install.sh --dry-run       # Preview stow changes
 ```
 
-**Flags:** `--apps`, `--dry-run`, `--skip-stow`, `--skip-agents`
+**Flags:** `--apps`, `--dry-run`, `--skip-stow`, `--skip-agents`, `--tailscale-ssh`
 
 That's it — your shell, git, agent tooling, and dev tools are all configured. Start using them:
 
@@ -97,16 +97,22 @@ Both Claude Code and Codex CLI share a single instruction file (`AGENTS.md`) dep
 
 **Skills** — Installed by `npx -y skills add -g -y` (the [skills CLI](https://github.com/vercel-labs/skills)) directly into `~/.claude/skills/` and `~/.codex/skills/`. Canonical source files live in `agents/.agents/skills/`:
 
-| Skill               | Source                                                      | Purpose                                                                   |
-| ------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `bootstrap-project` | This repo                                                   | Scaffolds per-project `AGENTS.md`, `CLAUDE.md` symlink, and `agent_docs/` |
-| `data-pipelines`    | This repo                                                   | DuckDB-centric data stack — dlt, sqlmesh, polars, marimo, uv              |
-| `apple-containers`  | This repo                                                   | Apple Container VM lifecycle on macOS                                     |
-| `sprites-dev`       | This repo                                                   | Manage remote Sprites (Fly.io microVMs) from local machine                |
-| `exe-dev`           | This repo                                                   | exe.dev VM management guide                                               |
-| `mviz`              | [matsonj/mviz](https://github.com/matsonj/mviz)             | Chart and report builder                                                  |
-| `find-skills`       | [vercel-labs/skills](https://github.com/vercel-labs/skills) | Skill discovery and installation                                          |
-| 6 Tigris skills     | [tigrisdata/skills](https://github.com/tigrisdata/skills)   | Tigris object storage — install, buckets, objects, snapshots              |
+| Skill               | Source                                                                                  | Purpose                                                                   |
+| ------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `bootstrap-project` | This repo                                                                               | Scaffolds per-project `AGENTS.md`, `CLAUDE.md` symlink, and `agent_docs/` |
+| `data-pipelines`    | This repo                                                                               | DuckDB-centric data stack — dlt, sqlmesh, polars, marimo, uv              |
+| `apple-containers`  | This repo                                                                               | Apple Container VM lifecycle on macOS                                     |
+| `sprites-dev`       | This repo                                                                               | Manage remote Sprites (Fly.io microVMs) from local machine                |
+| `exe-dev`           | This repo                                                                               | exe.dev VM management guide                                               |
+| `mviz`              | [matsonj/mviz](https://github.com/matsonj/mviz)                                         | Chart and report builder                                                  |
+| `find-skills`       | [vercel-labs/skills](https://github.com/vercel-labs/skills)                             | Skill discovery and installation                                          |
+| 5 Tigris skills     | [tigrisdata/tigris-agents-plugins](https://github.com/tigrisdata/tigris-agents-plugins) | Tigris CLI — auth, buckets, objects, access keys, IAM                     |
+| DuckDB skills       | [duckdb/duckdb-skills](https://github.com/duckdb/duckdb-skills)                         | DuckDB query, file reading, database management                           |
+| `quarto-authoring`  | [posit-dev/skills](https://github.com/posit-dev/skills)                                 | Quarto document authoring                                                 |
+| `brand-yml`         | [posit-dev/skills](https://github.com/posit-dev/skills)                                 | Brand styling for Shiny/Quarto                                            |
+| `marimo-notebook`   | [marimo-team/skills](https://github.com/marimo-team/skills)                             | Write marimo notebooks                                                    |
+| `marimo-batch`      | [marimo-team/skills](https://github.com/marimo-team/skills)                             | Prepare marimo notebooks for scheduled runs                               |
+| `archil-guide`      | [archil.com](https://archil.com/skill.md)                                               | Archil distributed filesystem setup and usage                             |
 
 Invoke a skill by typing `/skill-name` in Claude Code or Codex (e.g. `/bootstrap-project`).
 
