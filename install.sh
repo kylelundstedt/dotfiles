@@ -718,6 +718,11 @@ install_apps() {
         curl -fsSL https://sprites.dev/install.sh | sh >/dev/null 2>&1 && echo "  [+] Sprite CLI" || echo "  [!] Sprite CLI failed"
     fi
 
+    # Archil.app (macOS menu bar app for distributed filesystem)
+    if ! ls /Applications/Archil.app &>/dev/null; then
+        curl -fsSL https://archil.com/install | sh || echo "  [!] Archil.app install failed"
+    fi
+
     # Apple Container CLI — install or upgrade
     echo ""
     echo "=== Apple Container ==="
