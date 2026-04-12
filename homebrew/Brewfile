@@ -19,6 +19,7 @@ cask "columnar-tech/tap/dbc"
 cask "discord", args: { appdir: "/Applications" }
 # cask "dropbox", args: { appdir: "/Applications" }
 cask "fantastical", args: { appdir: "/Applications" }
+cask "xykong/tap/flux-markdown"
 cask "font-atkinson-hyperlegible"
 cask 'font-computer-modern'
 # cask 'font-consolas-for-powerline'
