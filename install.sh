@@ -564,7 +564,7 @@ setup_agents() {
         echo "  Installing agent skills..."
         npx -y skills add -g -y matsonj/mviz >/dev/null 2>&1 || true
         npx -y skills add -g -y vercel-labs/skills -s find-skills >/dev/null 2>&1 || true
-        npx -y skills add -g -y tigrisdata/skills >/dev/null 2>&1 || true
+        npx -y skills add -g -y tigrisdata/tigris-agents-plugins >/dev/null 2>&1 || true
         npx -y skills add -g -y duckdb/duckdb-skills >/dev/null 2>&1 || true
         npx -y skills add -g -y posit-dev/skills -s quarto-authoring brand-yml >/dev/null 2>&1 || true
         npx -y skills add -g -y marimo-team/skills -s marimo-notebook marimo-batch >/dev/null 2>&1 || true
