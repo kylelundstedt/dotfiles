@@ -22,9 +22,20 @@
 
 ## Secrets on remote VMs
 
-- GitHub: SSH agent forwarding via Tailscale handles clone/push/signing — no tokens needed (implemented 2026-04-12)
-- Tailscale: `TS_AUTHKEY` resolved on Mac via `op read`, passed as env var at VM creation
-- [ ] Evaluate Tailscale OAuth clients for reusable, non-expiring auth keys
+Solved:
+- GitHub clone/push/signing — SSH agent forwarding via Tailscale (2026-04-12)
+
+Requires Mac-side `op read` (biometric) + env var passing:
+- `TS_AUTHKEY` — needed once at VM creation to join the tailnet
+- Agents can't resolve this autonomously (Touch ID required)
+
+Not yet solved for VMs:
+- MCP servers — OAuth (MotherDuck, Tigris) needs a browser; GitHub MCP needs PATs from 1Password
+- Project-specific secrets (API keys, database creds, AWS credentials)
+- `op` CLI is installed on VMs but has no account configured
+
+Open items:
+- [ ] Evaluate Tailscale OAuth clients for reusable, non-expiring auth keys (removes `op read` dependency for `TS_AUTHKEY`)
 - [ ] Decide on 1Password strategy for VMs:
   - Mac-side resolution (current) — simple, works for test/ephemeral VMs
   - Service Accounts — one `OP_SERVICE_ACCOUNT_TOKEN` env var, needs `op` on each VM
