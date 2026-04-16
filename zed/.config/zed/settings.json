@@ -53,12 +53,7 @@
   },
   "agent_servers": {
     "claude-acp": {
-      "type": "registry",
-      "favorite_config_option_values": {
-        "mode": [
-          "auto"
-        ]
-      }
+      "type": "registry"
     }
   },
 }
