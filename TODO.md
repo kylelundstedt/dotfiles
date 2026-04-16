@@ -24,6 +24,7 @@
 
 Solved:
 - GitHub clone/push/signing — SSH agent forwarding via Tailscale (2026-04-12)
+- 1Password strategy decided (2026-04-16): single SA, single vault, 1P Environments for per-project injection
 
 Requires Mac-side `op read` (biometric) + env var passing:
 - `TS_AUTHKEY` — needed once at VM creation to join the tailnet
@@ -31,15 +32,15 @@ Requires Mac-side `op read` (biometric) + env var passing:
 
 Not yet solved for VMs:
 - MCP servers — OAuth (MotherDuck, Tigris) needs a browser; GitHub MCP needs PATs from 1Password
-- Project-specific secrets (API keys, database creds, AWS credentials)
-- `op` CLI is installed on VMs but has no account configured
 
-Open items:
+Implementation:
+- [ ] Create `IVS-Sandbox` vault in 1Password
+- [ ] Create single SA (`ivs-sandbox-sa`) with read-only access to that vault
+- [ ] Store SA token in Employee vault for provisioning access
+- [ ] Create 1P Environments per project with secret variables
+- [ ] Build `provision-sandbox.sh` — push SA token to `~/.config/op/sa-token`, wire up `.zshrc`
+- [ ] Test `op run --environment <id>` on each platform (Sprite, exe.dev, Apple Container)
 - [ ] Evaluate Tailscale OAuth clients for reusable, non-expiring auth keys (removes `op read` dependency for `TS_AUTHKEY`)
-- [ ] Decide on 1Password strategy for VMs:
-  - Mac-side resolution (current) — simple, works for test/ephemeral VMs
-  - Service Accounts — one `OP_SERVICE_ACCOUNT_TOKEN` env var, needs `op` on each VM
-  - Connect Server on tailnet — one persistent VM runs Docker containers, other VMs query via HTTP + `OP_CONNECT_TOKEN`. No `op` needed on clients. Worth it when VMs need autonomous secret access (long-lived devboxes, unattended agents).
 
 ## Apple Containers
 
