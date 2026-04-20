@@ -7,18 +7,28 @@ You are building data pipelines. The general pattern is **ingest** (get data in)
 
 The specific tools for each step depend on the project. Preferred defaults:
 
-| Step | Preferred Tool | Alternatives |
-|---|---|---|
-| Ingest | dlt | Plain Python scripts, shell + curl, custom connectors |
-| Transform | sqlmesh | Plain SQL scripts, dbt, Python scripts |
-| Query engine | DuckDB / MotherDuck | — |
-| DataFrames | polars | — |
-| Notebooks | marimo | — |
-| Project mgmt | uv | — |
+| Step          | Preferred Tool      | Alternatives                           |
+| ------------- | ------------------- | -------------------------------------- |
+| Ingest        | dlt                 | Plain Python scripts, shell + curl     |
+| Transform     | sqlmesh             | Plain SQL scripts, dbt, Python scripts |
+| Query engine  | DuckDB / MotherDuck | —                                      |
+| DataFrames    | polars              | —                                      |
+| Notebooks     | marimo              | —                                      |
+| Project mgmt  | uv                  | —                                      |
+| Visualization | altair, seaborn     | —                                      |
 
 ## Language Preference
 
 SQL first (DuckDB dialect), then Python, then bash. Use the simplest language that gets the job done.
+
+## Cross-references to other skills
+
+This skill covers the **opinionated stack** for ingest/transform/notebook work. For the underlying tools, defer to:
+
+- DuckDB syntax (Friendly SQL, file reads, nested types) → `motherduck-duckdb-sql` or `duckdb-docs`
+- MotherDuck connections, exploration, sharing, Dives → `motherduck-*` skills
+- marimo notebooks (cells, reactivity, SQL cells) → `marimo-notebook`
+- Local DuckDB session management → `attach-db`, `query`, `read-file`
 
 ## Project Layout
 
@@ -67,64 +77,6 @@ Run with `uv run script.py` — deps are resolved automatically.
 
 Always commit `uv.lock`. Use `pyproject.toml` for dependency declarations, never `requirements.txt`.
 
-## DuckDB — Query Engine
-
-DuckDB is the shared SQL engine across the entire stack. Use DuckDB-specific syntax freely.
-
-### CLI
-
-```bash
-duckdb                              # In-memory
-duckdb my_data.db                   # Persistent local
-duckdb md:my_db                     # MotherDuck
-duckdb -c "SELECT 42"              # One-shot
-```
-
-### DuckDB SQL Syntax
-
-**Friendly SQL:**
-
-```sql
-FROM my_table;                                          -- Implicit SELECT *
-FROM my_table SELECT col1, col2 WHERE col3 > 5;        -- FROM-first
-SELECT * EXCLUDE (internal_id) FROM events;             -- Drop columns
-SELECT * REPLACE (amount / 100.0 AS amount) FROM txns;  -- Transform in-place
-SELECT category, SUM(amount) FROM sales GROUP BY ALL;    -- Infer GROUP BY
-```
-
-**Read files directly (no import step):**
-
-```sql
-SELECT * FROM 'data.parquet';
-SELECT * FROM read_csv('data.csv', header=true);
-SELECT * FROM 's3://bucket/path/*.parquet';
-COPY (SELECT * FROM events) TO 'output.parquet' (FORMAT PARQUET);
-```
-
-**Nested types:**
-
-```sql
-SELECT {'name': 'Alice', 'age': 30} AS person;
-SELECT [1, 2, 3] AS nums;
-SELECT list_filter([1, 2, 3, 4], x -> x > 2);
-```
-
-**Useful commands:**
-
-```sql
-DESCRIBE SELECT * FROM events;
-SUMMARIZE events;
-```
-
-### MotherDuck
-
-```sql
-ATTACH 'md:';              -- All databases
-ATTACH 'md:my_db';         -- Specific database
-```
-
-Auth via `motherduck_token` env var. Cross-database queries work: `SELECT * FROM local_db.main.t1 JOIN md:cloud_db.main.t2 USING (id)`.
-
 ## polars — DataFrames
 
 Use polars when Python logic is needed — complex string transforms, ML features, row-level conditionals. For joins, aggregations, and window functions, prefer SQL.
@@ -157,27 +109,6 @@ import duckdb
 result = duckdb.sql("SELECT * FROM df WHERE amount > 100").pl()
 ```
 
-## marimo — Notebooks
-
-Reactive Python notebooks stored as plain `.py` files. Cells auto-re-execute when dependencies change.
-
-```bash
-marimo edit notebook.py              # Create/edit
-marimo run notebook.py               # Serve as app
-marimo convert notebook.ipynb -o out.py  # From Jupyter
-```
-
-**SQL cells** use DuckDB by default and return polars DataFrames:
-
-```python
-result = mo.sql(f"""
-    SELECT * FROM events
-    WHERE event_date >= '{start_date}'
-""")
-```
-
-Python variables and polars DataFrames are queryable from SQL cells and vice versa.
-
 ## dlt — Ingestion
 
 When a project uses dlt for ingestion. Handles API calls, pagination, schema inference, incremental loading, and state management.
@@ -186,7 +117,7 @@ When a project uses dlt for ingestion. Handles API calls, pagination, schema inf
 
 ```bash
 dlt init rest_api duckdb             # Scaffold pipeline
-uv run python pipeline.py           # Run extraction
+uv run python pipeline.py            # Run extraction
 dlt pipeline <name> info             # Inspect state
 dlt pipeline <name> schema           # View inferred schema
 ```
@@ -238,11 +169,11 @@ source = rest_api_source({
 
 **Write dispositions:**
 
-| Disposition | Behavior | Use For |
-|---|---|---|
-| `append` | Insert rows (default) | Immutable events, logs |
-| `replace` | Drop and recreate | Small lookup tables |
-| `merge` | Upsert by `primary_key` | Mutable records |
+| Disposition | Behavior                | Use For                |
+| ----------- | ----------------------- | ---------------------- |
+| `append`    | Insert rows (default)   | Immutable events, logs |
+| `replace`   | Drop and recreate       | Small lookup tables    |
+| `merge`     | Upsert by `primary_key` | Mutable records        |
 
 **Destinations:** `duckdb` (local file), `motherduck` (cloud). Set `motherduck_token` env var or configure in `.dlt/secrets.toml`.
 
@@ -264,14 +195,14 @@ sqlmesh ui                                       # Web interface
 
 ### Model Kinds
 
-| Kind | Behavior | Use For |
-|---|---|---|
-| `FULL` | Rewrite entire table | Small dimension tables |
-| `INCREMENTAL_BY_TIME_RANGE` | Process new time intervals | Facts, events, logs |
-| `INCREMENTAL_BY_UNIQUE_KEY` | Upsert by key | Mutable dimensions |
-| `SEED` | Static CSV data | Reference/lookup data |
-| `VIEW` | SQL view | Simple pass-throughs |
-| `SCD_TYPE_2` | Slowly changing dimensions | Historical tracking |
+| Kind                        | Behavior                   | Use For                |
+| --------------------------- | -------------------------- | ---------------------- |
+| `FULL`                      | Rewrite entire table       | Small dimension tables |
+| `INCREMENTAL_BY_TIME_RANGE` | Process new time intervals | Facts, events, logs    |
+| `INCREMENTAL_BY_UNIQUE_KEY` | Upsert by key              | Mutable dimensions     |
+| `SEED`                      | Static CSV data            | Reference/lookup data  |
+| `VIEW`                      | SQL view                   | Simple pass-throughs   |
+| `SCD_TYPE_2`                | Slowly changing dimensions | Historical tracking    |
 
 ### Model Example
 
