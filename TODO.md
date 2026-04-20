@@ -22,29 +22,27 @@
 
 ## Secrets on remote VMs
 
+Strategy decided 2026-04-16: secrets live in 1Password (source of truth), delivered to VMs as `.env` files via scripted scp over Tailscale. No `op` CLI or service accounts needed on VMs.
+
 Solved:
-- GitHub clone/push/signing — SSH agent forwarding via Tailscale (2026-04-12)
-- 1Password strategy decided (2026-04-16): single SA, single vault, 1P Environments for per-project injection
+- GitHub clone/push/signing — SSH agent forwarding via Tailscale
+- `TS_AUTHKEY` — passed as env var at VM creation (Mac-side biometric, one-time per VM)
 
-Requires Mac-side `op read` (biometric) + env var passing:
-- `TS_AUTHKEY` — needed once at VM creation to join the tailnet
-- Agents can't resolve this autonomously (Touch ID required)
+Not yet solved:
+- MCP servers — OAuth (MotherDuck, Tigris) needs a browser; GitHub MCP needs PATs
 
-Not yet solved for VMs:
-- MCP servers — OAuth (MotherDuck, Tigris) needs a browser; GitHub MCP needs PATs from 1Password
-
-Implementation:
-- [ ] Create `IVS-Sandbox` vault in 1Password
-- [ ] Create single SA (`ivs-sandbox-sa`) with read-only access to that vault
-- [ ] Store SA token in Employee vault for provisioning access
-- [ ] Create 1P Environments per project with secret variables
-- [ ] Build `provision-sandbox.sh` — push SA token to `~/.config/op/sa-token`, wire up `.zshrc`
-- [ ] Test `op run --environment <id>` on each platform (Sprite, exe.dev, Apple Container)
-- [ ] Evaluate Tailscale OAuth clients for reusable, non-expiring auth keys (removes `op read` dependency for `TS_AUTHKEY`)
+To do:
+- [ ] Set up 1P Environments per project as the organized source of truth for project secrets
+- [ ] Build `provision-secrets.sh` — reads from 1P Environments on Mac, generates `.env`, pushes to VMs via scp
+- [ ] Evaluate Tailscale OAuth clients for reusable, non-expiring auth keys (removes biometric dependency for `TS_AUTHKEY`)
 
 ## Apple Containers
 
 - [ ] `container create` broken in 0.11.0 — rootfs never provisioned (apple/container#1398). Workaround: `container run -d`. Skill already uses the workaround.
+
+## Done (2026-04-20)
+
+- [x] Added Snowflake CLI (`snow`) via `uv tool install snowflake-cli` in install.sh
 
 ## Done (2026-04-12)
 

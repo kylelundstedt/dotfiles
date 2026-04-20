@@ -247,6 +247,24 @@ install_cli_tools() {
     done
 }
 
+# --- install_python_clis ---
+# Python-based CLIs installed via `uv tool install` (binaries land in ~/.local/bin).
+# Runs after install_cli_tools so uv is guaranteed available.
+install_python_clis() {
+    echo ""
+    echo "=== Python CLIs (uv tool) ==="
+    if need uv; then
+        echo "  [!] uv not available, skipping"
+        return 0
+    fi
+    # snowflake-cli provides the `snow` command
+    if command -v snow >/dev/null 2>&1; then
+        uv tool upgrade snowflake-cli >/dev/null 2>&1 && echo "  [+] snow (upgraded)" || echo "  [+] snow (up to date)"
+    else
+        uv tool install snowflake-cli >/dev/null 2>&1 && echo "  [+] snow" || echo "  [!] snowflake-cli failed"
+    fi
+}
+
 # --- setup_node ---
 setup_node() {
     echo ""
@@ -807,6 +825,7 @@ echo ""
 
 install_system_deps
 install_cli_tools
+install_python_clis
 setup_node
 setup_tailscale
 setup_git

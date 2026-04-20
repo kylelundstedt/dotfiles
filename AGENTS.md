@@ -48,13 +48,14 @@ The install script sets up a machine from scratch. It self-bootstraps — when p
 1. **Bootstrap** — (only when not in repo) install git, clone to `~/dotfiles`, re-exec
 2. **System deps** — stow, zsh, git, curl (apt on Linux, Homebrew on macOS)
 3. **CLI tools** — installed in parallel via curl scripts and GitHub release binaries to `~/.local/bin` (starship, uv, atuin, zoxide, direnv, tigris, archil, fnm, bat, fzf, rg, jq, yq, gh, duckdb, carapace)
-4. **Node** — via fnm (LTS)
-5. **Git config** — OS include file, SSH config (macOS: multiplexing + agent forwarding for `*.ts.net` + MagicDNS hostname canonicalization; Linux: GitHub over port 443 + known hosts), identity (interactive prompt or default for non-interactive Linux). Commit signing is enabled at login time by `.zshrc` when a forwarded SSH agent is detected.
-6. **Shell** — set default shell to zsh
-7. **Stow** — all packages
-8. **Tailscale** — On Linux: install, start tailscaled (Sprite Service / systemd / bare nohup), authenticate with `--ssh`. On macOS with `--tailscale-ssh`: install open-source tailscale via brew formula, start tailscaled as a system daemon via `sudo brew services`, authenticate with `--ssh`. Without the flag on macOS: expects the standard Tailscale app. Once the brew formula is installed, subsequent runs auto-detect and maintain it.
-9. **Agents** — Claude Code CLI, Codex CLI, 1Password CLI (Linux), MCP server registration (remote HTTP), agent skills
-10. **Apps** (only with `--apps`) — `brew bundle` for casks/MAS apps, Sprite CLI, Apple Container CLI, LaunchAgents
+4. **Python CLIs** — `uv tool install` for Python-based tools (snowflake-cli → `snow`)
+5. **Node** — via fnm (LTS)
+6. **Git config** — OS include file, SSH config (macOS: multiplexing + agent forwarding for `*.ts.net` + MagicDNS hostname canonicalization; Linux: GitHub over port 443 + known hosts), identity (interactive prompt or default for non-interactive Linux). Commit signing is enabled at login time by `.zshrc` when a forwarded SSH agent is detected.
+7. **Shell** — set default shell to zsh
+8. **Stow** — all packages
+9. **Tailscale** — On Linux: install, start tailscaled (Sprite Service / systemd / bare nohup), authenticate with `--ssh`. On macOS with `--tailscale-ssh`: install open-source tailscale via brew formula, start tailscaled as a system daemon via `sudo brew services`, authenticate with `--ssh`. Without the flag on macOS: expects the standard Tailscale app. Once the brew formula is installed, subsequent runs auto-detect and maintain it.
+10. **Agents** — Claude Code CLI, Codex CLI, 1Password CLI (Linux), MCP server registration (remote HTTP), agent skills
+11. **Apps** (only with `--apps`) — `brew bundle` for casks/MAS apps, Sprite CLI, Apple Container CLI, LaunchAgents
 
 **Flags:** `--apps`, `--dry-run`, `--skip-stow`, `--skip-agents`, `--tailscale-ssh`
 
