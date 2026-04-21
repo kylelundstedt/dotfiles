@@ -11,43 +11,31 @@ exe.dev provides Linux VMs with persistent disks, instant HTTPS, and built-in au
 
 - Docs index: https://exe.dev/docs.md
 - All docs in one page (big!): https://exe.dev/docs/all.md
-- HTTPS API: https://blog.exe.dev/apis-for-the-restless
+- HTTPS API reference: https://exe.dev/docs/https-api.md
+- HTTPS API introduction (blog): https://blog.exe.dev/apis-for-the-restless
 
-## Two interfaces: HTTPS API and SSH
+## Three interfaces
 
-### HTTPS API (preferred for lobby commands)
+exe.dev officially documents three equal interfaces for VM management: **SSH**, **SSH API** (programmatic SSH), and **HTTPS API**. All use identical command syntax — the HTTPS API is "the SSH API shoved into a POST body." None is officially labeled preferred; pick based on context.
 
-The HTTPS API at `POST https://exe.dev/exec` is the reliable way to manage VMs. SSH to the exe.dev lobby is intermittently unreliable (connection timeouts).
+| Interface | When to use                                                                                        |
+| --------- | -------------------------------------------------------------------------------------------------- |
+| SSH       | Interactive lobby work; familiar unix-y experience                                                 |
+| SSH API   | Scripts where you already have the SSH agent loaded                                                |
+| HTTPS API | Scoped / time-limited tokens; environments where outbound port 22 is blocked; automation hardening |
 
-Mint a bearer token from your registered SSH key:
+### Lobby connection rate limiting
 
-```bash
-PERMS='{"cmds":["ls","new","rm","whoami"]}'
-PAYLOAD=$(printf '%s' "$PERMS" | base64 | tr -d '\n=' | tr '+/' '-_')
-SIG=$(printf '%s' "$PERMS" | ssh-keygen -Y sign -f ~/.ssh/exe_dev.pub -n v0@exe.dev 2>/dev/null | sed '1d;$d' | tr -d '\n' | tr '+/' '-_' | tr -d '=')
-TOKEN="exe0.$PAYLOAD.$SIG"
-```
+The `exe.dev` lobby silently drops inbound TCP SYNs when you exceed a per-source-IP connection rate (exact threshold undocumented). Empirically confirmed 2026-04-21: a burst of 5 `ssh exe.dev <cmd>` calls 0.5s apart produced 5/5 timeouts at port 22, and the source IP remained blocked at the TCP layer for minutes afterward. This is almost certainly intentional anti-abuse behavior, not instability.
 
-The `ssh-keygen -Y sign` works with 1Password's SSH agent — pass the public key file and the agent handles signing.
+**Avoid tripping it:**
 
-Use the token:
+- **Enable SSH multiplexing for `Host exe.dev`** (see "SSH config" below) — one persistent connection carries many commands, so repeated `ssh exe.dev` calls stay under the threshold. This is the single most important config for interactive use.
+- **Use the HTTPS API for scripts or agents** that need to issue many lobby commands. Its rate limit is per SSH key (documented) rather than a silent per-IP block.
 
-```bash
-# List VMs
-curl -s -X POST https://exe.dev/exec -H "Authorization: Bearer $TOKEN" -d "ls"
+Direct VM SSH (`ssh <vm>.exe.xyz`) is a different endpoint and does not show this behavior.
 
-# Create VM
-curl -s -X POST https://exe.dev/exec -H "Authorization: Bearer $TOKEN" -d "new --name myvm --image ubuntu:24.04"
-
-# Delete VM
-curl -s -X POST https://exe.dev/exec -H "Authorization: Bearer $TOKEN" -d "rm myvm"
-```
-
-Token permissions control which commands are allowed. The `cmds` array in the permissions JSON must include every command the token needs. Response is always JSON.
-
-### SSH (for VM access)
-
-Direct VM access uses standard SSH:
+### Direct VM access (SSH only)
 
 ```bash
 ssh <vm>.exe.xyz              # shell
@@ -55,6 +43,42 @@ scp file.txt <vm>.exe.xyz:~/  # transfer file
 ```
 
 Every VM gets `https://<vm>.exe.xyz/` with automatic TLS.
+
+## HTTPS API and scoped tokens
+
+The HTTPS API's distinguishing feature is SSH-signed bearer tokens with scoped permissions — useful for handing limited authority to agents, scripts, or CI jobs without giving out your full SSH key.
+
+Token format: `exe0.<base64url-payload>.<base64url-signature>`. Payload is signed JSON with four fields:
+
+| Field  | Purpose                                                                                                  |
+| ------ | -------------------------------------------------------------------------------------------------------- |
+| `cmds` | Explicit command allowlist. Parent commands do NOT grant subcommands (`ssh-key` ≠ `ssh-key list`)        |
+| `exp`  | Unix expiration timestamp. Docs "strongly recommend always setting `exp`" even though default is forever |
+| `nbf`  | Not-before timestamp (for scheduled tokens)                                                              |
+| `ctx`  | Arbitrary signed JSON passed to VMs via `X-ExeDev-Token-Ctx`; app-level authz data                       |
+
+Rate limits are **per SSH key** — use separate keys for independent workloads. No replay protection, so keep tokens short-lived. 8KB max.
+
+### Minting a token
+
+```bash
+PERMS='{"cmds":["ls","new","rm","whoami"],"exp":1800000000}'
+PAYLOAD=$(printf '%s' "$PERMS" | base64 | tr -d '\n=' | tr '+/' '-_')
+SIG=$(printf '%s' "$PERMS" | ssh-keygen -Y sign -f ~/.ssh/exe_dev.pub -n v0@exe.dev 2>/dev/null | sed '1d;$d' | tr -d '\n' | tr '+/' '-_' | tr -d '=')
+TOKEN="exe0.$PAYLOAD.$SIG"
+```
+
+`ssh-keygen -Y sign` works with 1Password's SSH agent — pass the public key file and the agent handles signing.
+
+### Using the token
+
+```bash
+curl -s -X POST https://exe.dev/exec -H "Authorization: Bearer $TOKEN" -d "ls"
+curl -s -X POST https://exe.dev/exec -H "Authorization: Bearer $TOKEN" -d "new --name myvm --image ubuntu:24.04"
+curl -s -X POST https://exe.dev/exec -H "Authorization: Bearer $TOKEN" -d "rm myvm"
+```
+
+Response is always JSON.
 
 ## VM defaults
 
@@ -72,19 +96,26 @@ Every VM gets `https://<vm>.exe.xyz/` with automatic TLS.
 
 ## SSH config
 
-The exe.dev SSH key must be pinned to avoid 1Password's agent offering wrong keys:
+Two blocks: the exe.dev key must be pinned (to avoid 1Password's agent offering other keys), and the lobby host needs connection multiplexing (to avoid the rate-limit block described above).
 
 ```
+Host exe.dev
+  ControlMaster auto
+  ControlPath ~/.ssh/sockets/%r@%h-%p
+  ControlPersist 600
+
 Host exe.dev *.exe.xyz
   IdentitiesOnly yes
   IdentityFile ~/.ssh/exe_dev.pub
 ```
 
+Multiplexing is only for `exe.dev` (the lobby). Do not add it for `*.exe.xyz` — VM SSH is a different endpoint, works fine without it, and multiplexing per-VM sockets complicates lifecycle.
+
 The private key lives in 1Password ("SSH Key - exe.dev" in Employee vault). Only the public key is on disk at `~/.ssh/exe_dev.pub`.
 
 ## Working in scripts and agents
 
-- **Prefer HTTPS API** for lobby commands (`ls`, `new`, `rm`). SSH to `exe.dev` is unreliable in automated contexts.
+- **HTTPS API is often the smoother choice for automation** — lobby SSH has observed timeouts, and you can scope the token's `cmds` so an agent only has the authority it needs.
 - **Use SSH multiplexing** for repeated VM access to avoid connection overhead:
   ```bash
   ssh -o ControlMaster=auto -o ControlPath=/tmp/ssh-%r@%h-%p -o ControlPersist=300 <vm>.exe.xyz
@@ -94,7 +125,7 @@ The private key lives in 1Password ("SSH Key - exe.dev" in Employee vault). Only
 
 ## Setting Up a Dev VM
 
-After creating a new VM, set up Tailscale and install dotfiles. Tailscale provides a stable hostname for SSH and enables agent forwarding from the Mac's 1Password SSH agent.
+After creating a new VM, set up Tailscale and install dotfiles. Tailscale provides a stable hostname and brings SSH agent forwarding from the Mac's 1Password SSH agent — which handles private repo clone, push, and commit signing uniformly across all dev VM platforms.
 
 ### 1. Install Tailscale and dotfiles
 
@@ -115,15 +146,15 @@ Do not proceed until this succeeds.
 
 ### 2. Clone project repos
 
-The Mac's SSH config forwards the 1Password agent to `*.ts.net` hosts (`ForwardAgent yes`). This means `ssh <vm>` (via Tailscale) gives the VM access to your GitHub SSH keys — no tokens needed. Clone directly:
+The Mac's SSH config sets `ForwardAgent yes` for `*.ts.net` hosts. `ssh <vm>` via Tailscale exposes the 1Password SSH agent to the VM, so git operations work with no tokens or keys on the VM:
 
 ```bash
 ssh <vm> git clone git@github.com:<org>/<repo>.git ~/<repo>
 ```
 
-Git commit signing is automatically enabled on first login via Tailscale SSH (the shell detects the forwarded agent).
+`.zshrc` detects the forwarded agent on login and enables commit signing automatically.
 
-**Alternative:** The exe.dev [GitHub integration](https://exe.dev/docs/integrations-github) provides clone/push access to private repos without tokens or Tailscale, but does not support commit signing.
+**Alternative (rarely needed):** The [exe.dev GitHub integration](https://exe.dev/docs/integrations-github) proxies private-repo clone/fetch/push via `https://<label>.int.exe.xyz/<org>/<repo>.git`, with no secrets on the VM. Useful when Tailscale isn't available, but does not cover commit signing — so typically still ends up paired with agent forwarding anyway.
 
 ### 3. Connect from Zed
 

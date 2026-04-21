@@ -348,6 +348,18 @@ SSHEOF
             echo "  [+] SSH multiplexing for github.com"
         fi
 
+        # SSH multiplexing for exe.dev lobby (avoids silent per-IP rate limit)
+        if ! grep -q '^Host exe.dev$' "$ssh_config" 2>/dev/null; then
+            cat >> "$ssh_config" <<'SSHEOF'
+
+Host exe.dev
+  ControlMaster auto
+  ControlPath ~/.ssh/sockets/%r@%h-%p
+  ControlPersist 600
+SSHEOF
+            echo "  [+] SSH multiplexing for exe.dev"
+        fi
+
         # Forward SSH agent to Tailscale VMs
         if ! grep -q 'ForwardAgent yes' "$ssh_config" 2>/dev/null; then
             cat >> "$ssh_config" <<'SSHEOF'
