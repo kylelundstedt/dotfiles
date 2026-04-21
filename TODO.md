@@ -20,20 +20,27 @@
 - [ ] Test end-to-end on exe.dev
 - [ ] Test end-to-end on Sprite (once checkpoint forking lands)
 
+> Re-evaluated 2026-04-21. exe.dev's `ghcr.io/boldsoftware/exeuntu` (Ubuntu 24.04, kitchen-sink apt list, systemd) is a usable public base image — if we revive this plan, consider extending exeuntu rather than building from scratch. Sprite still lacks custom-image support and checkpoint forking; no roadmap signal since Jan 2026. Decision: keep waiting, not urgent.
+
 ## Secrets on remote VMs
 
-Strategy decided 2026-04-16: secrets live in 1Password (source of truth), delivered to VMs as `.env` files via scripted scp over Tailscale. No `op` CLI or service accounts needed on VMs.
+Strategy (revised 2026-04-21): 1Password Environments per project; `op` CLI on VM authenticated with a scoped service-account token; secrets injected at runtime via `op run --env-file=<id> -- cmd`. No plaintext `.env` files on disk, no bespoke provisioning script, reactive to 1P changes. The SA token is the one bootstrap secret — provisioned to the VM at creation time via env var (same pattern as `TS_AUTHKEY`).
 
 Solved:
+
 - GitHub clone/push/signing — SSH agent forwarding via Tailscale
 - `TS_AUTHKEY` — passed as env var at VM creation (Mac-side biometric, one-time per VM)
 
 Not yet solved:
-- MCP servers — OAuth (MotherDuck, Tigris) needs a browser; GitHub MCP needs PATs
+
+- MCP server OAuth (MotherDuck, Tigris) — first-time browser flow can't be injected; needs separate strategy (port-forward Mac browser to VM, or per-machine auth)
 
 To do:
-- [ ] Set up 1P Environments per project as the organized source of truth for project secrets
-- [ ] Build `provision-secrets.sh` — reads from 1P Environments on Mac, generates `.env`, pushes to VMs via scp
+
+- [ ] Create per-project service account in 1P with read-only access to that project's vault
+- [ ] Extend `install.sh` to accept `OP_SERVICE_ACCOUNT_TOKEN` env var; write it to `~/.config/op/sa-token` on VM so `op` auto-authenticates
+- [ ] Set up first 1P Environment for a real project to validate the `op run --env-file` flow
+- [ ] Wire GitHub MCP PAT injection via `op run` at install time (replaces current `op read` on Mac)
 - [ ] Evaluate Tailscale OAuth clients for reusable, non-expiring auth keys (removes biometric dependency for `TS_AUTHKEY`)
 
 ## Apple Containers
