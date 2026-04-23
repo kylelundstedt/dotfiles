@@ -699,7 +699,8 @@ setup_tailscale() {
             # Sprite — register as a service so it survives sleep/wake
             sprite-env services create tailscaled --cmd /usr/sbin/tailscaled --args "--tun=userspace-networking" --no-stream 2>/dev/null || true
             sleep 2
-        elif command -v systemctl >/dev/null 2>&1; then
+        elif [ -d /run/systemd/system ]; then
+            # systemd is the active init system (not just installed as a dep)
             $SUDO systemctl enable --now tailscaled 2>/dev/null || true
         else
             # No systemd, no Sprite (e.g. Apple Containers, exe.dev) — start directly
