@@ -41,7 +41,7 @@ To do:
 - [ ] Extend `install.sh` to accept `OP_SERVICE_ACCOUNT_TOKEN` env var; write it to `~/.config/op/sa-token` on VM so `op` auto-authenticates
 - [ ] Set up first 1P Environment for a real project to validate the `op run --env-file` flow
 - [ ] Wire GitHub MCP PAT injection via `op run` at install time (replaces current `op read` on Mac)
-- [ ] Evaluate Tailscale OAuth clients for reusable, non-expiring auth keys (removes biometric dependency for `TS_AUTHKEY`)
+- [ ] Evaluate Tailscale OAuth clients with `auth_keys` + `devices` scopes — gives reusable non-expiring auth keys (removes biometric dependency for `TS_AUTHKEY`) AND programmatic node deletion via `DELETE /api/v2/device/{id}` (removes today's manual ghost-node cleanup in the admin console after every VM teardown)
 
 ## Apple Containers
 
