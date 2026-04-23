@@ -348,11 +348,11 @@ SSHEOF
             echo "  [+] SSH multiplexing for github.com"
         fi
 
-        # SSH multiplexing for exe.dev lobby (avoids silent per-IP rate limit)
-        if ! grep -q '^Host exe.dev$' "$ssh_config" 2>/dev/null; then
+        # SSH multiplexing for exe.dev lobby and direct VM SSH (avoids silent per-IP rate limit)
+        if ! grep -qF 'Host exe.dev *.exe.xyz' "$ssh_config" 2>/dev/null; then
             cat >> "$ssh_config" <<'SSHEOF'
 
-Host exe.dev
+Host exe.dev *.exe.xyz
   ControlMaster auto
   ControlPath ~/.ssh/sockets/%r@%h-%p
   ControlPersist 600
