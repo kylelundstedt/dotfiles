@@ -47,6 +47,18 @@ To do:
 
 - [ ] `container create` broken in 0.11.0 — rootfs never provisioned (apple/container#1398). Workaround: `container run -d`. Skill already uses the workaround.
 
+## install.sh on bare exe.dev VMs (ubuntu:24.04)
+
+Decision (2026-04-23): root stays root on exe.dev. Don't try to create a `klundstedt` user to match Apple Containers — Sprite is locked into `/home/sprite/` so the three-platform path can't be unified anyway. Convention: use `~`/`$HOME` in any code that needs to reference the home dir; per-VM users/paths stay platform-specific (AC = `/home/klundstedt`, Sprite = `/home/sprite`, exe.dev = `/root`).
+
+- [ ] `snowflake-cli` install via `uv tool install` failed on fresh ubuntu:24.04 VM. Investigate root cause (Python toolchain not yet available?).
+- [ ] `fnm` not available after CLI tools step → Node setup skipped → `npx` missing → skill installation skipped. Either install fnm earlier or fall back to a different node bootstrap.
+
+Done (2026-04-23):
+
+- [x] Added `cron` to apt deps (was missing on ubuntu:24.04, caused install.sh to abort at the `@reboot tailscaled` crontab call before Tailscale auth ran)
+- [x] Dropped the Linux-side `op read` fallback for `TS_AUTHKEY` — never reachable on a VM (op installed but not signed in). macOS fallback retained since op is signed into industryvault there.
+
 ## Done (2026-04-20)
 
 - [x] Added Snowflake CLI (`snow`) via `uv tool install snowflake-cli` in install.sh

@@ -157,7 +157,7 @@ install_system_deps() {
     if [[ "$OS" == "linux" ]]; then
         echo "Installing system packages via apt..."
         $SUDO apt-get update -qq 2>/dev/null || true
-        $SUDO apt-get install -y -qq stow zsh git curl unzip
+        $SUDO apt-get install -y -qq stow zsh git curl unzip cron
     elif [[ "$OS" == "macos" ]]; then
         if need brew; then
             echo "Homebrew is required on macOS. Install from https://brew.sh and re-run."
@@ -715,9 +715,6 @@ setup_tailscale() {
 
     # Authenticate with --ssh if we have an auth key
     local ts_key="${TS_AUTHKEY:-}"
-    if [[ -z "$ts_key" ]] && command -v op >/dev/null 2>&1; then
-        ts_key=$(op read "op://Employee/Tailscale - iv-internal-dev/credential" --account industryvault.1password.com 2>/dev/null) || true
-    fi
 
     if [[ -n "$ts_key" ]]; then
         local ts_hostname="${TS_HOSTNAME:-}"
