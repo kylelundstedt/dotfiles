@@ -1,7 +1,8 @@
 {
-  "skipDangerousModePermissionPrompt": true,
   "statusLine": {
     "type": "command",
     "command": "cship"
-  }
+  },
+  "skipDangerousModePermissionPrompt": true,
+  "theme": "dark-daltonized"
 }
