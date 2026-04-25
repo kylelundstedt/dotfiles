@@ -59,6 +59,21 @@ Done (2026-04-23):
 - [x] Added `cron` to apt deps (was missing on ubuntu:24.04, caused install.sh to abort at the `@reboot tailscaled` crontab call before Tailscale auth ran)
 - [x] Dropped the Linux-side `op read` fallback for `TS_AUTHKEY` — never reachable on a VM (op installed but not signed in). macOS fallback retained since op is signed into industryvault there.
 
+## Per-project VM helper (`exe-up`)
+
+One-command equivalent of today's per-VM bootstrap dance: `exe-up <vm-name> <github-org/repo>` creates the exe.dev VM, waits for ready, installs curl, runs `install.sh` with `TS_AUTHKEY`/`TS_HOSTNAME`, clones the repo via Tailscale-forwarded SSH, and adds the Zed `ssh_connections` entry. Worth doing — already at 5+ project VMs and growing one-per-repo.
+
+**Blocked on (do these first):**
+
+- [ ] Tailscale OAuth client with `devices` scope (see "Secrets on remote VMs"). Without programmatic node deletion, `--rebuild` would leave ghost nodes on every teardown — same friction we hit twice today. The helper without rebuild is half-useful; with it, that's the whole UX.
+- [ ] Sharing-across-folks story for secrets. Today's bootstrap path hardcodes `op://Employee/Tailscale - iv-internal-dev/credential` and the industryvault account. The helper needs to accept `TS_AUTHKEY` from env first, fall back to `op read` only as convenience for users with the same 1P setup, and document both paths in the exe-dev skill.
+
+**Design once unblocked:**
+
+- Idempotent by default — detect each piece (VM exists, Tailscale up, repo cloned, Zed bookmark present) and only do the missing parts. Safe to re-run after partial failure (which we needed several times today). Same purpose + fully set up → no-op with status. Same purpose + partial state → finish missing steps. Name collision + different purpose → bail with error.
+- `--rebuild` flag (with confirmation) for clean slate, only useful once ghost-node cleanup is automatic.
+- Lives at `~/.local/bin/exe-up` (stowable via existing pattern), not as a skill.
+
 ## Done (2026-04-20)
 
 - [x] Added Snowflake CLI (`snow`) via `uv tool install snowflake-cli` in install.sh
