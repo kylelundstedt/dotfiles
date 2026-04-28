@@ -12,6 +12,12 @@ export IS_SANDBOX=1
 
 command -v fnm >/dev/null && eval "$(fnm env)"
 
+# Export gh's stored token so tools that don't read ~/.config/gh/hosts.yml
+# (Ruff LSP, npm, curl) get the 5000/hr authenticated rate limit.
+if [ -z "${GITHUB_TOKEN:-}" ] && command -v gh >/dev/null 2>&1; then
+    GITHUB_TOKEN="$(gh auth token 2>/dev/null)" && export GITHUB_TOKEN
+fi
+
 # Tool-managed env (cargo, atuin)
 [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
 [ -f "$HOME/.atuin/bin/env" ] && . "$HOME/.atuin/bin/env"
