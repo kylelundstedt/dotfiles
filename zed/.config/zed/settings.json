@@ -39,7 +39,29 @@
       "projects": [
         {
           "paths": [
+            "/root"
+          ]
+        },
+        {
+          "paths": [
             "/root/gitlake"
+          ]
+        }
+      ]
+    },
+    {
+      "host": "dotfiles",
+      "username": "root",
+      "args": [],
+      "projects": [
+        {
+          "paths": [
+            "/root"
+          ]
+        },
+        {
+          "paths": [
+            "/root/dotfiles"
           ]
         }
       ]
@@ -113,7 +135,7 @@
     },
     "claude-acp": {
       "default_config_options": {
-        "mode": "auto"
+        "mode": "bypassPermissions"
       },
       "type": "registry"
     }
