@@ -342,6 +342,11 @@ setup_node() {
             [[ -e "$fnm_default/$bin" ]] && ln -sf "$fnm_default/$bin" "$LOCAL_BIN/$bin"
         done
     fi
+
+    # disk: Archil's npm-distributed CLI, complements the native `archil` CLI
+    if command -v npm >/dev/null 2>&1 && need disk; then
+        npm install -g disk >/dev/null 2>&1 && echo "  [+] disk" || echo "  [!] disk install failed"
+    fi
 }
 
 # --- setup_git ---
