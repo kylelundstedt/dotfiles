@@ -360,6 +360,19 @@ SSHEOF
             echo "  [+] SSH multiplexing for exe.dev"
         fi
 
+        # Pin exe.dev to its dedicated key (1Password agent offers many keys; exe.dev
+        # rejects unknown keys with "Please complete registration"). Additive second
+        # Host stanza — SSH merges with the multiplexing block above.
+        if ! grep -qF 'IdentityFile ~/.ssh/exe_dev.pub' "$ssh_config" 2>/dev/null; then
+            cat >> "$ssh_config" <<'SSHEOF'
+
+Host exe.dev *.exe.xyz
+  IdentitiesOnly yes
+  IdentityFile ~/.ssh/exe_dev.pub
+SSHEOF
+            echo "  [+] SSH key pinning for exe.dev"
+        fi
+
         # Forward SSH agent to Tailscale VMs
         if ! grep -q 'ForwardAgent yes' "$ssh_config" 2>/dev/null; then
             cat >> "$ssh_config" <<'SSHEOF'
@@ -399,6 +412,32 @@ SSHEOF
         if ! grep -q 'ssh.github.com' "$HOME/.ssh/known_hosts" 2>/dev/null; then
             ssh-keyscan -p 443 ssh.github.com >> "$HOME/.ssh/known_hosts" 2>/dev/null
             echo "  [+] GitHub known host"
+        fi
+
+        # SSH multiplexing for exe.dev lobby and direct VM SSH (avoids silent per-IP rate limit)
+        if ! grep -qF 'Host exe.dev *.exe.xyz' "$ssh_config" 2>/dev/null; then
+            cat >> "$ssh_config" <<'SSHEOF'
+
+Host exe.dev *.exe.xyz
+  ControlMaster auto
+  ControlPath ~/.ssh/sockets/%r@%h-%p
+  ControlPersist 600
+SSHEOF
+            echo "  [+] SSH multiplexing for exe.dev"
+        fi
+
+        # Pin exe.dev to its dedicated key — needed when a forwarded 1Password agent
+        # carries multiple keys; without pinning, exe.dev rejects whichever key is
+        # offered first as an unknown-user registration attempt. Pubkey is stowed
+        # from ssh/.ssh/exe_dev.pub.
+        if ! grep -qF 'IdentityFile ~/.ssh/exe_dev.pub' "$ssh_config" 2>/dev/null; then
+            cat >> "$ssh_config" <<'SSHEOF'
+
+Host exe.dev *.exe.xyz
+  IdentitiesOnly yes
+  IdentityFile ~/.ssh/exe_dev.pub
+SSHEOF
+            echo "  [+] SSH key pinning for exe.dev"
         fi
     fi
 
