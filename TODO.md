@@ -54,6 +54,10 @@ Decision (2026-04-23): root stays root on exe.dev. Don't try to create a `klunds
 - [ ] `snowflake-cli` install via `uv tool install` failed on fresh ubuntu:24.04 VM. Investigate root cause (Python toolchain not yet available?).
 - [ ] `fnm` not available after CLI tools step → Node setup skipped → `npx` missing → skill installation skipped. Either install fnm earlier or fall back to a different node bootstrap.
 
+Done (2026-05-01):
+
+- [x] Switched no-systemd branch to kernel-mode tailscaled (dropped `--tun=userspace-networking` from the `nohup` start and `@reboot` cron line). Verified on exe.dev: `/dev/net/tun` is exposed, `tailscale0` interface comes up. Migrated existing exe.dev VMs (`dotfiles`, `gitlake`, `gse-lld`) in place; node identities preserved (no ghosts). Apple Container behavior on this branch not retested.
+
 Done (2026-04-23):
 
 - [x] Added `cron` to apt deps (was missing on ubuntu:24.04, caused install.sh to abort at the `@reboot tailscaled` crontab call before Tailscale auth ran)
