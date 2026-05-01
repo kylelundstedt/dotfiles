@@ -9,18 +9,25 @@
 {
   "ssh_connections": [
     {
+      "host": "dotfiles",
+      "username": "root",
+      "args": [],
+      "projects": [
+        {
+          "paths": [
+            "/root/dotfiles"
+          ]
+        }
+      ]
+    },
+    {
       "host": "gse-lld",
       "username": "root",
       "args": [],
       "projects": [
         {
           "paths": [
-            "/root"
-          ]
-        },
-        {
-          "paths": [
-            "/root/gse-lld"
+            "/root/gse-lld/./"
           ]
         }
       ]
@@ -98,6 +105,12 @@
     "typst": true
   },
   "agent_servers": {
+    "cortex-code": {
+      "type": "registry"
+    },
+    "codex-acp": {
+      "type": "registry"
+    },
     "claude-acp": {
       "default_config_options": {
         "mode": "auto"

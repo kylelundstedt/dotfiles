@@ -273,7 +273,7 @@ setup_node() {
         echo "  [!] fnm not available, skipping node setup"
         return 0
     fi
-    eval "$(fnm env)"
+    eval "$(fnm env --shell bash)"
     if need node; then
         fnm install --lts >/dev/null 2>&1 && echo "  [+] node $(node --version)" || echo "  [!] node install failed"
     else
@@ -710,6 +710,21 @@ setup_tailscale() {
                 echo "  Already authenticated"
             else
                 echo "  [!] sudo required. Run interactively: sudo tailscale up --ssh"
+            fi
+            # Open-source tailscaled doesn't configure macOS split DNS automatically.
+            # Add /etc/resolver/ts.net so MagicDNS short names resolve.
+            if [[ ! -f /etc/resolver/ts.net ]] && tailscale status --json >/dev/null 2>&1; then
+                local ts_suffix
+                ts_suffix=$(tailscale status --json 2>/dev/null | jq -r '.MagicDNSSuffix // empty')
+                if [[ -n "$ts_suffix" ]]; then
+                    if sudo -n true 2>/dev/null; then
+                        sudo mkdir -p /etc/resolver
+                        printf 'nameserver 100.100.100.100\nsearch %s\n' "$ts_suffix" | sudo tee /etc/resolver/ts.net >/dev/null
+                        echo "  [+] MagicDNS resolver (/etc/resolver/ts.net)"
+                    else
+                        echo "  [!] MagicDNS resolver missing. Run: sudo mkdir -p /etc/resolver && printf 'nameserver 100.100.100.100\\nsearch $ts_suffix\\n' | sudo tee /etc/resolver/ts.net"
+                    fi
+                fi
             fi
         else
             # Standard Tailscale app (GUI with sandboxed network extension)
