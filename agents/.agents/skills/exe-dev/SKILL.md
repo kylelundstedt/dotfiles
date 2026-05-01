@@ -127,6 +127,22 @@ A running VM is reachable at two SSH endpoints once dotfiles are installed:
 
 **Rule of thumb:** if Tailscale is up on the VM, reach for `ssh <vm>` first. Reserve `ssh <vm>.exe.xyz` for the bootstrap window and emergencies.
 
+### VM-to-VM access: use `tailscale ssh`, not `ssh`
+
+The endpoints above assume you're connecting **from the Mac** (where Tailscale runs in kernel mode with a real `utun` interface and working MagicDNS). Connecting **from one VM to another** is different: exe.dev (and Apple Containers, Sprites) all run `tailscaled --tun=userspace-networking`, which has no `tailscale0` interface and no kernel route to tailnet IPs (`100.x.y.z`). Symptoms of treating it like the Mac:
+
+- `ssh gitlake` → "Could not resolve hostname" (MagicDNS resolver `100.100.100.100` is itself a tailnet IP and unreachable from the host stack).
+- `ssh root@100.100.109.23` → connect timeout (kernel has no route to the tailnet).
+
+**The fix is `tailscale ssh <vm>`.** It resolves names via tailscaled's control socket (no DNS needed), pipes the connection through tailscaled's userspace-networking proxy (no kernel route needed), and validates the destination's host key against Tailscale's coordination server. Works from any VM whether Tailscale is in kernel or userspace mode.
+
+```bash
+# from inside any VM
+tailscale ssh gitlake -- 'cd ~/dotfiles && git pull && ./install.sh'
+```
+
+Note: still subject to Tailscale ACL `ssh:` rules in the admin console.
+
 ## Setting Up a Dev VM
 
 After creating a new VM, set up Tailscale and install dotfiles. Tailscale provides a stable hostname and brings SSH agent forwarding from the Mac's 1Password SSH agent — which handles private repo clone, push, and commit signing uniformly across all dev VM platforms.

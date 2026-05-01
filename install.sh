@@ -765,10 +765,10 @@ setup_tailscale() {
                 fi
 
                 if [[ -n "$ts_key" ]]; then
-                    sudo tailscale up --ssh --authkey="$ts_key" 2>/dev/null && echo "  [+] Tailscale up (SSH enabled)" || echo "  [!] tailscale up failed"
+                    sudo tailscale up --ssh --accept-dns --authkey="$ts_key" 2>/dev/null && echo "  [+] Tailscale up (SSH enabled)" || echo "  [!] tailscale up failed"
                 elif tailscale status >/dev/null 2>&1; then
                     echo "  Already authenticated"
-                    sudo tailscale set --ssh 2>/dev/null || true
+                    sudo tailscale set --ssh --accept-dns 2>/dev/null || true
                 else
                     echo "  No auth key found. Run: sudo tailscale up --ssh"
                 fi
@@ -840,11 +840,11 @@ setup_tailscale() {
 
     if [[ -n "$ts_key" ]]; then
         local ts_hostname="${TS_HOSTNAME:-}"
-        $SUDO tailscale up --ssh --authkey="$ts_key" ${ts_hostname:+--hostname "$ts_hostname"} 2>/dev/null && echo "  [+] Tailscale up (SSH enabled${ts_hostname:+, hostname=$ts_hostname})" || echo "  [!] tailscale up failed"
+        $SUDO tailscale up --ssh --accept-dns --authkey="$ts_key" ${ts_hostname:+--hostname "$ts_hostname"} 2>/dev/null && echo "  [+] Tailscale up (SSH enabled${ts_hostname:+, hostname=$ts_hostname})" || echo "  [!] tailscale up failed"
     elif tailscale status >/dev/null 2>&1; then
         echo "  Already authenticated"
-        # Ensure SSH is enabled
-        $SUDO tailscale set --ssh 2>/dev/null || true
+        # Ensure SSH and DNS are enabled
+        $SUDO tailscale set --ssh --accept-dns 2>/dev/null || true
     else
         echo "  No auth key found. Run: sudo tailscale up --ssh"
     fi
