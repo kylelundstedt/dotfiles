@@ -46,7 +46,6 @@ cask "obsidian", args: { appdir: "/Applications" }
 # cask "omnioutliner", args: { appdir: "/Applications" }
 # cask "omniplan", args: { appdir: "/Applications" }
 # cask "positron"
-cask "quarto"
 cask "rocket"
 cask "rustdesk", args: { appdir: "/Applications" }
 # cask "rstudio"

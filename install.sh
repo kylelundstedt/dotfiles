@@ -151,6 +151,57 @@ install_github_binary() {
     rm -rf "$tmp"
 }
 
+# Quarto: install tarball to ~/.local/share/quarto, symlink binary to ~/.local/bin.
+# Replaces the Brewfile cask, whose .pkg installer required sudo on every run.
+install_quarto() {
+    local arch quarto_arch
+    arch=$(uname -m)
+    case "$OS-$arch" in
+        macos-*)        quarto_arch="macos" ;;
+        linux-x86_64)   quarto_arch="linux-amd64" ;;
+        linux-aarch64)  quarto_arch="linux-arm64" ;;
+        *) echo "  [!] quarto: unsupported $OS-$arch"; return 1 ;;
+    esac
+    local api="https://api.github.com/repos/quarto-dev/quarto-cli/releases/latest"
+    local -a opts=(-fsSL)
+    [[ -n "${GITHUB_TOKEN:-}" ]] && opts+=(-H "Authorization: token $GITHUB_TOKEN")
+    local resp version url
+    resp=$(curl "${opts[@]}" "$api" 2>/dev/null) || { echo "  [!] quarto: API fetch failed"; return 1; }
+    version=$(echo "$resp" | grep -oE '"tag_name": "v[^"]+"' | head -1 | sed 's/.*"v\([^"]*\)".*/\1/')
+    [[ -z "$version" ]] && { echo "  [!] quarto: no version in release"; return 1; }
+    url=$(echo "$resp" \
+        | grep -oE "\"browser_download_url\": \"[^\"]+\"" \
+        | grep -F "quarto-${version}-${quarto_arch}.tar.gz" \
+        | head -1 \
+        | sed 's/"browser_download_url": "//;s/"//')
+    [[ -z "$url" ]] && { echo "  [!] quarto: no asset for $quarto_arch"; return 1; }
+
+    local dest="$HOME/.local/share/quarto"
+    if [[ -L "$LOCAL_BIN/quarto" && -d "$dest/quarto-$version" ]]; then
+        echo "  [+] quarto $version (up to date)"
+        return 0
+    fi
+
+    local tmp; tmp=$(mktemp -d)
+    if curl "${opts[@]}" "$url" -o "$tmp/q.tgz"; then
+        mkdir -p "$dest"
+        # Drop older versions and any unversioned legacy layout
+        find "$dest" -maxdepth 1 -mindepth 1 -exec rm -rf {} +
+        mkdir -p "$dest/quarto-$version"
+        # Linux tarballs wrap contents in quarto-X.Y.Z/; macOS tarball doesn't.
+        if tar -tzf "$tmp/q.tgz" | head -1 | grep -q "^quarto-${version}/"; then
+            tar -xzf "$tmp/q.tgz" -C "$dest/quarto-$version" --strip-components=1
+        else
+            tar -xzf "$tmp/q.tgz" -C "$dest/quarto-$version"
+        fi
+        ln -sf "$dest/quarto-$version/bin/quarto" "$LOCAL_BIN/quarto"
+        echo "  [+] quarto $version"
+    else
+        echo "  [!] quarto: download failed"
+    fi
+    rm -rf "$tmp"
+}
+
 # --- install_system_deps ---
 install_system_deps() {
     echo "=== System dependencies ==="
@@ -239,6 +290,8 @@ install_cli_tools() {
     (install_github_binary "carapace-sh/carapace-bin" "carapace-bin_.*_${gh_os}_${gh_arch}\\.tar\\.gz" "carapace" "carapace") &
     pids+=($!)
     (install_github_binary "stephenleo/cship" "cship-${target_triple}" "cship" "cship-${target_triple}") &
+    pids+=($!)
+    (install_quarto) &
     pids+=($!)
 
     # Wait for all parallel installs
