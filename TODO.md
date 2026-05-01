@@ -74,6 +74,46 @@ One-command equivalent of today's per-VM bootstrap dance: `exe-up <vm-name> <git
 - `--rebuild` flag (with confirmation) for clean slate, only useful once ghost-node cleanup is automatic.
 - Lives at `~/.local/bin/exe-up` (stowable via existing pattern), not as a skill.
 
+## Consolidate on exe.dev (Sprite + Apple Containers on back burner)
+
+Decision (2026-05-01): focus the dev-VM stack on exe.dev. Phase 1 (kernel-mode Tailscale on exe.dev, plain `ssh <vm>` works VM-to-VM) shipped same day. Phases below queued.
+
+### Phase 2 — Reorient docs/skills
+
+- [ ] Demote `apple-containers` and `sprites-dev` in root `CLAUDE.md` from peer recommendations to "alternative paths, not actively maintained."
+- [ ] Same edit in `agents/.agents/AGENTS.md`.
+- [ ] README touch-up if it lists all three as equals.
+- [ ] Leave the skill files themselves on disk — still functional, just no longer the recommended path.
+
+### Phase 3 — Unblock exe.dev-specific work
+
+- [ ] Build `exe-up` per-project helper (see "Per-project VM helper" above) — was blocked partly on cross-platform symmetry, no longer is.
+- [ ] Service-account-token / `op run --env-file` flow (see "Secrets on remote VMs") — drop the cross-platform constraints and just make it work on exe.dev.
+
+### Phase 4 — Cleanup (low priority)
+
+- [ ] Mark `test-install.sh`'s Apple Container and Sprite paths informational (don't fail CI).
+- [ ] Drop the platform-specific home-dir convention from "install.sh on bare exe.dev VMs" — irrelevant once exe.dev (`/root`) is the only target.
+- [ ] Consider archiving `sprites-dev` skill to a `legacy/` folder. Not urgent.
+
+### Upgrade path for existing VMs (one-time, manual)
+
+`install.sh` change makes new VMs come up in kernel mode automatically and self-heals the @reboot crontab. Existing VMs (`gitlake`, `gse-lld`, `dotfiles`) keep running in their current mode until tailscaled restarts. To switch a running VM to kernel mode without rebooting:
+
+```bash
+ssh root@<vm>.exe.xyz 'pkill -x tailscaled; sleep 2; nohup tailscaled >/var/log/tailscaled.log 2>&1 &'
+```
+
+Use lobby SSH (`*.exe.xyz`), not Tailscale SSH — restarting tailscaled on the destination drops any in-flight Tailscale SSH session. Safe to re-run.
+
+## Tailscale ACL
+
+VM-to-VM SSH unblocked 2026-05-01 with broad `tag:dev` → `tag:dev` rules (network grant + Tailscale SSH, root included). Single compromised dev VM = root on all of them. Acceptable now (small handful of personal VMs) but worth tightening.
+
+- [ ] Drop `root` from the `tag:dev` → `tag:dev` SSH `users` list, force a non-root account.
+- [ ] Or split tags: only mesh-connect VMs that need it (e.g. `tag:dev-mesh`) and keep solo VMs on plain `tag:dev` with no peer access.
+- [ ] Or port-restrict the network grant: replace `"ip": ["*"]` with explicit ports (`*:22` plus whatever else cross-VM traffic actually uses).
+
 ## Done (2026-04-20)
 
 - [x] Added Snowflake CLI (`snow`) via `uv tool install snowflake-cli` in install.sh

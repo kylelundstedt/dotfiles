@@ -813,10 +813,16 @@ setup_tailscale() {
         echo "  [+] Tailscale"
     fi
 
+    # Prefer kernel mode (real tailscale0 interface, working MagicDNS, plain ssh
+    # to peers) when /dev/net/tun is available. Fall back to userspace mode for
+    # platforms that don't expose TUN (Sprite, some Apple Containers configs).
+    local ts_args=""
+    [ -c /dev/net/tun ] || ts_args="--tun=userspace-networking"
+
     # Start tailscaled if not running
     if ! pgrep -x tailscaled >/dev/null 2>&1; then
         if [ -d "/.sprite" ] && command -v sprite-env >/dev/null 2>&1; then
-            # Sprite — register as a service so it survives sleep/wake
+            # Sprite — register as a service so it survives sleep/wake (always userspace)
             sprite-env services create tailscaled --cmd /usr/sbin/tailscaled --args "--tun=userspace-networking" --no-stream 2>/dev/null || true
             sleep 2
         elif [ -d /run/systemd/system ]; then
@@ -824,14 +830,24 @@ setup_tailscale() {
             $SUDO systemctl enable --now tailscaled 2>/dev/null || true
         else
             # No systemd, no Sprite (e.g. Apple Containers, exe.dev) — start directly
-            $SUDO sh -c 'nohup tailscaled --tun=userspace-networking >/dev/null 2>&1 &'
+            $SUDO sh -c "nohup tailscaled $ts_args >/dev/null 2>&1 &"
             sleep 2
-            # Add @reboot cron entry so tailscaled survives container/VM restarts
-            local cron_cmd='@reboot nohup tailscaled --tun=userspace-networking >/dev/null 2>&1 &'
-            if ! ($SUDO crontab -l 2>/dev/null | grep -qF 'tailscaled'); then
-                # `|| true` keeps set -e from killing the subshell when no crontab exists yet
-                ($SUDO crontab -l 2>/dev/null || true; echo "$cron_cmd") | $SUDO crontab -
-            fi
+        fi
+    fi
+
+    # Maintain @reboot cron entry on platforms without an init system.
+    # Self-heals stale flags (e.g. a previous install used userspace mode).
+    if ! [ -d "/.sprite" ] && ! [ -d /run/systemd/system ]; then
+        local cron_cmd
+        if [[ -n "$ts_args" ]]; then
+            cron_cmd="@reboot nohup tailscaled $ts_args >/dev/null 2>&1 &"
+        else
+            cron_cmd="@reboot nohup tailscaled >/dev/null 2>&1 &"
+        fi
+        local current_cron
+        current_cron=$($SUDO crontab -l 2>/dev/null || true)
+        if ! printf '%s\n' "$current_cron" | grep -qxF "$cron_cmd"; then
+            { printf '%s\n' "$current_cron" | grep -v 'tailscaled' | grep -v '^$' || true; echo "$cron_cmd"; } | $SUDO crontab -
         fi
     fi
 
