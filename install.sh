@@ -557,6 +557,14 @@ run_stow() {
     echo ""
     echo "=== Stow ==="
 
+    # agents/.claude/settings.json is gitignored (Claude Code mutates it at runtime).
+    # Seed it from the example so stow has something to link.
+    local claude_settings="$DOTFILES_DIR/agents/.claude/settings.json"
+    if [[ ! -f "$claude_settings" && -f "${claude_settings}.example" ]]; then
+        cp "${claude_settings}.example" "$claude_settings"
+        echo "  Seeded agents/.claude/settings.json from example"
+    fi
+
     # Always stow these
     local packages=("git" "zsh" "starship" "agents")
 

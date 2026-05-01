@@ -30,4 +30,5 @@ git/.gitconfig_personal
 git/.gitconfig_work
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+agents/.claude/settings.json
 .install-apps.log
