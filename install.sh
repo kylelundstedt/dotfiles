@@ -575,11 +575,22 @@ run_stow() {
         packages+=("aws" "ssh")
     fi
 
-    # Backup files that conflict with the agents stow package
+    # Backup files/symlinks that conflict with the agents stow package.
+    # On boldsoftware/exeuntu (default exe.dev image), .claude/CLAUDE.md and
+    # .codex/AGENTS.md are pre-created as absolute symlinks into Bold's
+    # ~/.config/shelley/ tree. Foreign symlinks must be moved aside before
+    # stow will write its own; stow-created symlinks (target inside
+    # $DOTFILES_DIR) are left alone so reruns are idempotent.
     for f in "$HOME/.claude/settings.json" "$HOME/.claude/CLAUDE.md" "$HOME/.codex/AGENTS.md" "$HOME/.agents/AGENTS.md"; do
         if [[ -f "$f" && ! -L "$f" ]]; then
             mv "$f" "${f}.pre-dotfiles.$(date +%Y%m%d%H%M%S)"
             echo "  Backed up $f"
+        elif [[ -L "$f" ]]; then
+            target=$(readlink -f "$f" 2>/dev/null || true)
+            if [[ -n "$target" && "$target" != "$DOTFILES_DIR"/* ]]; then
+                mv "$f" "${f}.pre-dotfiles.$(date +%Y%m%d%H%M%S)"
+                echo "  Backed up foreign symlink $f → $target"
+            fi
         fi
     done
 
