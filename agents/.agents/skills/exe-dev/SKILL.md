@@ -81,11 +81,11 @@ Response is always JSON.
 
 ## VM defaults
 
-- **Default user is root** with no sudo installed. If you need a non-root user, install sudo first:
-  ```bash
-  ssh <vm>.exe.xyz "apt-get update -qq && apt-get install -y -qq sudo && useradd -m -s /bin/bash myuser && echo 'myuser ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/myuser"
-  ```
-- **Image:** `ubuntu:24.04` is the standard choice. exe.dev also offers `boldsoftware/exeuntu`.
+- **Image:** `boldsoftware/exeuntu` is the default — `ssh exe.dev new` (no `--image`) creates an exeuntu VM. Use `--image=ubuntu:24.04` for a barebones Ubuntu instead. exeuntu is Ubuntu 24.04 with Bold's overlay (Shelley/Pi agent stack at `~/.config/shelley/` and `~/.pi/`, `~/.zed_server/` pre-staged, kitchen-sink apt list including the Python build deps that broke `uv tool install snowflake-cli` on plain ubuntu).
+- **Default user:** depends on image.
+  - **exeuntu:** `exedev` (uid 1000, in `sudo` and `docker` groups, NOPASSWD sudo). `$HOME=/home/exedev`. Standard non-root dev pattern.
+  - **ubuntu:24.04:** `root` with no sudo installed. To create a non-root user: `ssh <vm>.exe.xyz "apt-get update -qq && apt-get install -y -qq sudo && useradd -m -s /bin/bash myuser && echo 'myuser ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/myuser"`.
+- **Pre-existing `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md` on exeuntu** are absolute symlinks into `~/.config/shelley/AGENTS.md`. The dotfiles `install.sh` detects and backs them up (`*.pre-dotfiles.<timestamp>`) before stowing the `agents` package. Bold's underlying file at `~/.config/shelley/AGENTS.md` is preserved.
 
 ## VM naming rules
 
@@ -132,11 +132,12 @@ A running VM is reachable at two SSH endpoints once dotfiles are installed:
 exe.dev VMs have `/dev/net/tun` and `CAP_NET_ADMIN`, so `install.sh` runs `tailscaled` in **kernel mode** — a real `tailscale0` interface, kernel routes for `100.0.0.0/8`, MagicDNS wired into the system resolver. Plain `ssh <vm>` works VM-to-VM the same way it does from the Mac.
 
 ```bash
-# from inside any exe.dev VM
-ssh root@gitlake 'cd ~/dotfiles && git pull && ./install.sh'
+# from inside any exe.dev VM (use the username that matches the destination's image)
+ssh exedev@gitlake 'cd ~/dotfiles && git pull && ./install.sh'   # exeuntu
+ssh root@gitlake 'cd ~/dotfiles && git pull && ./install.sh'     # ubuntu:24.04
 ```
 
-This still requires the Tailscale ACL to permit `tag:dev` → `tag:dev` for both the network grant and the SSH rule (admin console).
+This requires the Tailscale ACL to permit `tag:dev` → `tag:dev` for both the network grant and the SSH rule (admin console). The SSH rule's `users` list must include whichever destination user(s) you log in as — typically `exedev` for exeuntu, `root` for ubuntu:24.04.
 
 **Userspace-mode fallback.** If `/dev/net/tun` isn't available (some Apple Containers configs, Sprite), `install.sh` falls back to `tailscaled --tun=userspace-networking`. Plain `ssh <vm>` won't work in that mode (no kernel route to tailnet IPs); use `tailscale ssh <vm>` instead, which proxies through tailscaled's userspace TCP stack.
 
@@ -175,8 +176,9 @@ ssh <vm> git clone git@github.com:<org>/<repo>.git ~/<repo>
 
 ### 3. Connect from Zed
 
-Use the Tailscale hostname (short form works thanks to the canonicalization block in `~/.ssh/config`):
+Use the Tailscale hostname (short form works thanks to the canonicalization block in `~/.ssh/config`). The user and home path depend on the image:
 
 ```bash
-zed ssh://root@<vm>/root/<repo>
+zed ssh://exedev@<vm>/home/exedev/<repo>   # exeuntu (default)
+zed ssh://root@<vm>/root/<repo>            # ubuntu:24.04
 ```
