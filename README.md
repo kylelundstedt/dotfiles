@@ -112,6 +112,7 @@ Both Claude Code and Codex CLI share a single instruction file (`AGENTS.md`) dep
 | `brand-yml`         | [posit-dev/skills](https://github.com/posit-dev/skills)                                 | Brand styling for Shiny/Quarto                                            |
 | `marimo-notebook`   | [marimo-team/skills](https://github.com/marimo-team/skills)                             | Write marimo notebooks                                                    |
 | `marimo-batch`      | [marimo-team/skills](https://github.com/marimo-team/skills)                             | Prepare marimo notebooks for scheduled runs                               |
+| `marimo-pair`       | [marimo-team/marimo-pair](https://github.com/marimo-team/marimo-pair)                   | Drop agents inside running marimo notebook sessions                       |
 | `archil-guide`      | [archil.com](https://archil.com/skill.md)                                               | Archil distributed filesystem setup and usage                             |
 
 Invoke a skill by typing `/skill-name` in Claude Code or Codex (e.g. `/bootstrap-project`).
