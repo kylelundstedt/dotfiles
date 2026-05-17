@@ -374,24 +374,26 @@ EOF
     touch "$ssh_config"
 
     if [[ "$OS" == "macos" ]]; then
-        # Canonicalize MagicDNS short names to FQDNs (must be at top of config)
-        if ! grep -q 'CanonicalizeHostname' "$ssh_config" 2>/dev/null && tailscale status >/dev/null 2>&1; then
-            local tailnet_domain
+        # Detect tailnet domain once — used by canonicalization and OAuth-forward blocks below
+        local tailnet_domain=""
+        if tailscale status >/dev/null 2>&1; then
             tailnet_domain=$(tailscale status --json 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin)['Self']['DNSName']; parts=d.rstrip('.').split('.'); print('.'.join(parts[1:]))" 2>/dev/null)
-            if [[ -n "$tailnet_domain" ]]; then
-                local tmp_config
-                tmp_config=$(mktemp)
-                cat > "$tmp_config" <<SSHEOF
+        fi
+
+        # Canonicalize MagicDNS short names to FQDNs (must be at top of config)
+        if ! grep -q 'CanonicalizeHostname' "$ssh_config" 2>/dev/null && [[ -n "$tailnet_domain" ]]; then
+            local tmp_config
+            tmp_config=$(mktemp)
+            cat > "$tmp_config" <<SSHEOF
 CanonicalizeHostname yes
 CanonicalDomains $tailnet_domain
 CanonicalizeMaxDots 0
 
 SSHEOF
-                cat "$ssh_config" >> "$tmp_config"
-                mv "$tmp_config" "$ssh_config"
-                chmod 600 "$ssh_config"
-                echo "  [+] SSH hostname canonicalization for $tailnet_domain"
-            fi
+            cat "$ssh_config" >> "$tmp_config"
+            mv "$tmp_config" "$ssh_config"
+            chmod 600 "$ssh_config"
+            echo "  [+] SSH hostname canonicalization for $tailnet_domain"
         fi
 
         # SSH multiplexing for GitHub
@@ -429,6 +431,22 @@ Host exe.dev *.exe.xyz
   IdentityFile ~/.ssh/exe_dev.pub
 SSHEOF
             echo "  [+] SSH key pinning for exe.dev"
+        fi
+
+        # exe.dev dev VMs: default to root and forward port 8765 for MCP OAuth callbacks.
+        # Covers both direct (*.exe.xyz) and Tailscale-canonical (*.<tailnet>.ts.net) names.
+        # When Claude Code on the VM runs `claude mcp add ... --callback-port 8765`,
+        # the browser auth callback hits Mac:8765 and reaches the VM's listener.
+        if ! grep -qF 'LocalForward 8765' "$ssh_config" 2>/dev/null; then
+            local exe_hosts="*.exe.xyz"
+            [[ -n "$tailnet_domain" ]] && exe_hosts="$exe_hosts *.${tailnet_domain}"
+            cat >> "$ssh_config" <<SSHEOF
+
+Host $exe_hosts
+  User root
+  LocalForward 8765 localhost:8765
+SSHEOF
+            echo "  [+] SSH OAuth callback forward (8765) for exe.dev VMs"
         fi
 
         # Forward SSH agent to Tailscale VMs

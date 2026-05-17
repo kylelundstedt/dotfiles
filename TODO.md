@@ -30,10 +30,7 @@ Solved:
 
 - GitHub clone/push/signing — SSH agent forwarding via Tailscale
 - `TS_AUTHKEY` — passed as env var at VM creation (Mac-side biometric, one-time per VM)
-
-Not yet solved:
-
-- MCP server OAuth (MotherDuck, Tigris) — first-time browser flow can't be injected; needs separate strategy (port-forward Mac browser to VM, or per-machine auth)
+- MCP server OAuth (MotherDuck, Tigris, Readwise) — Mac's `~/.ssh/config` carries `LocalForward 8765 localhost:8765` for `*.exe.xyz *.<tailnet>.ts.net` (install.sh, 2026-05-17). Browser callback at `http://localhost:8765/...` tunnels to the VM's listener; `claude` on the VM picks 8765 by default. Verified end-to-end on `gitlake` with Tigris. Still per-VM (each VM caches its own tokens; do one OAuth at a time, since port 8765 only binds for the first concurrent SSH session).
 
 To do:
 
