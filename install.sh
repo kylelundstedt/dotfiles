@@ -776,8 +776,11 @@ setup_tailscale() {
                 echo "  Open-source tailscale already installed"
             fi
 
-            # Start tailscaled as a system daemon (needs root for real tun device)
-            if ! pgrep -x tailscaled >/dev/null 2>&1; then
+            # Start tailscaled as a system daemon (needs root for real tun device).
+            # `tailscale status` probes via the UNIX socket and works regardless of
+            # process ownership; pgrep alone misses root-owned tailscaled from a
+            # non-root SSH session on macOS due to TCC process-visibility limits.
+            if ! tailscale status >/dev/null 2>&1 && ! pgrep -x tailscaled >/dev/null 2>&1; then
                 if sudo -n true 2>/dev/null; then
                     sudo brew services start tailscale 2>/dev/null || true
                     sleep 2
