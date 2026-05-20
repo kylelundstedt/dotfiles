@@ -776,6 +776,33 @@ setup_agents() {
 
     echo "  [+] MCP servers configured"
 
+    # gh CLI auth (separate from MCP PATs).
+    # Interactive macOS prefers browser OAuth so gh gets its own scoped token
+    # rather than reusing the MCP PAT. Headless/Linux falls back to the home
+    # PAT from 1Password via --with-token.
+    if command -v gh >/dev/null 2>&1; then
+        if gh auth status >/dev/null 2>&1; then
+            echo "  [=] gh already authenticated"
+        elif [[ "$IS_INTERACTIVE" == true && "$OS" == "macos" ]]; then
+            echo "  Authenticating gh CLI (browser OAuth)..."
+            gh auth login --hostname github.com --git-protocol ssh --web \
+                && echo "  [+] gh CLI auth'd via browser" \
+                || echo "  [!] gh auth login --web failed"
+        elif [[ "$op_configured" == true ]]; then
+            local pat_home_gh
+            pat_home_gh=$(op read "op://Private/GitHub PAT Home/token" --account lundstedts.1password.com 2>/dev/null) || true
+            if [[ -n "$pat_home_gh" ]]; then
+                printf '%s\n' "$pat_home_gh" | gh auth login --hostname github.com --with-token \
+                    && echo "  [+] gh CLI auth'd with home PAT" \
+                    || echo "  [!] gh auth login --with-token failed"
+            else
+                echo "  [!] gh auth: home PAT not available from 1Password"
+            fi
+        else
+            echo "  [!] gh CLI not authenticated (no interactive shell, no 1Password)"
+        fi
+    fi
+
     # Skills
     if command -v npx >/dev/null 2>&1; then
         echo "  Installing agent skills..."
