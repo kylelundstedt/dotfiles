@@ -67,18 +67,4 @@
     "toml": true,
     "typst": true
   },
-  "agent_servers": {
-    "cortex-code": {
-      "type": "registry"
-    },
-    "codex-acp": {
-      "type": "registry"
-    },
-    "claude-acp": {
-      "default_config_options": {
-        "mode": "bypassPermissions"
-      },
-      "type": "registry"
-    }
-  },
 }
