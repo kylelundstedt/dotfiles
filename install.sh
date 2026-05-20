@@ -675,6 +675,16 @@ run_stow() {
         mkdir -p "$HOME/.config/op"
         chmod 700 "$HOME/.config/op"
     fi
+
+    # Skip-worktree on Zed settings so Zed's UI mutations (ssh_connections, etc.)
+    # don't show in git status. To edit the tracked file:
+    #   git update-index --no-skip-worktree zed/.config/zed/settings.json
+    if [[ "$OS" == "macos" ]]; then
+        local zed_settings="zed/.config/zed/settings.json"
+        if git -C "$DOTFILES_DIR" ls-files --error-unmatch "$zed_settings" &>/dev/null; then
+            git -C "$DOTFILES_DIR" update-index --skip-worktree "$zed_settings" 2>/dev/null || true
+        fi
+    fi
 }
 
 # --- setup_agents ---

@@ -7,66 +7,7 @@
 // custom settings, run `zed: open default settings` from the
 // command palette (cmd-shift-p / ctrl-shift-p)
 {
-  "ssh_connections": [
-    {
-      "host": "dotfiles",
-      "username": "root",
-      "args": [],
-      "projects": [
-        {
-          "paths": [
-            "/root/dotfiles"
-          ]
-        }
-      ]
-    },
-    {
-      "host": "gse-lld",
-      "username": "root",
-      "args": [],
-      "projects": [
-        {
-          "paths": [
-            "/root/gse-lld/./"
-          ]
-        }
-      ]
-    },
-    {
-      "host": "gitlake",
-      "username": "root",
-      "args": [],
-      "projects": [
-        {
-          "paths": [
-            "/root"
-          ]
-        },
-        {
-          "paths": [
-            "/root/gitlake"
-          ]
-        }
-      ]
-    },
-    {
-      "host": "dotfiles",
-      "username": "root",
-      "args": [],
-      "projects": [
-        {
-          "paths": [
-            "/root"
-          ]
-        },
-        {
-          "paths": [
-            "/root/dotfiles"
-          ]
-        }
-      ]
-    }
-  ],
+  "ssh_connections": [],
   "outline_panel": {
     "dock": "right"
   },
