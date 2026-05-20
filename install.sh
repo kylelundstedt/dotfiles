@@ -796,10 +796,33 @@ setup_agents() {
 
     # --- Codex ---
     if command -v codex >/dev/null 2>&1; then
-        # Remove stale servers from previous installations
-        for old in dlt github-home github-work motherduck readwise tigris; do
-            codex mcp remove "$old" >/dev/null 2>&1 || true
+        # Remove legacy server names from previous install.sh versions only.
+        # Don't remove currently-managed servers — codex eagerly opens an OAuth
+        # browser flow at 'mcp add' time, so we skip add when already present.
+        # Trade-off: changing a server URL in install.sh requires manually
+        # `codex mcp remove <name>` first; not auto-detected here.
+        for legacy in dlt github-home github-work; do
+            codex mcp remove "$legacy" >/dev/null 2>&1 || true
         done
+
+        # OAuth servers — mirror of Claude Code's set. Add only if missing.
+        for srv in "motherduck https://api.motherduck.com/mcp" \
+                   "tigris https://mcp.storage.dev/mcp" \
+                   "readwise https://mcp2.readwise.io/mcp"; do
+            read -r name url <<< "$srv"
+            if codex mcp get "$name" >/dev/null 2>&1; then
+                echo "  [=] codex mcp: $name (already present)"
+            else
+                codex mcp add "$name" --url "$url" >/dev/null 2>&1 \
+                    && echo "  [+] codex mcp: $name" \
+                    || echo "  [!] codex mcp add $name failed"
+            fi
+        done
+
+        # GitHub MCP servers deferred. Codex disallows inline bearer tokens
+        # (only --bearer-token-env-var), so wiring github-home/github-work
+        # needs a codex wrapper that sources PATs via 'op run' at exec time.
+        # See TODO.md "Secrets on remote VMs".
     fi
 
     echo "  [+] MCP servers configured"
