@@ -433,20 +433,31 @@ SSHEOF
             echo "  [+] SSH key pinning for exe.dev"
         fi
 
-        # exe.dev dev VMs: default to root and forward port 8765 for MCP OAuth callbacks.
-        # Covers both direct (*.exe.xyz) and Tailscale-canonical (*.<tailnet>.ts.net) names.
-        # When Claude Code on the VM runs `claude mcp add ... --callback-port 8765`,
-        # the browser auth callback hits Mac:8765 and reaches the VM's listener.
-        if ! grep -qF 'LocalForward 8765' "$ssh_config" 2>/dev/null; then
+        # exe.dev dev VMs default to root over both direct (*.exe.xyz) and
+        # Tailscale-canonical (*.<tailnet>.ts.net) names.
+        if ! grep -qF 'User root' "$ssh_config" 2>/dev/null; then
             local exe_hosts="*.exe.xyz"
             [[ -n "$tailnet_domain" ]] && exe_hosts="$exe_hosts *.${tailnet_domain}"
             cat >> "$ssh_config" <<SSHEOF
 
 Host $exe_hosts
   User root
+SSHEOF
+            echo "  [+] SSH User root for exe.dev VMs"
+        fi
+
+        # MCP OAuth callback forward — scoped to *.exe.xyz only (not the Tailscale
+        # form) so routine `ssh <vm>` connections don't race for port 8765. Zed's
+        # remote-server keeps a persistent SSH connection open, which would bind
+        # the port and make every subsequent OAuth-form login warn "Address already
+        # in use". For OAuth flows, use `ssh <vm>.exe.xyz` explicitly.
+        if ! grep -qF 'LocalForward 8765' "$ssh_config" 2>/dev/null; then
+            cat >> "$ssh_config" <<'SSHEOF'
+
+Host *.exe.xyz
   LocalForward 8765 localhost:8765
 SSHEOF
-            echo "  [+] SSH OAuth callback forward (8765) for exe.dev VMs"
+            echo "  [+] SSH OAuth callback forward (8765) for *.exe.xyz"
         fi
 
         # Forward SSH agent to Tailscale VMs

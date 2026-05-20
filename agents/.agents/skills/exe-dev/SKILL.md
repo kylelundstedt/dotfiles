@@ -108,7 +108,19 @@ Host exe.dev *.exe.xyz
 
 The private key lives in 1Password ("SSH Key - exe.dev" in Employee vault). Only the public key is on disk at `~/.ssh/exe_dev.pub`.
 
-`install.sh` (macOS branch) also adds a `User root` + `LocalForward 8765 localhost:8765` stanza covering both `*.exe.xyz` and `*.<tailnet>.ts.net`. This makes `ssh <vm>` default to root and tunnel port 8765 to the VM, so MCP OAuth callbacks from a remote `claude` invocation (which listens on `localhost:8765` for the loopback redirect) come back through the SSH connection. Only the first concurrent SSH session to a `*.ts.net` host binds 8765 on the Mac; later sessions log a harmless `bind: Address already in use` warning, and the tunnel is dead for those sessions until the first one closes. Do OAuth flows one VM at a time.
+`install.sh` (macOS branch) adds two related stanzas:
+
+```
+Host *.exe.xyz *.<tailnet>.ts.net
+  User root
+
+Host *.exe.xyz
+  LocalForward 8765 localhost:8765
+```
+
+`User root` applies broadly so `ssh <vm>` and `ssh <vm>.exe.xyz` both default to root. `LocalForward 8765` is scoped to **the `*.exe.xyz` form only** — the Tailscale name is deliberately left out so routine `ssh <vm>` connections don't race for port 8765. Zed's remote-server SSH keeps a persistent connection open; if the LocalForward were on the Tailscale pattern too, every subsequent terminal `ssh <vm>` would log `bind: Address already in use` and its tunnel would be dead.
+
+**For MCP OAuth flows, use `ssh <vm>.exe.xyz`** — that gets the tunnel. Everyday work uses `ssh <vm>` (Tailscale) and stays clean.
 
 ## Working in scripts and agents
 
@@ -178,16 +190,16 @@ ssh <vm> git clone git@github.com:<org>/<repo>.git ~/<repo>
 
 ### 3. Authenticate MCP servers (one-time per VM)
 
-OAuth-based MCP servers (MotherDuck, Tigris, Readwise, etc.) need a first-time browser dance. The Mac's SSH config tunnels port 8765 through to `*.exe.xyz` and `*.<tailnet>.ts.net` hosts (see "SSH config" above), so the browser callback reaches the right VM's listener.
+OAuth-based MCP servers (MotherDuck, Tigris, Readwise, etc.) need a first-time browser dance. The Mac's SSH config tunnels port 8765 to the **`*.exe.xyz` form** of each VM hostname (see "SSH config" above), so the browser callback reaches the right VM's listener.
 
 ```bash
-ssh <vm>                        # opens session carrying LocalForward 8765
+ssh <vm>.exe.xyz                # use the .exe.xyz form — carries LocalForward 8765
 claude                          # inside the VM, start an interactive session
 # /mcp → pick a server marked "Needs authentication" → Authenticate
 # claude prints an http://localhost:8765/... URL — open it in the Mac browser
 ```
 
-Verified end-to-end on `gitlake` with Tigris (2026-05-17). Do one OAuth flow at a time across VMs because of the port-8765 bind constraint above. Tokens cache per VM under `~/.claude/`, so this is a one-time-per-VM step per MCP server.
+The Tailscale form (`ssh <vm>`) deliberately does **not** carry the LocalForward — Zed's persistent remote-server SSH would otherwise race for port 8765 on every routine connection. Verified end-to-end on `gitlake` with Tigris (2026-05-17). Do one OAuth flow at a time across VMs because of the port-8765 bind. Tokens cache per VM under `~/.claude/`, so this is a one-time-per-VM step per MCP server.
 
 ### 4. Connect from Zed
 
