@@ -705,10 +705,38 @@ setup_agents() {
         fi
     fi
 
-    # Codex CLI
-    if command -v npm >/dev/null 2>&1 && need codex; then
-        echo "  Installing Codex CLI..."
-        npm install -g @openai/codex >/dev/null 2>&1 || echo "  [!] Codex install failed"
+    # Codex CLI — native binary preferred (brew cask on macOS, GitHub release
+    # tarball on Linux). The npm wrapper is a last-resort fallback: it ships
+    # the same native binary inside an npm package, but partial installs leave
+    # an empty vendor dir and a broken `codex` on PATH (we hit this once).
+    if need codex; then
+        if [[ "$OS" == "macos" ]] && command -v brew >/dev/null 2>&1; then
+            echo "  Installing Codex CLI (brew cask)..."
+            brew install --cask codex >/dev/null 2>&1 \
+                && echo "  [+] Codex CLI (brew)" \
+                || echo "  [!] Codex brew install failed"
+        elif [[ "$OS" == "linux" ]]; then
+            local codex_arch
+            case "$(uname -m)" in
+                x86_64)  codex_arch="x86_64" ;;
+                aarch64) codex_arch="aarch64" ;;
+                *) echo "  [!] Codex: unsupported arch $(uname -m)"; codex_arch="" ;;
+            esac
+            if [[ -n "$codex_arch" ]]; then
+                echo "  Installing Codex CLI (native binary)..."
+                install_github_binary "openai/codex" \
+                    "codex-${codex_arch}-unknown-linux-musl\\.tar\\.gz" \
+                    "codex" \
+                    "codex-${codex_arch}-unknown-linux-musl"
+            fi
+        elif command -v npm >/dev/null 2>&1; then
+            echo "  Installing Codex CLI (npm fallback)..."
+            npm install -g @openai/codex >/dev/null 2>&1 \
+                && echo "  [+] Codex CLI (npm)" \
+                || echo "  [!] Codex npm install failed"
+        else
+            echo "  [!] Codex CLI: no install method available"
+        fi
     fi
 
     # 1Password CLI (Linux only — macOS gets it from Brewfile cask)
