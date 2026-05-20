@@ -433,6 +433,33 @@ SSHEOF
             echo "  [+] SSH key pinning for exe.dev"
         fi
 
+        # One-shot migration: commit 539a7c5 wrote a combined stanza
+        #   Host *.exe.xyz *.<tailnet>.ts.net
+        #     User root
+        #     LocalForward 8765 localhost:8765
+        # which made every routine `ssh <vm>` (Tailscale form) race against Zed's
+        # persistent remote-server SSH for port 8765. Remove the legacy block so
+        # the corrected split-stanza blocks below re-add the right form.
+        if grep -qE '^Host \*\.exe\.xyz \*\.[^ ]+\.ts\.net$' "$ssh_config" 2>/dev/null; then
+            python3 - "$ssh_config" <<'PYEOF'
+import re, sys
+path = sys.argv[1]
+content = open(path).read()
+pattern = re.compile(
+    r'\n*Host \*\.exe\.xyz \*\.[^ \n]+\.ts\.net\n'
+    r'  User root\n'
+    r'  LocalForward 8765 localhost:8765\n',
+    re.MULTILINE,
+)
+new = pattern.sub('\n', content, count=1)
+if new != content:
+    open(path, 'w').write(new)
+    print('migrated')
+PYEOF
+            grep -qE '^Host \*\.exe\.xyz \*\.[^ ]+\.ts\.net$' "$ssh_config" 2>/dev/null \
+                || echo "  [+] Migrated legacy combined exe.dev SSH stanza"
+        fi
+
         # exe.dev dev VMs default to root over both direct (*.exe.xyz) and
         # Tailscale-canonical (*.<tailnet>.ts.net) names.
         if ! grep -qF 'User root' "$ssh_config" 2>/dev/null; then
