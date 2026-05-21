@@ -37,7 +37,7 @@ To do:
 - [ ] Create per-project service account in 1P with read-only access to that project's vault
 - [ ] Extend `install.sh` to accept `OP_SERVICE_ACCOUNT_TOKEN` env var; write it to `~/.config/op/sa-token` on VM so `op` auto-authenticates
 - [ ] Set up first 1P Environment for a real project to validate the `op run --env-file` flow
-- [ ] Wire GitHub MCP PAT injection via `op run` at install time (replaces current `op read` on Mac)
+- [ ] Wire GitHub MCP PAT injection via `op run` at install time (replaces current `op read` on Mac). Same change unblocks Codex GitHub MCPs (github-home, github-work) — Codex disallows inline bearer tokens in `config.toml` (only `bearer_token_env_var`), so it needs a `codex` wrapper that sources PATs via `op run --env-file=...` at exec time, or a 0600-mode cache file sourced from shell init.
 - [ ] Evaluate Tailscale OAuth clients with `auth_keys` + `devices` scopes — gives reusable non-expiring auth keys (removes biometric dependency for `TS_AUTHKEY`) AND programmatic node deletion via `DELETE /api/v2/device/{id}` (removes today's manual ghost-node cleanup in the admin console after every VM teardown)
 
 ## Apple Containers
@@ -114,6 +114,37 @@ VM-to-VM SSH unblocked 2026-05-01 with broad `tag:dev` → `tag:dev` rules (netw
 - [ ] Drop `root` from the `tag:dev` → `tag:dev` SSH `users` list, force a non-root account.
 - [ ] Or split tags: only mesh-connect VMs that need it (e.g. `tag:dev-mesh`) and keep solo VMs on plain `tag:dev` with no peer access.
 - [ ] Or port-restrict the network grant: replace `"ip": ["*"]` with explicit ports (`*:22` plus whatever else cross-VM traffic actually uses).
+
+## Basic Memory (evaluation)
+
+Cross-AI / multi-machine persistent memory via Basic Memory (basicmachines-co). Claude Code's built-in auto-memory is per-machine, not synced, and Claude-only; Codex has its own native memory. Basic Memory could fill both gaps via MCP. Per-project cloud routing (v0.21.0) lets one client mount a mix of local and cloud-routed projects.
+
+- [ ] Pick hosting model: AGPL local (`uv tool install basic-memory`) vs Basic Memory Cloud ($14.25/mo beta-discounted) vs Teams (`teams-beta` milestone 90% complete in repo, not yet launched per public docs)
+- [ ] Run a small trial on klundstedt-mini against one project (suggested: a contained client engagement) and evaluate over 1–2 weeks before wiring into `install.sh`
+- [ ] If kept: install on all machines via install.sh; decide sync model for `~/basic-memory` across MBP/Mini/exe.dev VMs (git-tracked dir aligns with existing dotfiles sync pattern)
+- [ ] Document policy in `agents/.agents/AGENTS.md` distinguishing Basic Memory vs Claude Code's auto-memory vs Codex native memory — when to write which
+- [ ] Install companion skills (`basicmachines-co/basic-memory-skills`) — memory-notes, memory-reflect, memory-defrag, memory-research, etc.
+
+### IV Products architecture (depends on Basic Memory adoption decision)
+
+Per `gitlake/iv/iv_products.md`, IV Datasets surface a "per-dataset Data Product MCP server" alongside the query MCP. Basic Memory's per-project cloud routing is a natural fit for the semantic layer (schema, data dictionary, harmonization rules, restatement history, sample queries) — one Basic Memory project per (client, dataset) tuple, mounted alongside the data-query MCP.
+
+- [ ] Decide storage placement: per-client Archil mount (inherits AVE/GitLake guarantees + "client owns storage" property; loses cloud-routed sync) vs Basic Memory Cloud (multi-machine sync, shareable to client; breaks "client owns storage" unless Teams ships with BYO storage)
+
+## install.sh hygiene
+
+- [ ] Replace swallowed errors in `setup_agents` (`>/dev/null 2>&1 || true` → explicit `echo "[!] X failed"` on non-zero). The silent pattern hid the missing `github-home` MCP on klundstedt-mini for an unknown number of runs before it was diagnosed.
+- [ ] Trace and remove the `GITHUB_TOKEN` env var that overrides gh's keyring on klundstedt-mini (likely set in `.zshrc`/`.zshenv`/atuin shell init); low priority
+
+## Done (2026-05-20)
+
+- [x] Zed: removed `agent_servers` ACP block. Anthropic's June 15 billing change stops Claude Pro/Max from covering ACP/agent-panel usage (moves to per-credit pricing at API rates); `claude` CLI in a Zed terminal thread still draws from the Max subscription. Default agentic flow is now CLI (`claude`, `codex`) via Zed terminal threads, preserving subscription value for both providers.
+- [x] Zed: cleared `ssh_connections` in tracked file and wired `git update-index --skip-worktree` after stow in `install.sh` so Zed's UI mutations no longer pollute `git status`. Per-machine `ssh_connections` editing stays local without churn.
+- [x] install.sh: wire `gh` CLI auth. Browser OAuth on macOS interactive (gh gets its own scoped token, separate from MCP PATs); `op read | gh auth login --with-token` fallback for headless/Linux.
+- [x] install.sh: switch Codex CLI install to native binary — `brew install --cask codex` on macOS, native musl tarball from GitHub releases on Linux via `install_github_binary`. npm kept as last-resort fallback. Fixed a corrupt npm install on klundstedt-mini (empty vendor dir → broken `codex` on PATH).
+- [x] install.sh: register OAuth MCP servers for Codex (motherduck, tigris, readwise) mirroring Claude Code's set; idempotent via `codex mcp get` to avoid re-OAuth on every install run (Codex eagerly OAuths at add-time, unlike Claude's lazy first-use auth).
+- [x] Recovered missing `github-home` Claude MCP on klundstedt-mini — failed silently at a prior install (`op read` returned empty); after PAT rotation in 1P and re-run of `install.sh`, both `github-home` and `github-work` are connected.
+- [x] Runtime cleanup on klundstedt-mini: removed stale user-scope `duckdb` MCP entry (pointed at nonexistent `dotfiles/claude/bin/duckdb-mcp`); removed local-scope `MotherDuck` duplicate of the user-scope `motherduck`.
 
 ## Done (2026-04-20)
 
