@@ -14,6 +14,11 @@ command -v fnm >/dev/null && eval "$(fnm env)"
 
 # Export gh's stored token so tools that don't read ~/.config/gh/hosts.yml
 # (Ruff LSP, npm, curl) get the 5000/hr authenticated rate limit.
+# Side effect: `gh auth status` shows GITHUB_TOKEN as the active account
+# above the keyring entry — that's gh being accurate (env var wins), not
+# a bug. Stale-token caveat: long-running shells keep the env value until
+# restart, so `gh auth refresh` in one shell won't propagate to others.
+# install.sh has the same logic at the top; keep them in sync.
 if [ -z "${GITHUB_TOKEN:-}" ] && command -v gh >/dev/null 2>&1; then
     GITHUB_TOKEN="$(gh auth token 2>/dev/null)" && export GITHUB_TOKEN
 fi
