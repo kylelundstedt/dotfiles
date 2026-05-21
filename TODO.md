@@ -134,7 +134,6 @@ Per `gitlake/iv/iv_products.md`, IV Datasets surface a "per-dataset Data Product
 ## install.sh hygiene
 
 - [ ] Replace swallowed errors in `setup_agents` (`>/dev/null 2>&1 || true` → explicit `echo "[!] X failed"` on non-zero). The silent pattern hid the missing `github-home` MCP on klundstedt-mini for an unknown number of runs before it was diagnosed.
-- [ ] Trace and remove the `GITHUB_TOKEN` env var that overrides gh's keyring on klundstedt-mini (likely set in `.zshrc`/`.zshenv`/atuin shell init); low priority
 
 ## Done (2026-05-20)
 
@@ -145,6 +144,9 @@ Per `gitlake/iv/iv_products.md`, IV Datasets surface a "per-dataset Data Product
 - [x] install.sh: register OAuth MCP servers for Codex (motherduck, tigris, readwise) mirroring Claude Code's set; idempotent via `codex mcp get` to avoid re-OAuth on every install run (Codex eagerly OAuths at add-time, unlike Claude's lazy first-use auth).
 - [x] Recovered missing `github-home` Claude MCP on klundstedt-mini — failed silently at a prior install (`op read` returned empty); after PAT rotation in 1P and re-run of `install.sh`, both `github-home` and `github-work` are connected.
 - [x] Runtime cleanup on klundstedt-mini: removed stale user-scope `duckdb` MCP entry (pointed at nonexistent `dotfiles/claude/bin/duckdb-mcp`); removed local-scope `MotherDuck` duplicate of the user-scope `motherduck`.
+- [x] MBP catch-up: pulled today's commits and re-ran `install.sh`; migrated Codex from npm 0.130 to brew --cask 0.132 (manual `npm uninstall -g @openai/codex` since `need codex` skipped the new branch); re-completed Codex Readwise OAuth (initial install.sh OAuth flow didn't complete); same runtime MCP cleanups applied.
+- [x] claude.ai web: removed duplicate Mermaid Chart connector (`mcp.mermaidchart.com`, failing) — superseded by the working `chatgpt.mermaid.ai/anthropic/mcp` entry.
+- [x] `zsh/.profile`: documented that the `GITHUB_TOKEN` export is intentional — non-gh tools (Ruff LSP, npm, curl) need the env var to get the 5000/hr authenticated GitHub API rate limit. The duplicate display in `gh auth status` (env var shown above keyring) is gh being accurate, not a bug. Stale-token caveat in long-running shells noted. Same logic in `install.sh:89-93`.
 
 ## Done (2026-04-20)
 
