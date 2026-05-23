@@ -39,6 +39,14 @@ Decision (2026-05-01): exe.dev is the primary dev-VM platform. Apple Containers 
 - [ ] Tighten `tag:dev` → `tag:dev` SSH users list (currently allows `root` + `autogroup:nonroot`; consider restricting to `exedev` only)
 - [ ] Consider port-restricting the network grant (`*:22` instead of `"ip": ["*"]`)
 
+## exe.dev multi-tenant (future)
+
+Decision (2026-05-23): single tailnet for now (Option 1 — you create VMs, contractors use them via `*.exe.xyz`). Move to per-tenant tailnets (Option 2) when there's a paying client.
+
+- [ ] Per-tenant Tailscale tailnet + API key + `tailscale-api-<client>` integration scoped to `tag:<client>`
+- [ ] Per-tenant `exe-setup.sh` variant or parameterized setup script
+- [ ] Team integrations (`--team`) for client-scoped MCP servers
+
 ## Basic Memory (evaluation)
 
 Cross-AI / multi-machine persistent memory via Basic Memory (basicmachines-co). Claude Code's built-in auto-memory is per-machine, not synced, and Claude-only; Codex has its own native memory.
