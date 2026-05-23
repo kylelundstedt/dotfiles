@@ -819,30 +819,39 @@ setup_agents() {
 
     # --- Claude Code ---
     if command -v claude >/dev/null 2>&1; then
-        # Remove stale servers from previous installations
-        claude mcp remove --scope user dlt >/dev/null 2>&1 || true
+        # Remove stale or migrated servers before re-adding with correct URLs.
+        # On Linux, motherduck migrates from OAuth to exe.dev proxy.
+        for srv in dlt motherduck github-home github-work tigris readwise; do
+            claude mcp remove --scope user "$srv" >/dev/null 2>&1 || true
+        done
 
-        # OAuth servers (browser auth on first use)
-        claude mcp add --transport http --scope user motherduck https://api.motherduck.com/mcp >/dev/null 2>&1 || true
-        claude mcp add --transport http --scope user tigris https://mcp.storage.dev/mcp >/dev/null 2>&1 || true
-        claude mcp add --transport http --scope user readwise https://mcp2.readwise.io/mcp >/dev/null 2>&1 || true
-
-        # GitHub servers — on exe.dev VMs, use HTTP proxy integrations
-        # (no secrets on VM); on macOS, use PATs from 1Password directly.
+        # On exe.dev VMs, use HTTP proxy integrations for servers that
+        # support static tokens (no secrets on VM disk). OAuth-only servers
+        # (Tigris, Readwise) still need the LocalForward 8765 browser dance.
         if [[ "$OS" == "linux" ]]; then
+            claude mcp add --transport http --scope user motherduck https://motherduck-mcp.int.exe.xyz/mcp >/dev/null 2>&1 || true
             claude mcp add --transport http --scope user github-home https://github-mcp-home.int.exe.xyz/mcp/ >/dev/null 2>&1 || true
             claude mcp add --transport http --scope user github-work https://github-mcp-work.int.exe.xyz/mcp/ >/dev/null 2>&1 || true
-            echo "  [+] GitHub MCP servers (exe.dev proxy)"
-        elif [[ "$op_configured" == true ]]; then
-            local pat_home pat_work
-            pat_home=$(op read "op://Private/GitHub PAT Home/token" --account lundstedts.1password.com 2>/dev/null) || true
-            pat_work=$(op read "op://Employee/GitHub PAT IV/token" --account industryvault.1password.com 2>/dev/null) || true
-            [[ -n "$pat_home" ]] && claude mcp add-json --scope user github-home \
-                "{\"type\":\"http\",\"url\":\"https://api.githubcopilot.com/mcp/\",\"headers\":{\"Authorization\":\"Bearer $pat_home\"}}" >/dev/null 2>&1 || true
-            [[ -n "$pat_work" ]] && claude mcp add-json --scope user github-work \
-                "{\"type\":\"http\",\"url\":\"https://api.githubcopilot.com/mcp/\",\"headers\":{\"Authorization\":\"Bearer $pat_work\"}}" >/dev/null 2>&1 || true
+            # OAuth-only servers (browser auth on first use via LocalForward 8765)
+            claude mcp add --transport http --scope user tigris https://mcp.storage.dev/mcp >/dev/null 2>&1 || true
+            claude mcp add --transport http --scope user readwise https://mcp2.readwise.io/mcp >/dev/null 2>&1 || true
+            echo "  [+] MCP servers (3 via exe.dev proxy, 2 OAuth)"
         else
-            echo "  Skipping GitHub MCP servers (1Password not configured)"
+            # macOS: OAuth servers + GitHub PATs from 1Password
+            claude mcp add --transport http --scope user motherduck https://api.motherduck.com/mcp >/dev/null 2>&1 || true
+            claude mcp add --transport http --scope user tigris https://mcp.storage.dev/mcp >/dev/null 2>&1 || true
+            claude mcp add --transport http --scope user readwise https://mcp2.readwise.io/mcp >/dev/null 2>&1 || true
+            if [[ "$op_configured" == true ]]; then
+                local pat_home pat_work
+                pat_home=$(op read "op://Private/GitHub PAT Home/token" --account lundstedts.1password.com 2>/dev/null) || true
+                pat_work=$(op read "op://Employee/GitHub PAT IV/token" --account industryvault.1password.com 2>/dev/null) || true
+                [[ -n "$pat_home" ]] && claude mcp add-json --scope user github-home \
+                    "{\"type\":\"http\",\"url\":\"https://api.githubcopilot.com/mcp/\",\"headers\":{\"Authorization\":\"Bearer $pat_home\"}}" >/dev/null 2>&1 || true
+                [[ -n "$pat_work" ]] && claude mcp add-json --scope user github-work \
+                    "{\"type\":\"http\",\"url\":\"https://api.githubcopilot.com/mcp/\",\"headers\":{\"Authorization\":\"Bearer $pat_work\"}}" >/dev/null 2>&1 || true
+            else
+                echo "  Skipping GitHub MCP servers (1Password not configured)"
+            fi
         fi
     fi
 
