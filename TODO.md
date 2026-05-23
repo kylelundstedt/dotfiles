@@ -6,23 +6,24 @@
 
 ## Secrets on remote VMs
 
-Strategy (revised 2026-04-21): 1Password Environments per project; `op` CLI on VM authenticated with a scoped service-account token; secrets injected at runtime via `op run --env-file=<id> -- cmd`. No plaintext `.env` files on disk, no bespoke provisioning script, reactive to 1P changes. The SA token is the one bootstrap secret — provisioned to the VM at creation time via env var (same pattern as `TS_AUTHKEY`).
+Strategy: no plaintext secrets on VM disk. Each secret uses the narrowest delivery mechanism available.
 
-Solved:
+| Secret                                   | Mechanism                                                   | Status            |
+| ---------------------------------------- | ----------------------------------------------------------- | ----------------- |
+| GitHub clone/push/signing                | SSH agent forwarding via Tailscale                          | Done              |
+| Tailscale auth key                       | `tailscale-api` exe.dev HTTP proxy → ephemeral key per boot | Done (2026-05-23) |
+| Tailscale ghost node cleanup             | Setup script `DELETE /api/v2/device/{id}` via proxy         | Done (2026-05-23) |
+| MCP OAuth (MotherDuck, Tigris, Readwise) | `LocalForward 8765` on `*.exe.xyz` only; browser dance      | Done (2026-05-17) |
+| Per-project app secrets                  | 1P service account + `op run --env-file`                    | Not started       |
+| GitHub MCP PATs on VMs                   | `op run` injection or `bearer_token_env_var`                | Not started       |
 
-- GitHub clone/push/signing — SSH agent forwarding via Tailscale
-- `TS_AUTHKEY` — passed as env var at VM creation (Mac-side biometric, one-time per VM)
-- MCP server OAuth (MotherDuck, Tigris, Readwise) — Mac's `~/.ssh/config` carries `LocalForward 8765 localhost:8765` for `*.exe.xyz` only (install.sh, 2026-05-17). `User exedev` covers both `*.exe.xyz` and `*.<tailnet>.ts.net` so `ssh <vm>` defaults to exedev. OAuth port forward is intentionally scoped to the lobby hostname so routine Tailscale SSH doesn't race for port 8765. For OAuth, use `ssh <vm>.exe.xyz` explicitly. Verified end-to-end on `gitlake` with Tigris. Per-VM token cache; do one OAuth at a time per VM.
-- Tailscale API key — `tailscale-api` HTTP proxy integration on exe.dev (`auto:all`), bearer token from 1P `op://Employee/Tailscale - API Key/credential`. Setup scripts generate ephemeral auth keys via the proxy; the API key never touches VMs. 90-day expiry, created 2026-05-23.
-- Tailscale ghost node cleanup — setup script deletes stale nodes with same hostname before registering, via `DELETE /api/v2/device/{id}` through the proxy.
+### To do
 
-To do:
-
-- [ ] Create per-project service account in 1P with read-only access to that project's vault
-- [ ] Extend `install.sh` to accept `OP_SERVICE_ACCOUNT_TOKEN` env var; write it to `~/.config/op/sa-token` on VM so `op` auto-authenticates
-- [ ] Set up first 1P Environment for a real project to validate the `op run --env-file` flow
-- [ ] Wire GitHub MCP PAT injection via `op run` at install time (replaces current `op read` on Mac). Same change unblocks Codex GitHub MCPs (github-home, github-work) — Codex disallows inline bearer tokens in `config.toml` (only `bearer_token_env_var`), so it needs a `codex` wrapper that sources PATs via `op run --env-file=...` at exec time, or a 0600-mode cache file sourced from shell init.
-- [ ] Rotate Tailscale API key before 2026-08-21 (90-day expiry). Update `tailscale-api` integration: `ssh exe.dev integrations remove tailscale-api` then re-add with new token.
+- [ ] Create per-project 1P service account (read-only access to project vault)
+- [ ] Extend `install.sh` to accept `OP_SERVICE_ACCOUNT_TOKEN` env var; write to `~/.config/op/sa-token`
+- [ ] Validate `op run --env-file` flow on a real project
+- [ ] Wire GitHub MCP PATs via `op run` at install time (also unblocks Codex `github-home`/`github-work` — Codex needs `bearer_token_env_var`, not inline tokens)
+- [ ] Rotate Tailscale API key before 2026-08-21 (`ssh exe.dev integrations remove tailscale-api` then re-add)
 
 ## Apple Containers
 
