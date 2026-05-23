@@ -6,5 +6,6 @@ Supplementary context for AI agents working in this repository.
 |------|---------|
 | `agents-advanced.md` | When and how to add rules and skills beyond `AGENTS.md` |
 | `agents-recommendations.md` | Operating patterns, dual-agent workflows, task routing, maintenance checklists |
-| `linux.md` | Linux platform notes — OrbStack, Docker testing, local sprites (Apple Container), Fly.io Sprites, cloud-init |
-| `secrets.md` | 1Password secret management — `op run` pattern, MCP server wrappers |
+| `linux.md` | Linux platform notes and testing |
+| `secrets.md` | Secret management — exe.dev integrations, 1Password patterns, MCP server auth |
+| `snowflake-auth-policy.md` | Snowflake authentication policy — restricting programmatic access |

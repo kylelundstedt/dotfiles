@@ -1,69 +1,42 @@
-# Secret Management with 1Password
+# Secret Management
 
-Secrets are never stored in plaintext. 1Password CLI (`op`) resolves secrets at runtime or install time.
+Secrets are never stored in plaintext. Each secret uses the narrowest delivery mechanism available.
+
+## exe.dev VMs
+
+exe.dev integrations handle the two secrets that every VM needs — no tokens on VM disk:
+
+- **GitHub clone/push** — exe.dev GitHub integration. URLs like `https://<label>.int.exe.xyz/<org>/<repo>.git`. Attached per-VM (`integrations attach <label> vm:<vm>`) or globally (`auto:all`).
+- **Tailscale auth** — `tailscale-api` HTTP proxy integration. The setup script (`exe-setup.sh`) generates a single-use ephemeral key via `POST /api/v2/tailnet/-/keys` through the proxy; exe.dev injects the bearer token.
+
+Commit signing uses SSH agent forwarding over Tailscale (`ForwardAgent yes` for `*.ts.net` in SSH config). The private key stays in 1Password on the Mac.
 
 ## MCP Servers
 
-MCP servers use remote HTTP transport. No local wrapper scripts or `.env` files needed.
+MCP servers use remote HTTP transport. No local wrapper scripts or `.env` files.
 
-**OAuth servers** (MotherDuck, Tigris) — no 1Password involvement. Authentication happens via browser OAuth flow on first use. Works on all environments.
+- **OAuth servers** (MotherDuck, Tigris, Readwise) — browser auth on first use. Works everywhere. On VMs, use `ssh <vm>.exe.xyz` (carries `LocalForward 8765`) for the OAuth callback.
+- **GitHub servers** (github-home, github-work) — PATs from 1Password, resolved at install time via `op read` and stored in `~/.claude.json`. macOS only.
 
-**GitHub servers** (github-home, github-work) — PATs resolved from 1Password at install time via `op read` and stored in `~/.claude.json` as HTTP `Authorization` headers. Re-running `install.sh` refreshes them. Only registered on macOS where 1Password is configured.
+## 1Password Patterns
+
+Read a single secret:
 
 ```bash
-# How install.sh resolves GitHub PATs
-pat=$(op read "op://Private/GitHub PAT Home/token" --account lundstedts.1password.com)
-claude mcp add-json --scope user github-home \
-    "{\"type\":\"http\",\"url\":\"https://api.githubcopilot.com/mcp/\",\"headers\":{\"Authorization\":\"Bearer $pat\"}}"
+op read "op://Employee/SomeService/api_key" --account industryvault.1password.com
 ```
 
-## Using 1Password in Your Own Projects
+Inject secrets into a command via env file:
 
-Create a `.env` file with secret references in your project root:
-
-```
+```bash
+# .env (secret references, not values)
 DATABASE_URL=op://Employee/ProjectDB/connection_string
 API_KEY=op://Employee/SomeService/api_key
-```
 
-Then run any command with those secrets injected:
-
-```bash
 op run --env-file=.env -- your-command
 ```
 
-Or read a single secret value:
-
-```bash
-op read "op://Employee/SomeService/api_key"
-```
-
-## Cloning Private Repos on Remote VMs
-
-VMs (Apple Containers, Sprites, exe.dev) don't have 1Password configured, so secrets must be resolved on the Mac and passed as ephemeral env vars. The token never touches disk on the VM.
-
-```bash
-# 1. Resolve PAT on Mac
-GITHUB_TOKEN=$(op item get 'GitHub PAT Home' --fields token --reveal --account lundstedts.1password.com)
-
-# 2. Pass into VM, clone, scrub token from remotes
-container exec -e "GITHUB_TOKEN=$GITHUB_TOKEN" <vm> bash -l -c '
-    git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/owner/repo.git" ~/repo
-    git -C ~/repo remote set-url origin git@github.com:owner/repo.git
-'
-```
-
-Same pattern works with `ssh <vm>.exe.xyz` or `sprite exec`. The `bash -l` ensures `~/.profile` is sourced (PATH includes `~/.local/bin`).
-
-For Tailscale auth, the same approach is used with `TS_AUTHKEY`.
-
 ## Platform Notes
 
-- **macOS** with 1Password desktop app: auth persists while the app is unlocked (biometric prompt on first access)
-- **Linux** without the desktop app: run `eval $(op signin --account <account>)` before starting Claude Code — the session token is inherited by child processes and lasts 30 minutes
-
-## Troubleshooting
-
-### 1Password CLI Not Working
-
-Verify permissions: `chmod 700 ~/.config/op` and ensure 1Password desktop app is running
+- **macOS** — 1Password desktop app handles auth (biometric on first access)
+- **Linux VMs** — 1Password CLI not configured; secrets come from exe.dev integrations or are passed as ephemeral env vars from the Mac
