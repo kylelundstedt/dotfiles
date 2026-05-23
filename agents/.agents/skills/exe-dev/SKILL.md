@@ -157,29 +157,50 @@ This requires the Tailscale ACL to permit `tag:dev` → `tag:dev` for both the n
 
 ## Setting Up a Dev VM
 
-A default setup script (`exe-setup.sh`) is registered via `ssh exe.dev defaults write` so every new VM automatically gets Tailscale + dotfiles. Three commands to a working repo:
+A default setup script (`exe-setup.sh`) is registered via `ssh exe.dev defaults write` so every new VM automatically gets Tailscale + dotfiles. Two commands to a working repo:
 
 ### 1. Create VM + clone repo (~4s)
 
 ```bash
-ssh exe.dev new --name=<vm>
-ssh exe.dev integrations attach github-<org>-<repo> vm:<vm>
+ssh exe.dev new --name=<vm> --tag=iv \
+  --integration=github-<org>-<repo>
 ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new <vm>.exe.xyz \
   "git clone https://github-<org>-<repo>.int.exe.xyz/<org>/<repo>.git ~/<repo>"
 ```
 
-GitHub integrations are named `github-<org>-<repo>` (e.g. `github-kylelundstedt-gitlake`) and attached per-VM. To register a new repo:
+- `--tag=iv` grants the VM access to IV-scoped integrations (work GitHub MCP, MotherDuck)
+- `--integration=github-<org>-<repo>` attaches the per-repo clone/push integration
+- For personal VMs, also attach `github-mcp-home` after creation: `ssh exe.dev integrations attach github-mcp-home vm:<vm>`
+
+GitHub integrations are named `github-<org>-<repo>` (e.g. `github-kylelundstedt-gitlake`). To register a new repo:
 
 ```bash
 ssh exe.dev integrations add github --name github-<org>-<repo> --repository <org>/<repo>
 ```
+
+### Integration scoping
+
+Integrations are scoped to minimize credential exposure across VMs:
+
+| Integration | Scope | Grants |
+|---|---|---|
+| `tailscale-api` | `auto:all` (personal) | Tailscale API — needed by setup script at boot |
+| `github-mcp-work` | `tag:iv` | Work GitHub API (issues, PRs, code search) |
+| `motherduck-mcp` | `tag:iv` | MotherDuck SQL queries |
+| `github-mcp-home` | `vm:` per VM | Personal GitHub API — only your VMs |
+| `github-<org>-<repo>` | `vm:` per VM | Git clone/push for a single repo |
+| `reflection` | `auto:all` | VM metadata (harmless) |
+
+When team members join via SSO, they won't see personal integrations. Team integrations (`--team` flag) only support `tag:` attachment — use client-specific tags (e.g. `iv`, `usaa`) to scope access.
+
+### Setup script
 
 The default setup script (`exe-setup.sh` in the dotfiles repo) runs at first boot and:
 
 - Deletes stale Tailscale nodes with the same hostname (prevents `-2` suffix)
 - Generates a single-use ephemeral auth key via the `tailscale-api` HTTP proxy integration
 - Starts `tailscaled` and authenticates (Tailscale SSH available ~18s after VM creation)
-- Runs `install.sh` in the background (full dotfiles ~60s)
+- Runs `install.sh` (full dotfiles ~60s)
 
 To set the default (one-time, already done):
 
@@ -187,22 +208,7 @@ To set the default (one-time, already done):
 ssh exe.dev "defaults write dev.exe new.setup-script 'curl -fsSL https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/exe-setup.sh | bash'"
 ```
 
-The `tailscale-api` integration holds the Tailscale API bearer token — the VM never sees it. Created once via:
-
-```bash
-ssh exe.dev integrations add http-proxy --name tailscale-api \
-  --target https://api.tailscale.com \
-  --bearer "$(op read 'op://Employee/Tailscale - API Key/credential' --account industryvault.1password.com)" \
-  --attach auto:all
-```
-
-### 2. Clone project repos
-
-The exe.dev GitHub integration handles clone/push with no tokens on the VM:
-
-```bash
-ssh <vm>.exe.xyz "git clone https://<label>.int.exe.xyz/<org>/<repo>.git ~/<repo>"
-```
+### 2. Commit signing
 
 For commit signing, use Tailscale SSH (`ssh <vm>`) which forwards the 1Password SSH agent. `.zshrc` detects the forwarded agent on login and enables commit signing automatically.
 

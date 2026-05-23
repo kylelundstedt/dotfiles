@@ -4,26 +4,26 @@ Secrets are never stored in plaintext. Each secret uses the narrowest delivery m
 
 ## exe.dev VMs
 
-exe.dev integrations handle the two secrets that every VM needs — no tokens on VM disk:
+No credentials on VM disk. Integrations are scoped by tag (client/project) or per-VM:
 
-- **GitHub clone/push** — exe.dev GitHub integration. Named `github-<org>-<repo>`, attached per-VM (`integrations attach github-<org>-<repo> vm:<vm>`). Clone via `https://github-<org>-<repo>.int.exe.xyz/<org>/<repo>.git`.
-- **Tailscale auth** — `tailscale-api` HTTP proxy integration. The setup script (`exe-setup.sh`) generates a single-use ephemeral key via `POST /api/v2/tailnet/-/keys` through the proxy; exe.dev injects the bearer token.
+| Integration | Type | Scope | Purpose |
+|---|---|---|---|
+| `tailscale-api` | http-proxy | `auto:all` | Setup script generates ephemeral Tailscale auth keys at boot |
+| `github-mcp-work` | http-proxy | `tag:iv` | Work GitHub API (MCP) |
+| `motherduck-mcp` | http-proxy | `tag:iv` | MotherDuck SQL (MCP) |
+| `github-mcp-home` | http-proxy | `vm:` per VM | Personal GitHub API (MCP) — only your VMs |
+| `github-<org>-<repo>` | github | `vm:` per VM | Git clone/push for a single repo |
+| `reflection` | reflection | `auto:all` | VM metadata |
+| tigris | OAuth | — | One-time browser dance via `LocalForward 8765` |
+| readwise | OAuth | — | macOS only |
 
-Commit signing uses SSH agent forwarding over Tailscale (`ForwardAgent yes` for `*.ts.net` in SSH config). The private key stays in 1Password on the Mac.
+**Tag convention:** VMs are tagged by client (e.g. `iv`, `usaa`). Tag-scoped integrations grant access to the appropriate set of services. When team members join via SSO, personal integrations remain invisible to them; team integrations (`--team` flag) only support `tag:` attachment.
+
+Commit signing uses SSH agent forwarding over Tailscale (`ForwardAgent yes` for `*.ts.net`). The private key stays in 1Password on the Mac.
 
 ## MCP Servers
 
 MCP servers use remote HTTP transport. No local wrapper scripts or `.env` files.
-
-**On exe.dev VMs** — three of five servers connect automatically via HTTP proxy integrations (no secrets on VM):
-
-| Server | Integration | Auth |
-|---|---|---|
-| motherduck | `motherduck-mcp` | Static bearer token (auto) |
-| github-home | `github-mcp-home` | Static bearer token (auto) |
-| github-work | `github-mcp-work` | Static bearer token (auto) |
-| tigris | — | OAuth (one-time browser dance via `LocalForward 8765`) |
-| readwise | — | OAuth (one-time browser dance via `LocalForward 8765`) |
 
 **On macOS** — OAuth for MotherDuck/Tigris/Readwise (browser auth on first use). GitHub servers use PATs from 1Password, resolved at install time via `op read`.
 
