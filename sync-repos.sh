@@ -12,8 +12,7 @@ set -euo pipefail
 LAST_RUN_FILE="/tmp/sync-repos.lastrun"
 LOCKFILE="/tmp/sync-repos.lock"
 MIN_INTERVAL=$((20 * 3600))  # 20 hours
-PERSONAL_DIR="$HOME/github/kylelundstedt"
-WORK_DIR="$HOME/github/klundstedt"
+GITHUB_DIR="$HOME/github"
 SKIP_REPOS="dotfiles"  # managed separately at ~/dotfiles
 
 # Skip if last successful run was recent
@@ -81,9 +80,10 @@ sync_repos() {
     done
 }
 
-sync_repos kylelundstedt "$PERSONAL_DIR"
-sync_repos IndustryVault "$WORK_DIR"
-sync_repos iv-cmg "$WORK_DIR"
+sync_repos kylelundstedt "$GITHUB_DIR/kylelundstedt"
+sync_repos IndustryVault "$GITHUB_DIR/IndustryVault"
+sync_repos iv-cmg "$GITHUB_DIR/iv-cmg"
+sync_repos USAA "$GITHUB_DIR/USAA"
 
 date +%s > "$LAST_RUN_FILE"
 echo "==> Done $(date)"

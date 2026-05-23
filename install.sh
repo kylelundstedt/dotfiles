@@ -622,14 +622,15 @@ EOF
         fi
     elif [[ "$OS" == "linux" ]]; then
         # Non-interactive Linux VM — use personal identity as default.
-        # Work repos under ~/github/klundstedt/ pick up .gitconfig_work
-        # via includeIf in .gitconfig (stowed).
+        # Work repos under ~/github/<org>/ pick up .gitconfig_work
+        # via includeIf in .gitconfig (stowed); personal override for
+        # ~/github/kylelundstedt/.
         cat > "$git_config_local" <<'EOF'
 [user]
 name = Kyle G. Lundstedt
 email = kyle@lundstedt.us
 EOF
-        mkdir -p "$HOME/github/kylelundstedt" "$HOME/github/klundstedt"
+        mkdir -p "$HOME/github/kylelundstedt"
         echo "  [+] Wrote git/.gitconfig_local (default: personal)"
     else
         echo "  Skipping git user setup (non-interactive). Run install.sh interactively to configure."
