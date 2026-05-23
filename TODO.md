@@ -4,28 +4,6 @@
 
 - [ ] Track [zed-industries/zed#56282](https://github.com/zed-industries/zed/issues/56282) — `zed ssh://` always opens a new window; `--add` and `--existing` flags don't work with SSH URLs. Workaround: "projects: open remote" in command palette.
 
-## Devbox image (reproducible dev environment)
-
-### Build
-
-- [ ] Determine full tool list and versions (driven by GitLake needs)
-- [ ] Build `image/Dockerfile` with pinned tool versions, `klundstedt` user
-- [ ] Build `image/build.sh` for local builds via `container build`
-
-### Deploy per backend
-
-- [ ] Apple Container: update `container` to use devbox image instead of `ubuntu:25.04`
-- [ ] exe.dev: use devbox image via `new --image`
-- [ ] Sprite: wait for checkpoint forking, then create golden sprite from devbox (no custom image support yet)
-
-### Validate
-
-- [ ] Test end-to-end on Apple Container
-- [ ] Test end-to-end on exe.dev
-- [ ] Test end-to-end on Sprite (once checkpoint forking lands)
-
-> Re-evaluated 2026-04-21. exe.dev's `ghcr.io/boldsoftware/exeuntu` (Ubuntu 24.04, kitchen-sink apt list, systemd) is a usable public base image — if we revive this plan, consider extending exeuntu rather than building from scratch. Sprite still lacks custom-image support and checkpoint forking; no roadmap signal since Jan 2026. Decision: keep waiting, not urgent.
-
 ## Secrets on remote VMs
 
 Strategy (revised 2026-04-21): 1Password Environments per project; `op` CLI on VM authenticated with a scoped service-account token; secrets injected at runtime via `op run --env-file=<id> -- cmd`. No plaintext `.env` files on disk, no bespoke provisioning script, reactive to 1P changes. The SA token is the one bootstrap secret — provisioned to the VM at creation time via env var (same pattern as `TS_AUTHKEY`).
