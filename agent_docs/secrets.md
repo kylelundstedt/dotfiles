@@ -15,8 +15,17 @@ Commit signing uses SSH agent forwarding over Tailscale (`ForwardAgent yes` for 
 
 MCP servers use remote HTTP transport. No local wrapper scripts or `.env` files.
 
-- **OAuth servers** (MotherDuck, Tigris, Readwise) — browser auth on first use. Works everywhere. On VMs, use `ssh <vm>.exe.xyz` (carries `LocalForward 8765`) for the OAuth callback.
-- **GitHub servers** (github-home, github-work) — PATs from 1Password, resolved at install time via `op read` and stored in `~/.claude.json`. macOS only.
+**On exe.dev VMs** — three of five servers connect automatically via HTTP proxy integrations (no secrets on VM):
+
+| Server | Integration | Auth |
+|---|---|---|
+| motherduck | `motherduck-mcp` | Static bearer token (auto) |
+| github-home | `github-mcp-home` | Static bearer token (auto) |
+| github-work | `github-mcp-work` | Static bearer token (auto) |
+| tigris | — | OAuth (one-time browser dance via `LocalForward 8765`) |
+| readwise | — | OAuth (one-time browser dance via `LocalForward 8765`) |
+
+**On macOS** — OAuth for MotherDuck/Tigris/Readwise (browser auth on first use). GitHub servers use PATs from 1Password, resolved at install time via `op read`.
 
 ## 1Password Patterns
 

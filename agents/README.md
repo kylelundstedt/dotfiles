@@ -21,7 +21,7 @@ Stow deploys the core agent infrastructure:
 ~/.codex/AGENTS.md  → ../.agents/AGENTS.md   ← so Codex reads the canonical file
 ```
 
-MCP servers are registered as remote HTTP endpoints by `install.sh` — no local wrappers needed. OAuth servers (MotherDuck, Tigris) work on all environments. GitHub servers use PATs from 1Password (macOS only).
+MCP servers are registered as remote HTTP endpoints by `install.sh` — no local wrappers needed. On exe.dev VMs, MotherDuck and GitHub servers use HTTP proxy integrations (no secrets on VM); Tigris and Readwise use OAuth. On macOS, all OAuth servers use browser auth; GitHub servers use PATs from 1Password.
 
 Skills are deployed by `npx -y skills add -g -y` (the [skills CLI](https://github.com/vercel-labs/skills)), which installs them directly into `~/.claude/skills/` and `~/.codex/skills/`. The `.stow-local-ignore` file excludes skills from the stow package. Canonical skill source files live in `agents/.agents/skills/` in this repo.
 

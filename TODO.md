@@ -53,12 +53,17 @@ Cross-AI / multi-machine persistent memory via Basic Memory (basicmachines-co). 
 
 ## Done (2026-05-23)
 
+- [x] install.sh: skip redundant downloads on exeuntu (`need` guards, skip apt-get when packages present)
 - [x] install.sh: skip Codex MCP add on non-interactive sessions (was hanging on headless VMs)
-- [x] install.sh, ssh config: `User root` → `User exedev` (Tailscale SSH hangs as root on exeuntu)
-- [x] exe.dev default setup script (`exe-setup.sh`): Tailscale via API proxy, ghost node cleanup, dotfiles — three-command bootstrap in ~4s
+- [x] install.sh: `User root` → `User exedev` in SSH config (Tailscale SSH hangs as root on exeuntu)
+- [x] install.sh: GitHub MCP servers via exe.dev HTTP proxy on VMs (`github-mcp-home`, `github-mcp-work`)
+- [x] install.sh: MotherDuck MCP via exe.dev HTTP proxy on VMs (`motherduck-mcp`)
+- [x] exe.dev default setup script (`exe-setup.sh`): Tailscale via API proxy, ghost node cleanup, dotfiles
 - [x] `tailscale-api` HTTP proxy integration on exe.dev — no secrets on VM
-- [x] exe-dev skill updated with new bootstrap flow
-- [x] Removed devbox image section (superseded by exeuntu + setup script)
+- [x] exe-dev skill updated with MCP proxy setup and bootstrap flow
+- [x] agent_docs: rewrote secrets.md and linux.md for exe.dev era
+- [x] sync-repos.sh: fast-forward default branch after fetch; split work repos by org; added USAA org
+- [x] Restructured `~/github/` from flat `klundstedt/` to per-org directories (IndustryVault, iv-cmg, USAA)
 
 ## Done (2026-05-20)
 
