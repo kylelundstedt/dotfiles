@@ -157,33 +157,29 @@ This requires the Tailscale ACL to permit `tag:dev` → `tag:dev` for both the n
 
 ## Setting Up a Dev VM
 
-The `--setup-script` flag runs a script at first boot. Combined with the `tailscale-api` HTTP proxy integration (which injects the Tailscale API bearer token), the setup script generates an ephemeral auth key and starts Tailscale — no secrets on the VM.
+A default setup script (`exe-setup.sh`) is registered via `ssh exe.dev defaults write` so every new VM automatically gets Tailscale + dotfiles. No piping needed — just three commands:
 
-### 1. Create VM with setup script + clone repo (~4s)
+### 1. Create VM + clone repo (~4s)
 
 ```bash
-printf '%s\n' \
-  '#!/bin/bash' \
-  'PROXY=https://tailscale-api.int.exe.xyz' \
-  'TS_HOSTNAME=$(hostname)' \
-  'for did in $(curl -sL "$PROXY/api/v2/tailnet/-/devices" | jq -r --arg h "$TS_HOSTNAME" '"'"'.devices[] | select(.hostname == $h) | .id'"'"'); do curl -sL -X DELETE "$PROXY/api/v2/device/$did"; done' \
-  'TS_AUTHKEY=$(curl -sL -X POST "$PROXY/api/v2/tailnet/-/keys" -H "Content-Type: application/json" -d '"'"'{"capabilities":{"devices":{"create":{"reusable":false,"ephemeral":true,"preauthorized":true,"tags":["tag:dev"]}}}}'"'"' | jq -r .key)' \
-  'tailscaled &' \
-  'sleep 2' \
-  'tailscale up --ssh --accept-dns --hostname="$TS_HOSTNAME" --authkey="$TS_AUTHKEY"' \
-  'curl -fsSL https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/install.sh | TS_AUTHKEY="$TS_AUTHKEY" TS_HOSTNAME="$TS_HOSTNAME" bash' \
-  | ssh exe.dev new --name=<vm> --setup-script /dev/stdin
+ssh exe.dev new --name=<vm>
 ssh exe.dev integrations attach <github-label> vm:<vm>
 ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new <vm>.exe.xyz \
   "git clone https://<github-label>.int.exe.xyz/<org>/<repo>.git ~/<repo>"
 ```
 
-The setup script:
+The default setup script (`exe-setup.sh` in the dotfiles repo) runs at first boot and:
 
 - Deletes stale Tailscale nodes with the same hostname (prevents `-2` suffix)
 - Generates a single-use ephemeral auth key via the `tailscale-api` HTTP proxy integration
-- Starts `tailscaled` and authenticates immediately (Tailscale SSH available ~5–10s after VM creation)
+- Starts `tailscaled` and authenticates (Tailscale SSH available ~18s after VM creation)
 - Runs `install.sh` in the background (full dotfiles ~60s)
+
+To set the default (one-time, already done):
+
+```bash
+ssh exe.dev "defaults write dev.exe new.setup-script 'curl -fsSL https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/exe-setup.sh | bash'"
+```
 
 The `tailscale-api` integration holds the Tailscale API bearer token — the VM never sees it. Created once via:
 
