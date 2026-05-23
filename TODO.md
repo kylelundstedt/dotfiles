@@ -10,7 +10,8 @@ Strategy: no plaintext secrets on VM disk. Each secret uses the narrowest delive
 
 | Secret                                   | Mechanism                                                   | Status            |
 | ---------------------------------------- | ----------------------------------------------------------- | ----------------- |
-| GitHub clone/push/signing                | SSH agent forwarding via Tailscale                          | Done              |
+| GitHub clone/push                        | exe.dev GitHub integration (`*.int.exe.xyz`)                | Done              |
+| Git commit signing                       | SSH agent forwarding via Tailscale                          | Done              |
 | Tailscale auth key                       | `tailscale-api` exe.dev HTTP proxy → ephemeral key per boot | Done (2026-05-23) |
 | Tailscale ghost node cleanup             | Setup script `DELETE /api/v2/device/{id}` via proxy         | Done (2026-05-23) |
 | MCP OAuth (MotherDuck, Tigris, Readwise) | `LocalForward 8765` on `*.exe.xyz` only; browser dance      | Done (2026-05-17) |
