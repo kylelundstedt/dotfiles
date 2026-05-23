@@ -206,9 +206,18 @@ install_quarto() {
 install_system_deps() {
     echo "=== System dependencies ==="
     if [[ "$OS" == "linux" ]]; then
-        echo "Installing system packages via apt..."
-        $SUDO apt-get update -qq 2>/dev/null || true
-        $SUDO apt-get install -y -qq stow zsh git curl unzip cron
+        local apt_needed=()
+        for pkg_cmd in stow:stow zsh:zsh git:git curl:curl unzip:unzip cron:cron; do
+            local cmd="${pkg_cmd##*:}" pkg="${pkg_cmd%%:*}"
+            need "$cmd" && apt_needed+=("$pkg")
+        done
+        if [[ ${#apt_needed[@]} -gt 0 ]]; then
+            echo "  Installing ${apt_needed[*]}..."
+            $SUDO apt-get update -qq 2>/dev/null || true
+            $SUDO apt-get install -y -qq "${apt_needed[@]}"
+        else
+            echo "  All system packages present"
+        fi
     elif [[ "$OS" == "macos" ]]; then
         if need brew; then
             echo "Homebrew is required on macOS. Install from https://brew.sh and re-run."
@@ -237,9 +246,8 @@ install_cli_tools() {
         *) echo "  [!] Unsupported platform: $OS-$arch"; return 1 ;;
     esac
 
-    # Always install all tools to ~/.local/bin — no `need` checks.
-    # This ensures identical versions across macOS and Linux regardless of
-    # what the system or brew already has. ~/.local/bin is first on PATH.
+    # Install tools to ~/.local/bin. Skip tools already present (at any path)
+    # to avoid redundant downloads — exeuntu ships with several of these.
     local pids=()
     local fnm_asset
     case "$OS-$arch" in
@@ -249,50 +257,84 @@ install_cli_tools() {
     esac
 
     # Curl install scripts
-    (curl -fsSL https://starship.rs/install.sh | sh -s -- --yes --bin-dir="$LOCAL_BIN" >/dev/null 2>&1 && echo "  [+] starship" || echo "  [!] starship failed") &
-    pids+=($!)
-    (curl -fsSL https://astral.sh/uv/install.sh | env CARGO_HOME="$HOME/.local" sh >/dev/null 2>&1 && echo "  [+] uv" || echo "  [!] uv failed") &
-    pids+=($!)
-    (curl -fsSL https://github.com/atuinsh/atuin/releases/latest/download/atuin-installer.sh | sh -s -- --no-modify-path >/dev/null 2>&1 && echo "  [+] atuin" || echo "  [!] atuin failed") &
-    pids+=($!)
+    if need starship; then
+        (curl -fsSL https://starship.rs/install.sh | sh -s -- --yes --bin-dir="$LOCAL_BIN" >/dev/null 2>&1 && echo "  [+] starship" || echo "  [!] starship failed") &
+        pids+=($!)
+    else echo "  [=] starship"; fi
+    if need uv; then
+        (curl -fsSL https://astral.sh/uv/install.sh | env CARGO_HOME="$HOME/.local" sh >/dev/null 2>&1 && echo "  [+] uv" || echo "  [!] uv failed") &
+        pids+=($!)
+    else echo "  [=] uv"; fi
+    if need atuin && [[ ! -x "$HOME/.atuin/bin/atuin" ]]; then
+        (curl -fsSL https://github.com/atuinsh/atuin/releases/latest/download/atuin-installer.sh | sh -s -- --no-modify-path >/dev/null 2>&1 && echo "  [+] atuin" || echo "  [!] atuin failed") &
+        pids+=($!)
+    else echo "  [=] atuin"; fi
     local direnv_os; case "$OS" in macos) direnv_os="darwin" ;; linux) direnv_os="linux" ;; esac
-    (install_github_binary "direnv/direnv" "direnv\\.${direnv_os}-${gh_arch}\"$" "direnv" "direnv.${direnv_os}-${gh_arch}") &
-    pids+=($!)
-    (install_github_binary "ajeetdsouza/zoxide" "zoxide-.*-${target_triple}.*\\.tar\\.gz" "zoxide") &
-    pids+=($!)
+    if need direnv; then
+        (install_github_binary "direnv/direnv" "direnv\\.${direnv_os}-${gh_arch}\"$" "direnv" "direnv.${direnv_os}-${gh_arch}") &
+        pids+=($!)
+    else echo "  [=] direnv"; fi
+    if need zoxide; then
+        (install_github_binary "ajeetdsouza/zoxide" "zoxide-.*-${target_triple}.*\\.tar\\.gz" "zoxide") &
+        pids+=($!)
+    else echo "  [=] zoxide"; fi
     local tigris_arch; case "$arch" in arm64|aarch64) tigris_arch="arm64" ;; x86_64) tigris_arch="x64" ;; esac
-    (install_github_binary "tigrisdata/cli" "tigris-${direnv_os}-${tigris_arch}\\.tar\\.gz" "tigris" "tigris-${direnv_os}-${tigris_arch}") &
-    pids+=($!)
+    if need tigris; then
+        (install_github_binary "tigrisdata/cli" "tigris-${direnv_os}-${tigris_arch}\\.tar\\.gz" "tigris" "tigris-${direnv_os}-${tigris_arch}") &
+        pids+=($!)
+    else echo "  [=] tigris"; fi
     # archil: CLI on Linux, macOS app installed separately (interactive prompt)
-    if [[ "$OS" == "linux" ]]; then
-        (if need archil; then curl -fsSL https://archil.com/install | sh >/dev/null 2>&1 && echo "  [+] archil" || echo "  [!] archil failed"; fi) &
+    if [[ "$OS" == "linux" ]] && need archil; then
+        (curl -fsSL https://archil.com/install | sh >/dev/null 2>&1 && echo "  [+] archil" || echo "  [!] archil failed") &
         pids+=($!)
     fi
-    (install_github_binary "Schniz/fnm" "${fnm_asset}\\.zip" "fnm" "fnm") &
-    pids+=($!)
+    if need fnm; then
+        (install_github_binary "Schniz/fnm" "${fnm_asset}\\.zip" "fnm" "fnm") &
+        pids+=($!)
+    else echo "  [=] fnm"; fi
 
     # GitHub release binaries
-    (install_github_binary "sharkdp/bat" "bat-v.*-${target_triple}.*\\.tar\\.gz" "bat") &
-    pids+=($!)
-    (install_github_binary "junegunn/fzf" "fzf-.*-${gh_os}_${gh_arch}\\.tar\\.gz" "fzf" "fzf") &
-    pids+=($!)
-    (install_github_binary "BurntSushi/ripgrep" "ripgrep-.*-${target_triple}.*\\.tar\\.gz" "rg") &
-    pids+=($!)
+    if need bat; then
+        (install_github_binary "sharkdp/bat" "bat-v.*-${target_triple}.*\\.tar\\.gz" "bat") &
+        pids+=($!)
+    else echo "  [=] bat"; fi
+    if need fzf; then
+        (install_github_binary "junegunn/fzf" "fzf-.*-${gh_os}_${gh_arch}\\.tar\\.gz" "fzf" "fzf") &
+        pids+=($!)
+    else echo "  [=] fzf"; fi
+    if need rg; then
+        (install_github_binary "BurntSushi/ripgrep" "ripgrep-.*-${target_triple}.*\\.tar\\.gz" "rg") &
+        pids+=($!)
+    else echo "  [=] rg"; fi
     local jq_os; case "$OS" in macos) jq_os="macos" ;; linux) jq_os="linux" ;; esac
-    (install_github_binary "jqlang/jq" "jq-${jq_os}-${gh_arch}\"$" "jq" "jq-${jq_os}-${gh_arch}") &
-    pids+=($!)
-    (install_github_binary "mikefarah/yq" "yq_${gh_os}_${gh_arch}\"$" "yq" "yq_${gh_os}_${gh_arch}") &
-    pids+=($!)
-    (install_github_binary "cli/cli" "gh_.*_${gh_cli_os}_${gh_arch}\\.(tar\\.gz|zip)" "gh") &
-    pids+=($!)
-    (install_github_binary "duckdb/duckdb" "duckdb_cli-${duckdb_os}-${gh_arch}\\.zip" "duckdb" "duckdb") &
-    pids+=($!)
-    (install_github_binary "carapace-sh/carapace-bin" "carapace-bin_.*_${gh_os}_${gh_arch}\\.tar\\.gz" "carapace" "carapace") &
-    pids+=($!)
-    (install_github_binary "stephenleo/cship" "cship-${target_triple}" "cship" "cship-${target_triple}") &
-    pids+=($!)
-    (install_quarto) &
-    pids+=($!)
+    if need jq; then
+        (install_github_binary "jqlang/jq" "jq-${jq_os}-${gh_arch}\"$" "jq" "jq-${jq_os}-${gh_arch}") &
+        pids+=($!)
+    else echo "  [=] jq"; fi
+    if need yq; then
+        (install_github_binary "mikefarah/yq" "yq_${gh_os}_${gh_arch}\"$" "yq" "yq_${gh_os}_${gh_arch}") &
+        pids+=($!)
+    else echo "  [=] yq"; fi
+    if need gh; then
+        (install_github_binary "cli/cli" "gh_.*_${gh_cli_os}_${gh_arch}\\.(tar\\.gz|zip)" "gh") &
+        pids+=($!)
+    else echo "  [=] gh"; fi
+    if need duckdb; then
+        (install_github_binary "duckdb/duckdb" "duckdb_cli-${duckdb_os}-${gh_arch}\\.zip" "duckdb" "duckdb") &
+        pids+=($!)
+    else echo "  [=] duckdb"; fi
+    if need carapace; then
+        (install_github_binary "carapace-sh/carapace-bin" "carapace-bin_.*_${gh_os}_${gh_arch}\\.tar\\.gz" "carapace" "carapace") &
+        pids+=($!)
+    else echo "  [=] carapace"; fi
+    if need cship; then
+        (install_github_binary "stephenleo/cship" "cship-${target_triple}" "cship" "cship-${target_triple}") &
+        pids+=($!)
+    else echo "  [=] cship"; fi
+    if need quarto; then
+        (install_quarto) &
+        pids+=($!)
+    else echo "  [=] quarto"; fi
 
     # Wait for all parallel installs
     for pid in "${pids[@]}"; do
@@ -977,42 +1019,60 @@ setup_tailscale() {
     fi
 
     # --- Linux ---
-    if command -v tailscale >/dev/null 2>&1; then
-        echo "  Already installed"
+
+    # If Tailscale is already connected (e.g. exe-setup.sh ran before us),
+    # just ensure SSH+DNS flags and set up the cron entry.
+    if tailscale status >/dev/null 2>&1; then
+        echo "  Already connected"
+        $SUDO tailscale set --ssh --accept-dns 2>/dev/null || true
     else
-        echo "  Installing Tailscale..."
-        curl -fsSL https://tailscale.com/install.sh | sh >/dev/null 2>&1 || { echo "  [!] Tailscale install failed"; return 0; }
-        echo "  [+] Tailscale"
-    fi
+        # Install if missing
+        if ! command -v tailscale >/dev/null 2>&1; then
+            echo "  Installing Tailscale..."
+            curl -fsSL https://tailscale.com/install.sh | sh >/dev/null 2>&1 || { echo "  [!] Tailscale install failed"; return 0; }
+            echo "  [+] Tailscale"
+        fi
 
-    # Prefer kernel mode (real tailscale0 interface, working MagicDNS, plain ssh
-    # to peers) when /dev/net/tun is available. Fall back to userspace mode for
-    # platforms that don't expose TUN (Sprite, some Apple Containers configs).
-    local ts_args=""
-    [ -c /dev/net/tun ] || ts_args="--tun=userspace-networking"
+        # Prefer kernel mode (real tailscale0 interface, working MagicDNS, plain ssh
+        # to peers) when /dev/net/tun is available. Fall back to userspace mode for
+        # platforms that don't expose TUN (Sprite, some Apple Containers configs).
+        local ts_args=""
+        [ -c /dev/net/tun ] || ts_args="--tun=userspace-networking"
 
-    # Start tailscaled if not running
-    if ! pgrep -x tailscaled >/dev/null 2>&1; then
-        if [ -d "/.sprite" ] && command -v sprite-env >/dev/null 2>&1; then
-            # Sprite — register as a service so it survives sleep/wake (always userspace)
-            sprite-env services create tailscaled --cmd /usr/sbin/tailscaled --args "--tun=userspace-networking" --no-stream 2>/dev/null || true
-            sleep 2
-        elif [ -d /run/systemd/system ]; then
-            # systemd is the active init system (not just installed as a dep)
-            $SUDO systemctl enable --now tailscaled 2>/dev/null || true
+        # Start tailscaled if not running
+        if ! pgrep -x tailscaled >/dev/null 2>&1; then
+            if [ -d "/.sprite" ] && command -v sprite-env >/dev/null 2>&1; then
+                # Sprite — register as a service so it survives sleep/wake (always userspace)
+                sprite-env services create tailscaled --cmd /usr/sbin/tailscaled --args "--tun=userspace-networking" --no-stream 2>/dev/null || true
+                sleep 2
+            elif [ -d /run/systemd/system ]; then
+                # systemd is the active init system (not just installed as a dep)
+                $SUDO systemctl enable --now tailscaled 2>/dev/null || true
+            else
+                # No systemd, no Sprite (e.g. Apple Containers, exe.dev) — start directly
+                $SUDO sh -c "nohup tailscaled $ts_args >/dev/null 2>&1 &"
+                sleep 2
+            fi
+        fi
+
+        # Authenticate with --ssh if we have an auth key
+        local ts_key="${TS_AUTHKEY:-}"
+        if [[ -n "$ts_key" ]]; then
+            local ts_hostname="${TS_HOSTNAME:-}"
+            $SUDO tailscale up --ssh --accept-dns --authkey="$ts_key" ${ts_hostname:+--hostname "$ts_hostname"} 2>/dev/null && echo "  [+] Tailscale up (SSH enabled${ts_hostname:+, hostname=$ts_hostname})" || echo "  [!] tailscale up failed"
         else
-            # No systemd, no Sprite (e.g. Apple Containers, exe.dev) — start directly
-            $SUDO sh -c "nohup tailscaled $ts_args >/dev/null 2>&1 &"
-            sleep 2
+            echo "  No auth key found. Run: sudo tailscale up --ssh"
         fi
     fi
 
     # Maintain @reboot cron entry on platforms without an init system.
     # Self-heals stale flags (e.g. a previous install used userspace mode).
     if ! [ -d "/.sprite" ] && ! [ -d /run/systemd/system ]; then
+        local ts_args_cron=""
+        [ -c /dev/net/tun ] || ts_args_cron="--tun=userspace-networking"
         local cron_cmd
-        if [[ -n "$ts_args" ]]; then
-            cron_cmd="@reboot nohup tailscaled $ts_args >/dev/null 2>&1 &"
+        if [[ -n "$ts_args_cron" ]]; then
+            cron_cmd="@reboot nohup tailscaled $ts_args_cron >/dev/null 2>&1 &"
         else
             cron_cmd="@reboot nohup tailscaled >/dev/null 2>&1 &"
         fi
@@ -1021,20 +1081,6 @@ setup_tailscale() {
         if ! printf '%s\n' "$current_cron" | grep -qxF "$cron_cmd"; then
             { printf '%s\n' "$current_cron" | grep -v 'tailscaled' | grep -v '^$' || true; echo "$cron_cmd"; } | $SUDO crontab -
         fi
-    fi
-
-    # Authenticate with --ssh if we have an auth key
-    local ts_key="${TS_AUTHKEY:-}"
-
-    if [[ -n "$ts_key" ]]; then
-        local ts_hostname="${TS_HOSTNAME:-}"
-        $SUDO tailscale up --ssh --accept-dns --authkey="$ts_key" ${ts_hostname:+--hostname "$ts_hostname"} 2>/dev/null && echo "  [+] Tailscale up (SSH enabled${ts_hostname:+, hostname=$ts_hostname})" || echo "  [!] tailscale up failed"
-    elif tailscale status >/dev/null 2>&1; then
-        echo "  Already authenticated"
-        # Ensure SSH and DNS are enabled
-        $SUDO tailscale set --ssh --accept-dns 2>/dev/null || true
-    else
-        echo "  No auth key found. Run: sudo tailscale up --ssh"
     fi
 }
 
