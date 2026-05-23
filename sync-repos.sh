@@ -56,6 +56,16 @@ sync_repos() {
             if git -C "$repo_dir" rev-parse HEAD >/dev/null 2>&1; then
                 echo "  fetch $name"
                 git -C "$repo_dir" fetch --all --quiet 2>&1 || echo "  WARN: fetch failed for $name"
+                # Fast-forward default branch so local HEAD stays current
+                local default_branch
+                default_branch=$(git -C "$repo_dir" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||')
+                if [[ -n "$default_branch" ]]; then
+                    local current_branch
+                    current_branch=$(git -C "$repo_dir" symbolic-ref --short HEAD 2>/dev/null || true)
+                    if [[ "$current_branch" == "$default_branch" ]]; then
+                        git -C "$repo_dir" merge --ff-only "origin/$default_branch" --quiet 2>/dev/null || true
+                    fi
+                fi
             else
                 echo "  WARN: $name has corrupt .git, removing and re-cloning"
                 rm -rf "$repo_dir"
