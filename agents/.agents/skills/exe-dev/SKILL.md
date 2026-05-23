@@ -200,9 +200,21 @@ ssh <vm>.exe.xyz "git clone https://<label>.int.exe.xyz/<org>/<repo>.git ~/<repo
 
 For commit signing, use Tailscale SSH (`ssh <vm>`) which forwards the 1Password SSH agent. `.zshrc` detects the forwarded agent on login and enables commit signing automatically.
 
-### 3. Authenticate MCP servers (one-time per VM)
+### 3. MCP servers
 
-OAuth-based MCP servers (MotherDuck, Tigris, Readwise, etc.) need a first-time browser dance. The Mac's SSH config tunnels port 8765 to the **`*.exe.xyz` form** of each VM hostname (see "SSH config" above), so the browser callback reaches the right VM's listener.
+Three of five MCP servers connect automatically via exe.dev HTTP proxy integrations — no setup needed on new VMs:
+
+| Server | Proxy integration | Auth |
+|---|---|---|
+| motherduck | `motherduck-mcp.int.exe.xyz` | Static bearer token (auto) |
+| github-home | `github-mcp-home.int.exe.xyz` | Static bearer token (auto) |
+| github-work | `github-mcp-work.int.exe.xyz` | Static bearer token (auto) |
+| tigris | — | OAuth (one-time browser dance) |
+| readwise | — | OAuth (one-time browser dance) |
+
+`install.sh` registers all five servers automatically. The three proxy-based servers show "Connected" immediately after install; Tigris and Readwise show "Needs authentication" until the OAuth flow is completed.
+
+**OAuth flow for Tigris/Readwise (one-time per VM):**
 
 ```bash
 ssh <vm>.exe.xyz                # use the .exe.xyz form — carries LocalForward 8765
@@ -211,7 +223,7 @@ claude                          # inside the VM, start an interactive session
 # claude prints an http://localhost:8765/... URL — open it in the Mac browser
 ```
 
-The Tailscale form (`ssh <vm>`) deliberately does **not** carry the LocalForward — Zed's persistent remote-server SSH would otherwise race for port 8765 on every routine connection. Verified end-to-end on `gitlake` with Tigris (2026-05-17). Do one OAuth flow at a time across VMs because of the port-8765 bind. Tokens cache per VM under `~/.claude/`, so this is a one-time-per-VM step per MCP server.
+The Tailscale form (`ssh <vm>`) deliberately does **not** carry the LocalForward — Zed's persistent remote-server SSH would otherwise race for port 8765 on every routine connection. Do one OAuth flow at a time across VMs because of the port-8765 bind. Tokens cache per VM under `~/.claude/`, so this is a one-time-per-VM step per server.
 
 ### 4. Connect from Zed
 
