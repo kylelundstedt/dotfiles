@@ -164,13 +164,13 @@ A default setup script (`exe-setup.sh`) is registered via `ssh exe.dev defaults 
 ```bash
 ssh exe.dev new --name=<vm>
 ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new <vm>.exe.xyz \
-  "git clone https://github-<repo>.int.exe.xyz/<org>/<repo>.git ~/<repo>"
+  "git clone https://github-<org>-<repo>.int.exe.xyz/<org>/<repo>.git ~/<repo>"
 ```
 
-GitHub integrations are named `github-<repo>` (e.g. `github-gitlake`, `github-rss-feed`). To add a new repo:
+GitHub integrations are named `github-<org>-<repo>` (e.g. `github-kylelundstedt-gitlake`). To add a new repo:
 
 ```bash
-ssh exe.dev integrations add github --name github-<repo> --repository <org>/<repo> --attach auto:all
+ssh exe.dev integrations add github --name github-<org>-<repo> --repository <org>/<repo> --attach auto:all
 ```
 
 The default setup script (`exe-setup.sh` in the dotfiles repo) runs at first boot and:
