@@ -806,18 +806,25 @@ setup_agents() {
         done
 
         # OAuth servers — mirror of Claude Code's set. Add only if missing.
-        for srv in "motherduck https://api.motherduck.com/mcp" \
-                   "tigris https://mcp.storage.dev/mcp" \
-                   "readwise https://mcp2.readwise.io/mcp"; do
-            read -r name url <<< "$srv"
-            if codex mcp get "$name" >/dev/null 2>&1; then
-                echo "  [=] codex mcp: $name (already present)"
-            else
-                codex mcp add "$name" --url "$url" >/dev/null 2>&1 \
-                    && echo "  [+] codex mcp: $name" \
-                    || echo "  [!] codex mcp add $name failed"
-            fi
-        done
+        # codex mcp add eagerly opens a browser OAuth flow, so skip on
+        # non-interactive sessions (e.g. curl|bash on a headless VM) where
+        # there's no browser to complete the callback.
+        if [[ "$IS_INTERACTIVE" == true ]]; then
+            for srv in "motherduck https://api.motherduck.com/mcp" \
+                       "tigris https://mcp.storage.dev/mcp" \
+                       "readwise https://mcp2.readwise.io/mcp"; do
+                read -r name url <<< "$srv"
+                if codex mcp get "$name" >/dev/null 2>&1; then
+                    echo "  [=] codex mcp: $name (already present)"
+                else
+                    codex mcp add "$name" --url "$url" >/dev/null 2>&1 \
+                        && echo "  [+] codex mcp: $name" \
+                        || echo "  [!] codex mcp add $name failed"
+                fi
+            done
+        else
+            echo "  Skipping Codex MCP servers (non-interactive)"
+        fi
 
         # GitHub MCP servers deferred. Codex disallows inline bearer tokens
         # (only --bearer-token-env-var), so wiring github-home/github-work

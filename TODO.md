@@ -1,5 +1,9 @@
 # TODO
 
+## Zed remote folder in existing window (CLI)
+
+- [ ] Track [zed-industries/zed#56282](https://github.com/zed-industries/zed/issues/56282) — `zed ssh://` always opens a new window; `--add` and `--existing` flags don't work with SSH URLs. Workaround: "projects: open remote" in command palette.
+
 ## Devbox image (reproducible dev environment)
 
 ### Build
