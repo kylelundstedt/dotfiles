@@ -157,15 +157,20 @@ This requires the Tailscale ACL to permit `tag:dev` → `tag:dev` for both the n
 
 ## Setting Up a Dev VM
 
-A default setup script (`exe-setup.sh`) is registered via `ssh exe.dev defaults write` so every new VM automatically gets Tailscale + dotfiles. No piping needed — just three commands:
+A default setup script (`exe-setup.sh`) is registered via `ssh exe.dev defaults write` so every new VM automatically gets Tailscale + dotfiles. GitHub integrations are `auto:all`, so no per-VM attach step — just two commands:
 
 ### 1. Create VM + clone repo (~4s)
 
 ```bash
 ssh exe.dev new --name=<vm>
-ssh exe.dev integrations attach <github-label> vm:<vm>
 ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new <vm>.exe.xyz \
-  "git clone https://<github-label>.int.exe.xyz/<org>/<repo>.git ~/<repo>"
+  "git clone https://github-<repo>.int.exe.xyz/<org>/<repo>.git ~/<repo>"
+```
+
+GitHub integrations are named `github-<repo>` (e.g. `github-gitlake`, `github-rss-feed`). To add a new repo:
+
+```bash
+ssh exe.dev integrations add github --name github-<repo> --repository <org>/<repo> --attach auto:all
 ```
 
 The default setup script (`exe-setup.sh` in the dotfiles repo) runs at first boot and:
