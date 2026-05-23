@@ -34,7 +34,9 @@ Solved:
 
 - GitHub clone/push/signing — SSH agent forwarding via Tailscale
 - `TS_AUTHKEY` — passed as env var at VM creation (Mac-side biometric, one-time per VM)
-- MCP server OAuth (MotherDuck, Tigris, Readwise) — Mac's `~/.ssh/config` carries `LocalForward 8765 localhost:8765` for `*.exe.xyz` only (install.sh, 2026-05-17). `User root` covers both `*.exe.xyz` and `*.<tailnet>.ts.net` so `ssh <vm>` still defaults to root, but the OAuth port forward is intentionally scoped to the lobby hostname so routine Tailscale SSH (incl. Zed's persistent remote-server connection) doesn't race for port 8765. For OAuth, use `ssh <vm>.exe.xyz` explicitly. Verified end-to-end on `gitlake` with Tigris. Per-VM token cache; do one OAuth at a time per VM.
+- MCP server OAuth (MotherDuck, Tigris, Readwise) — Mac's `~/.ssh/config` carries `LocalForward 8765 localhost:8765` for `*.exe.xyz` only (install.sh, 2026-05-17). `User exedev` covers both `*.exe.xyz` and `*.<tailnet>.ts.net` so `ssh <vm>` defaults to exedev. OAuth port forward is intentionally scoped to the lobby hostname so routine Tailscale SSH doesn't race for port 8765. For OAuth, use `ssh <vm>.exe.xyz` explicitly. Verified end-to-end on `gitlake` with Tigris. Per-VM token cache; do one OAuth at a time per VM.
+- Tailscale API key — `tailscale-api` HTTP proxy integration on exe.dev (`auto:all`), bearer token from 1P `op://Employee/Tailscale - API Key/credential`. Setup scripts generate ephemeral auth keys via the proxy; the API key never touches VMs. 90-day expiry, created 2026-05-23.
+- Tailscale ghost node cleanup — setup script deletes stale nodes with same hostname before registering, via `DELETE /api/v2/device/{id}` through the proxy.
 
 To do:
 
@@ -42,7 +44,7 @@ To do:
 - [ ] Extend `install.sh` to accept `OP_SERVICE_ACCOUNT_TOKEN` env var; write it to `~/.config/op/sa-token` on VM so `op` auto-authenticates
 - [ ] Set up first 1P Environment for a real project to validate the `op run --env-file` flow
 - [ ] Wire GitHub MCP PAT injection via `op run` at install time (replaces current `op read` on Mac). Same change unblocks Codex GitHub MCPs (github-home, github-work) — Codex disallows inline bearer tokens in `config.toml` (only `bearer_token_env_var`), so it needs a `codex` wrapper that sources PATs via `op run --env-file=...` at exec time, or a 0600-mode cache file sourced from shell init.
-- [ ] Evaluate Tailscale OAuth clients with `auth_keys` + `devices` scopes — gives reusable non-expiring auth keys (removes biometric dependency for `TS_AUTHKEY`) AND programmatic node deletion via `DELETE /api/v2/device/{id}` (removes today's manual ghost-node cleanup in the admin console after every VM teardown)
+- [ ] Rotate Tailscale API key before 2026-08-21 (90-day expiry). Update `tailscale-api` integration: `ssh exe.dev integrations remove tailscale-api` then re-add with new token.
 
 ## Apple Containers
 
@@ -68,10 +70,13 @@ Done (2026-04-23):
 
 One-command equivalent of today's per-VM bootstrap dance: `exe-up <vm-name> <github-org/repo>` creates the exe.dev VM, waits for ready, installs curl, runs `install.sh` with `TS_AUTHKEY`/`TS_HOSTNAME`, clones the repo via Tailscale-forwarded SSH, and adds the Zed `ssh_connections` entry. Worth doing — already at 5+ project VMs and growing one-per-repo.
 
-**Blocked on (do these first):**
+**Previously blocked, now resolved:**
 
-- [ ] Tailscale OAuth client with `devices` scope (see "Secrets on remote VMs"). Without programmatic node deletion, `--rebuild` would leave ghost nodes on every teardown — same friction we hit twice today. The helper without rebuild is half-useful; with it, that's the whole UX.
-- [ ] Sharing-across-folks story for secrets. Today's bootstrap path hardcodes `op://Employee/Tailscale - iv-internal-dev/credential` and the industryvault account. The helper needs to accept `TS_AUTHKEY` from env first, fall back to `op read` only as convenience for users with the same 1P setup, and document both paths in the exe-dev skill.
+- [x] Tailscale API key with `devices` scope — `tailscale-api` HTTP proxy integration handles ephemeral auth key generation and ghost node deletion. No biometric dependency, no secrets on VM.
+- [x] Secrets sharing — HTTP proxy integration (`auto:all`) means any exe.dev VM can use it. No per-user 1P setup required.
+- [x] Setup script pattern validated — `--setup-script` with early `tailscaled` start gives Tailscale SSH in ~5–10s, full dotfiles in ~60s.
+
+**Remaining:**
 
 **Design once unblocked:**
 
@@ -138,6 +143,15 @@ Per `gitlake/iv/iv_products.md`, IV Datasets surface a "per-dataset Data Product
 ## install.sh hygiene
 
 - [ ] Replace swallowed errors in `setup_agents` (`>/dev/null 2>&1 || true` → explicit `echo "[!] X failed"` on non-zero). The silent pattern hid the missing `github-home` MCP on klundstedt-mini for an unknown number of runs before it was diagnosed.
+
+## Done (2026-05-23)
+
+- [x] install.sh: skip Codex MCP add on non-interactive sessions — `codex mcp add` eagerly opens an OAuth browser flow, hanging indefinitely on headless VMs. Guarded with `IS_INTERACTIVE`.
+- [x] install.sh, ssh config: `User root` → `User exedev` for exe.dev VMs — Tailscale SSH on exeuntu times out as root but works as exedev. Migration in install.sh for existing configs.
+- [x] exe.dev setup script: `--setup-script` with `tailscale-api` HTTP proxy integration. Generates ephemeral Tailscale auth key via API proxy (no secrets on VM), deletes stale nodes to prevent hostname suffix, starts `tailscaled` immediately (Tailscale SSH in ~5–10s). Full dotfiles install runs in background (~60s).
+- [x] exe.dev `tailscale-api` HTTP proxy integration: bearer token from 1P, `auto:all` attachment. Enables any VM to call the Tailscale API without holding the API key. Unblocks `exe-up` helper and programmatic ghost node cleanup.
+- [x] exe-dev skill: updated SSH config examples, added setup script + HTTP proxy integration docs, updated "Setting Up a Dev VM" section.
+- [x] IV naming convention for exe.dev VMs: `iv-<clientid>-<purpose>`, e.g. `iv-iv-gitlake` for IV's own gitlake project.
 
 ## Done (2026-05-20)
 

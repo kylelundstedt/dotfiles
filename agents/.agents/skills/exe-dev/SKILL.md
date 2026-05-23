@@ -112,13 +112,13 @@ The private key lives in 1Password ("SSH Key - exe.dev" in Employee vault). Only
 
 ```
 Host *.exe.xyz *.<tailnet>.ts.net
-  User root
+  User exedev
 
 Host *.exe.xyz
   LocalForward 8765 localhost:8765
 ```
 
-`User root` applies broadly so `ssh <vm>` and `ssh <vm>.exe.xyz` both default to root. `LocalForward 8765` is scoped to **the `*.exe.xyz` form only** — the Tailscale name is deliberately left out so routine `ssh <vm>` connections don't race for port 8765. Zed's remote-server SSH keeps a persistent connection open; if the LocalForward were on the Tailscale pattern too, every subsequent terminal `ssh <vm>` would log `bind: Address already in use` and its tunnel would be dead.
+`User exedev` applies broadly so `ssh <vm>` and `ssh <vm>.exe.xyz` both default to exedev (exeuntu's default user). `LocalForward 8765` is scoped to **the `*.exe.xyz` form only** — the Tailscale name is deliberately left out so routine `ssh <vm>` connections don't race for port 8765. Zed's remote-server SSH keeps a persistent connection open; if the LocalForward were on the Tailscale pattern too, every subsequent terminal `ssh <vm>` would log `bind: Address already in use` and its tunnel would be dead.
 
 **For MCP OAuth flows, use `ssh <vm>.exe.xyz`** — that gets the tunnel. Everyday work uses `ssh <vm>` (Tailscale) and stays clean.
 
@@ -157,36 +157,52 @@ This requires the Tailscale ACL to permit `tag:dev` → `tag:dev` for both the n
 
 ## Setting Up a Dev VM
 
-After creating a new VM, set up Tailscale and install dotfiles. Tailscale provides a stable hostname and brings SSH agent forwarding from the Mac's 1Password SSH agent — which handles private repo clone, push, and commit signing uniformly across all dev VM platforms.
+The `--setup-script` flag runs a script at first boot. Combined with the `tailscale-api` HTTP proxy integration (which injects the Tailscale API bearer token), the setup script generates an ephemeral auth key and starts Tailscale — no secrets on the VM.
 
-### 1. Install Tailscale and dotfiles
-
-Pass `TS_AUTHKEY` and `TS_HOSTNAME` so install.sh handles Tailscale end-to-end:
+### 1. Create VM with setup script + clone repo (~4s)
 
 ```bash
-TS_AUTHKEY="$(op read 'op://Employee/Tailscale - iv-internal-dev/credential' --account industryvault.1password.com)"
-ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new <vm>.exe.xyz "TS_AUTHKEY='$TS_AUTHKEY' TS_HOSTNAME='<vm>' bash -c 'curl -fsSL https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/install.sh | bash'"
+printf '%s\n' \
+  '#!/bin/bash' \
+  'PROXY=https://tailscale-api.int.exe.xyz' \
+  'TS_HOSTNAME=$(hostname)' \
+  'for did in $(curl -sL "$PROXY/api/v2/tailnet/-/devices" | jq -r --arg h "$TS_HOSTNAME" '"'"'.devices[] | select(.hostname == $h) | .id'"'"'); do curl -sL -X DELETE "$PROXY/api/v2/device/$did"; done' \
+  'TS_AUTHKEY=$(curl -sL -X POST "$PROXY/api/v2/tailnet/-/keys" -H "Content-Type: application/json" -d '"'"'{"capabilities":{"devices":{"create":{"reusable":false,"ephemeral":true,"preauthorized":true,"tags":["tag:dev"]}}}}'"'"' | jq -r .key)' \
+  'tailscaled &' \
+  'sleep 2' \
+  'tailscale up --ssh --accept-dns --hostname="$TS_HOSTNAME" --authkey="$TS_AUTHKEY"' \
+  'curl -fsSL https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/install.sh | TS_AUTHKEY="$TS_AUTHKEY" TS_HOSTNAME="$TS_HOSTNAME" bash' \
+  | ssh exe.dev new --name=<vm> --setup-script /dev/stdin
+ssh exe.dev integrations attach <github-label> vm:<vm>
+ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new <vm>.exe.xyz \
+  "git clone https://<github-label>.int.exe.xyz/<org>/<repo>.git ~/<repo>"
 ```
 
-Verify Tailscale SSH connectivity from the Mac:
+The setup script:
+
+- Deletes stale Tailscale nodes with the same hostname (prevents `-2` suffix)
+- Generates a single-use ephemeral auth key via the `tailscale-api` HTTP proxy integration
+- Starts `tailscaled` and authenticates immediately (Tailscale SSH available ~5–10s after VM creation)
+- Runs `install.sh` in the background (full dotfiles ~60s)
+
+The `tailscale-api` integration holds the Tailscale API bearer token — the VM never sees it. Created once via:
 
 ```bash
-ssh -o StrictHostKeyChecking=accept-new <vm> echo ok
+ssh exe.dev integrations add http-proxy --name tailscale-api \
+  --target https://api.tailscale.com \
+  --bearer "$(op read 'op://Employee/Tailscale - API Key/credential' --account industryvault.1password.com)" \
+  --attach auto:all
 ```
-
-Do not proceed until this succeeds.
 
 ### 2. Clone project repos
 
-The Mac's SSH config sets `ForwardAgent yes` for `*.ts.net` hosts. `ssh <vm>` via Tailscale exposes the 1Password SSH agent to the VM, so git operations work with no tokens or keys on the VM:
+The exe.dev GitHub integration handles clone/push with no tokens on the VM:
 
 ```bash
-ssh <vm> git clone git@github.com:<org>/<repo>.git ~/<repo>
+ssh <vm>.exe.xyz "git clone https://<label>.int.exe.xyz/<org>/<repo>.git ~/<repo>"
 ```
 
-`.zshrc` detects the forwarded agent on login and enables commit signing automatically.
-
-**Alternative (rarely needed):** The [exe.dev GitHub integration](https://exe.dev/docs/integrations-github) proxies private-repo clone/fetch/push via `https://<label>.int.exe.xyz/<org>/<repo>.git`, with no secrets on the VM. Useful when Tailscale isn't available, but does not cover commit signing — so typically still ends up paired with agent forwarding anyway.
+For commit signing, use Tailscale SSH (`ssh <vm>`) which forwards the 1Password SSH agent. `.zshrc` detects the forwarded agent on login and enables commit signing automatically.
 
 ### 3. Authenticate MCP servers (one-time per VM)
 
