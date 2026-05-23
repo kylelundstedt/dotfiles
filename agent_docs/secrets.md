@@ -6,7 +6,7 @@ Secrets are never stored in plaintext. Each secret uses the narrowest delivery m
 
 exe.dev integrations handle the two secrets that every VM needs — no tokens on VM disk:
 
-- **GitHub clone/push** — exe.dev GitHub integration. URLs like `https://<label>.int.exe.xyz/<org>/<repo>.git`. Attached per-VM (`integrations attach <label> vm:<vm>`) or globally (`auto:all`).
+- **GitHub clone/push** — exe.dev GitHub integration. Named `github-<org>-<repo>`, attached per-VM (`integrations attach github-<org>-<repo> vm:<vm>`). Clone via `https://github-<org>-<repo>.int.exe.xyz/<org>/<repo>.git`.
 - **Tailscale auth** — `tailscale-api` HTTP proxy integration. The setup script (`exe-setup.sh`) generates a single-use ephemeral key via `POST /api/v2/tailnet/-/keys` through the proxy; exe.dev injects the bearer token.
 
 Commit signing uses SSH agent forwarding over Tailscale (`ForwardAgent yes` for `*.ts.net` in SSH config). The private key stays in 1Password on the Mac.
