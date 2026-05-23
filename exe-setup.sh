@@ -20,9 +20,10 @@ TS_AUTHKEY=$(curl -sL -X POST "$PROXY/api/v2/tailnet/-/keys" \
   | jq -r '.key')
 
 # Start Tailscale immediately (tailscaled is pre-installed on exeuntu)
-tailscaled &
+# Needs sudo — setup script runs as exedev, not root.
+sudo tailscaled &
 sleep 2
-tailscale up --ssh --accept-dns --hostname="$TS_HOSTNAME" --authkey="$TS_AUTHKEY"
+sudo tailscale up --ssh --accept-dns --hostname="$TS_HOSTNAME" --authkey="$TS_AUTHKEY"
 
 # Install dotfiles
 curl -fsSL https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/install.sh \
