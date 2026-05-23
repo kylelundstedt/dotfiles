@@ -15,7 +15,7 @@ Strategy: no plaintext secrets on VM disk. Each secret uses the narrowest delive
 | Tailscale ghost node cleanup             | Setup script via same HTTP proxy                           | Done (2026-05-23) |
 | Git commit signing                       | SSH agent forwarding via Tailscale                         | Done              |
 | MCP OAuth (MotherDuck, Tigris, Readwise) | `LocalForward 8765` on `*.exe.xyz`; browser dance          | Done (2026-05-17) |
-| GitHub MCP PATs on VMs                   | exe.dev HTTP proxy integration (same pattern as Tailscale) | Not started       |
+| GitHub MCP PATs on VMs                   | exe.dev HTTP proxy integration (`github-mcp-home`, `github-mcp-work`) | Done (2026-05-23) |
 | Per-project app secrets                  | 1P service account + `op run --env-file`                   | Not started       |
 
 ### To do
@@ -23,8 +23,8 @@ Strategy: no plaintext secrets on VM disk. Each secret uses the narrowest delive
 - [ ] Create per-project 1P service account (read-only access to project vault)
 - [ ] Extend `install.sh` to accept `OP_SERVICE_ACCOUNT_TOKEN` env var; write to `~/.config/op/sa-token`
 - [ ] Validate `op run --env-file` flow on a real project
-- [ ] Wire GitHub MCP PATs via exe.dev HTTP proxy integration (same pattern as `tailscale-api`; unblocks `github-home`/`github-work` on VMs)
 - [ ] Rotate Tailscale API key before 2026-08-21 (`ssh exe.dev integrations remove tailscale-api` then re-add)
+- [ ] Rotate GitHub PATs when expired (`ssh exe.dev integrations remove github-mcp-home` then re-add)
 
 ## exe.dev consolidation
 

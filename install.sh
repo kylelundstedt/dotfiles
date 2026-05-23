@@ -820,17 +820,20 @@ setup_agents() {
     # --- Claude Code ---
     if command -v claude >/dev/null 2>&1; then
         # Remove stale servers from previous installations
-        for old in dlt github-home github-work motherduck readwise tigris; do
-            claude mcp remove --scope user "$old" >/dev/null 2>&1 || true
-        done
+        claude mcp remove --scope user dlt >/dev/null 2>&1 || true
 
         # OAuth servers (browser auth on first use)
         claude mcp add --transport http --scope user motherduck https://api.motherduck.com/mcp >/dev/null 2>&1 || true
         claude mcp add --transport http --scope user tigris https://mcp.storage.dev/mcp >/dev/null 2>&1 || true
         claude mcp add --transport http --scope user readwise https://mcp2.readwise.io/mcp >/dev/null 2>&1 || true
 
-        # GitHub servers (PAT from 1Password)
-        if [[ "$op_configured" == true ]]; then
+        # GitHub servers — on exe.dev VMs, use HTTP proxy integrations
+        # (no secrets on VM); on macOS, use PATs from 1Password directly.
+        if [[ "$OS" == "linux" ]]; then
+            claude mcp add --transport http --scope user github-home https://github-mcp-home.int.exe.xyz/mcp/ >/dev/null 2>&1 || true
+            claude mcp add --transport http --scope user github-work https://github-mcp-work.int.exe.xyz/mcp/ >/dev/null 2>&1 || true
+            echo "  [+] GitHub MCP servers (exe.dev proxy)"
+        elif [[ "$op_configured" == true ]]; then
             local pat_home pat_work
             pat_home=$(op read "op://Private/GitHub PAT Home/token" --account lundstedts.1password.com 2>/dev/null) || true
             pat_work=$(op read "op://Employee/GitHub PAT IV/token" --account industryvault.1password.com 2>/dev/null) || true
