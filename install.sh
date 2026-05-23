@@ -447,7 +447,7 @@ path = sys.argv[1]
 content = open(path).read()
 pattern = re.compile(
     r'\n*Host \*\.exe\.xyz \*\.[^ \n]+\.ts\.net\n'
-    r'  User root\n'
+    r'  User (?:root|exedev)\n'
     r'  LocalForward 8765 localhost:8765\n',
     re.MULTILINE,
 )
@@ -460,17 +460,23 @@ PYEOF
                 || echo "  [+] Migrated legacy combined exe.dev SSH stanza"
         fi
 
-        # exe.dev dev VMs default to root over both direct (*.exe.xyz) and
-        # Tailscale-canonical (*.<tailnet>.ts.net) names.
-        if ! grep -qF 'User root' "$ssh_config" 2>/dev/null; then
-            local exe_hosts="*.exe.xyz"
-            [[ -n "$tailnet_domain" ]] && exe_hosts="$exe_hosts *.${tailnet_domain}"
-            cat >> "$ssh_config" <<SSHEOF
+        # exe.dev dev VMs default to exedev (exeuntu image) over both direct
+        # (*.exe.xyz) and Tailscale-canonical (*.<tailnet>.ts.net) names.
+        if ! grep -qF 'User exedev' "$ssh_config" 2>/dev/null; then
+            # Migrate from old User root stanza
+            if grep -qF 'User root' "$ssh_config" 2>/dev/null; then
+                sed -i.bak 's/  User root/  User exedev/' "$ssh_config" && rm -f "${ssh_config}.bak"
+                echo "  [+] Migrated SSH User root → exedev"
+            else
+                local exe_hosts="*.exe.xyz"
+                [[ -n "$tailnet_domain" ]] && exe_hosts="$exe_hosts *.${tailnet_domain}"
+                cat >> "$ssh_config" <<SSHEOF
 
 Host $exe_hosts
-  User root
+  User exedev
 SSHEOF
-            echo "  [+] SSH User root for exe.dev VMs"
+                echo "  [+] SSH User exedev for exe.dev VMs"
+            fi
         fi
 
         # MCP OAuth callback forward — scoped to *.exe.xyz only (not the Tailscale
