@@ -44,8 +44,17 @@ done
 # Tailscale connected with SSH enabled
 if tailscale status >/dev/null 2>&1; then echo "OK tailscale-connected"; else echo "MISSING tailscale-connected"; fi
 
+# SSH config is a real file (not a stow symlink)
+if [ -f ~/.ssh/config ] && [ ! -L ~/.ssh/config ]; then echo "OK ssh-config-file"; else echo "MISSING ssh-config-file"; fi
+
 # SSH multiplexing
 if grep -q "Host github.com" ~/.ssh/config 2>/dev/null; then echo "OK ssh-mux"; else echo "MISSING ssh-mux"; fi
+
+# exe_dev.pub copied
+if [ -f ~/.ssh/exe_dev.pub ]; then echo "OK exe-dev-key"; else echo "MISSING exe-dev-key"; fi
+
+# exe.dev known host
+if grep -q 'exe.dev' ~/.ssh/known_hosts 2>/dev/null; then echo "OK exe-known-host"; else echo "MISSING exe-known-host"; fi
 
 # Git OS include
 if [ -f ~/.gitconfig_os_local ]; then echo "OK git-os-include"; else echo "MISSING git-os-include"; fi

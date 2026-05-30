@@ -24,7 +24,6 @@ Temporary Items
 homebrew/Brewfile.lock.json
 # Local configs (not for public)
 aws/.aws/config
-ssh/.ssh/config
 git/.gitconfig_local
 git/.gitconfig_personal
 git/.gitconfig_work

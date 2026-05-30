@@ -44,7 +44,7 @@ Decision (2026-05-01): exe.dev is the primary dev-VM platform. Apple Containers 
 Decision (2026-05-23): single tailnet for now (Option 1 — you create VMs, contractors use them via `*.exe.xyz`). Move to per-tenant tailnets (Option 2) when there's a paying client.
 
 - [ ] Per-tenant Tailscale tailnet + API key + `tailscale-api-<client>` integration scoped to `tag:<client>`
-- [ ] Per-tenant `exe-setup.sh` variant or parameterized setup script
+- [ ] Per-tenant setup script (parameterize install.sh's `setup_tailscale`)
 - [ ] Team integrations (`--team`) for client-scoped MCP servers
 
 ## Basic Memory (evaluation)
@@ -58,6 +58,14 @@ Cross-AI / multi-machine persistent memory via Basic Memory (basicmachines-co). 
 ## install.sh hygiene
 
 - [ ] Replace swallowed errors in `setup_agents` (`>/dev/null 2>&1 || true` → explicit `echo "[!] X failed"` on non-zero)
+
+## Done (2026-05-30)
+
+- [x] SSH config: single-source-of-truth rewrite — install.sh generates `~/.ssh/config` from scratch, removed ssh stow package
+- [x] Folded `exe-setup.sh` into install.sh's `setup_tailscale` (Tailscale proxy detection, auth key gen, ghost node cleanup)
+- [x] Fixed `User exedev` scope — was `*.exe.xyz *.ts.net` (applied to all tailnet hosts incl. Macs), now `*.exe.xyz` only
+- [x] Pre-seed exe.dev host key in known_hosts (wildcard `*.exe.xyz` entry, no more `StrictHostKeyChecking=accept-new`)
+- [x] `TS_HOSTNAME` defaults to `$(hostname)` so Tailscale name always matches VM name
 
 ## Done (2026-05-23)
 

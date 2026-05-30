@@ -337,7 +337,7 @@ install_cli_tools() {
     else echo "  [=] quarto"; fi
 
     # Wait for all parallel installs
-    for pid in "${pids[@]}"; do
+    for pid in "${pids[@]+"${pids[@]}"}"; do
         wait "$pid" 2>/dev/null || true
     done
 }
@@ -409,199 +409,116 @@ setup_git() {
     path = $include_path
 EOF
 
-    # SSH config
+    # --- SSH config (complete write) ---
     local ssh_config="$HOME/.ssh/config"
     mkdir -p "$HOME/.ssh/sockets"
     chmod 700 "$HOME/.ssh"
-    touch "$ssh_config"
+
+    # Migration: remove stow symlink (ssh package no longer manages this file)
+    [[ -L "$ssh_config" ]] && rm "$ssh_config"
+
+    # Copy exe_dev.pub from repo (needed for IdentityFile key pinning).
+    # Remove any stow symlink first — cp follows symlinks and would
+    # overwrite the repo source file instead of creating a real copy.
+    local exe_pub_src="$DOTFILES_DIR/ssh/exe_dev.pub"
+    if [[ -f "$exe_pub_src" ]]; then
+        [[ -L "$HOME/.ssh/exe_dev.pub" ]] && rm "$HOME/.ssh/exe_dev.pub"
+        cp "$exe_pub_src" "$HOME/.ssh/exe_dev.pub"
+        chmod 644 "$HOME/.ssh/exe_dev.pub"
+    fi
 
     if [[ "$OS" == "macos" ]]; then
-        # Detect tailnet domain once — used by canonicalization and OAuth-forward blocks below
+        # Detect tailnet domain for hostname canonicalization
         local tailnet_domain=""
         if tailscale status >/dev/null 2>&1; then
-            tailnet_domain=$(tailscale status --json 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin)['Self']['DNSName']; parts=d.rstrip('.').split('.'); print('.'.join(parts[1:]))" 2>/dev/null)
+            tailnet_domain=$(tailscale status --json 2>/dev/null \
+                | python3 -c "import sys,json; d=json.load(sys.stdin)['Self']['DNSName']; parts=d.rstrip('.').split('.'); print('.'.join(parts[1:]))" 2>/dev/null) || true
         fi
 
-        # Canonicalize MagicDNS short names to FQDNs (must be at top of config)
-        if ! grep -q 'CanonicalizeHostname' "$ssh_config" 2>/dev/null && [[ -n "$tailnet_domain" ]]; then
-            local tmp_config
-            tmp_config=$(mktemp)
-            cat > "$tmp_config" <<SSHEOF
+        cat > "$ssh_config" <<'SSHEOF'
+# Managed by dotfiles/install.sh — do not edit manually.
+SSHEOF
+
+        if [[ -n "$tailnet_domain" ]]; then
+            cat >> "$ssh_config" <<SSHEOF
+
 CanonicalizeHostname yes
 CanonicalDomains $tailnet_domain
 CanonicalizeMaxDots 0
-
 SSHEOF
-            cat "$ssh_config" >> "$tmp_config"
-            mv "$tmp_config" "$ssh_config"
-            chmod 600 "$ssh_config"
-            echo "  [+] SSH hostname canonicalization for $tailnet_domain"
         fi
 
-        # SSH multiplexing for GitHub
-        if ! grep -q 'Host github.com' "$ssh_config" 2>/dev/null; then
-            cat >> "$ssh_config" <<'SSHEOF'
+        cat >> "$ssh_config" <<'SSHEOF'
 
 Host github.com
   ControlMaster auto
   ControlPath ~/.ssh/sockets/%r@%h-%p
   ControlPersist 600
-SSHEOF
-            echo "  [+] SSH multiplexing for github.com"
-        fi
-
-        # SSH multiplexing for exe.dev lobby and direct VM SSH (avoids silent per-IP rate limit)
-        if ! grep -qF 'Host exe.dev *.exe.xyz' "$ssh_config" 2>/dev/null; then
-            cat >> "$ssh_config" <<'SSHEOF'
 
 Host exe.dev *.exe.xyz
   ControlMaster auto
   ControlPath ~/.ssh/sockets/%r@%h-%p
   ControlPersist 600
-SSHEOF
-            echo "  [+] SSH multiplexing for exe.dev"
-        fi
-
-        # Pin exe.dev to its dedicated key (1Password agent offers many keys; exe.dev
-        # rejects unknown keys with "Please complete registration"). Additive second
-        # Host stanza — SSH merges with the multiplexing block above.
-        if ! grep -qF 'IdentityFile ~/.ssh/exe_dev.pub' "$ssh_config" 2>/dev/null; then
-            cat >> "$ssh_config" <<'SSHEOF'
-
-Host exe.dev *.exe.xyz
   IdentitiesOnly yes
   IdentityFile ~/.ssh/exe_dev.pub
-SSHEOF
-            echo "  [+] SSH key pinning for exe.dev"
-        fi
-
-        # One-shot migration: commit 539a7c5 wrote a combined stanza
-        #   Host *.exe.xyz *.<tailnet>.ts.net
-        #     User root
-        #     LocalForward 8765 localhost:8765
-        # which made every routine `ssh <vm>` (Tailscale form) race against Zed's
-        # persistent remote-server SSH for port 8765. Remove the legacy block so
-        # the corrected split-stanza blocks below re-add the right form.
-        if grep -qE '^Host \*\.exe\.xyz \*\.[^ ]+\.ts\.net$' "$ssh_config" 2>/dev/null; then
-            python3 - "$ssh_config" <<'PYEOF'
-import re, sys
-path = sys.argv[1]
-content = open(path).read()
-pattern = re.compile(
-    r'\n*Host \*\.exe\.xyz \*\.[^ \n]+\.ts\.net\n'
-    r'  User (?:root|exedev)\n'
-    r'  LocalForward 8765 localhost:8765\n',
-    re.MULTILINE,
-)
-new = pattern.sub('\n', content, count=1)
-if new != content:
-    open(path, 'w').write(new)
-    print('migrated')
-PYEOF
-            grep -qE '^Host \*\.exe\.xyz \*\.[^ ]+\.ts\.net$' "$ssh_config" 2>/dev/null \
-                || echo "  [+] Migrated legacy combined exe.dev SSH stanza"
-        fi
-
-        # exe.dev dev VMs default to exedev (exeuntu image) over both direct
-        # (*.exe.xyz) and Tailscale-canonical (*.<tailnet>.ts.net) names.
-        if ! grep -qF 'User exedev' "$ssh_config" 2>/dev/null; then
-            # Migrate from old User root stanza
-            if grep -qF 'User root' "$ssh_config" 2>/dev/null; then
-                sed -i.bak 's/  User root/  User exedev/' "$ssh_config" && rm -f "${ssh_config}.bak"
-                echo "  [+] Migrated SSH User root → exedev"
-            else
-                local exe_hosts="*.exe.xyz"
-                [[ -n "$tailnet_domain" ]] && exe_hosts="$exe_hosts *.${tailnet_domain}"
-                cat >> "$ssh_config" <<SSHEOF
-
-Host $exe_hosts
-  User exedev
-SSHEOF
-                echo "  [+] SSH User exedev for exe.dev VMs"
-            fi
-        fi
-
-        # MCP OAuth callback forward — scoped to *.exe.xyz only (not the Tailscale
-        # form) so routine `ssh <vm>` connections don't race for port 8765. Zed's
-        # remote-server keeps a persistent SSH connection open, which would bind
-        # the port and make every subsequent OAuth-form login warn "Address already
-        # in use". For OAuth flows, use `ssh <vm>.exe.xyz` explicitly.
-        if ! grep -qF 'LocalForward 8765' "$ssh_config" 2>/dev/null; then
-            cat >> "$ssh_config" <<'SSHEOF'
 
 Host *.exe.xyz
+  User exedev
   LocalForward 8765 localhost:8765
-SSHEOF
-            echo "  [+] SSH OAuth callback forward (8765) for *.exe.xyz"
-        fi
-
-        # Forward SSH agent to Tailscale VMs
-        if ! grep -q 'ForwardAgent yes' "$ssh_config" 2>/dev/null; then
-            cat >> "$ssh_config" <<'SSHEOF'
 
 Host *.ts.net
   ForwardAgent yes
 SSHEOF
-            echo "  [+] SSH agent forwarding for *.ts.net"
-        fi
 
-        # 1Password SSH agent
         local op_agent_sock="$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
-        if [[ -S "$op_agent_sock" ]] && ! grep -q 'IdentityAgent' "$ssh_config" 2>/dev/null; then
+        if [[ -S "$op_agent_sock" ]]; then
             cat >> "$ssh_config" <<'SSHEOF'
 
 Host *
   IdentityAgent "~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
 SSHEOF
-            echo "  [+] 1Password SSH agent"
         fi
-    fi
 
-    if [[ "$OS" == "linux" ]]; then
-        # GitHub SSH over port 443 (port 22 blocked on Apple Containers)
-        if ! grep -q 'Host github.com' "$ssh_config" 2>/dev/null; then
-            cat >> "$ssh_config" <<'SSHEOF'
+        echo "  [+] SSH config (macOS)"
+
+    elif [[ "$OS" == "linux" ]]; then
+        cat > "$ssh_config" <<'SSHEOF'
+# Managed by dotfiles/install.sh — do not edit manually.
 
 Host github.com
   Hostname ssh.github.com
   Port 443
   User git
-SSHEOF
-            echo "  [+] GitHub SSH over port 443"
-        fi
-
-        # Add GitHub known host (idempotent)
-        if ! grep -q 'ssh.github.com' "$HOME/.ssh/known_hosts" 2>/dev/null; then
-            ssh-keyscan -p 443 ssh.github.com >> "$HOME/.ssh/known_hosts" 2>/dev/null
-            echo "  [+] GitHub known host"
-        fi
-
-        # SSH multiplexing for exe.dev lobby and direct VM SSH (avoids silent per-IP rate limit)
-        if ! grep -qF 'Host exe.dev *.exe.xyz' "$ssh_config" 2>/dev/null; then
-            cat >> "$ssh_config" <<'SSHEOF'
 
 Host exe.dev *.exe.xyz
   ControlMaster auto
   ControlPath ~/.ssh/sockets/%r@%h-%p
   ControlPersist 600
-SSHEOF
-            echo "  [+] SSH multiplexing for exe.dev"
-        fi
-
-        # Pin exe.dev to its dedicated key — needed when a forwarded 1Password agent
-        # carries multiple keys; without pinning, exe.dev rejects whichever key is
-        # offered first as an unknown-user registration attempt. Pubkey is stowed
-        # from ssh/.ssh/exe_dev.pub.
-        if ! grep -qF 'IdentityFile ~/.ssh/exe_dev.pub' "$ssh_config" 2>/dev/null; then
-            cat >> "$ssh_config" <<'SSHEOF'
-
-Host exe.dev *.exe.xyz
   IdentitiesOnly yes
   IdentityFile ~/.ssh/exe_dev.pub
 SSHEOF
-            echo "  [+] SSH key pinning for exe.dev"
+
+        echo "  [+] SSH config (Linux)"
+
+        # GitHub known host
+        if ! grep -q 'ssh.github.com' "$HOME/.ssh/known_hosts" 2>/dev/null; then
+            ssh-keyscan -p 443 ssh.github.com >> "$HOME/.ssh/known_hosts" 2>/dev/null
+            echo "  [+] GitHub known host"
         fi
     fi
+
+    chmod 600 "$ssh_config"
+
+    # Pre-seed exe.dev host key (all VMs share one key; wildcard avoids
+    # host-key churn on VM rebuild and StrictHostKeyChecking prompts)
+    local known_hosts="$HOME/.ssh/known_hosts"
+    touch "$known_hosts"
+    local exe_rsa_key="ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDEKtEcRW8OBtro5B/MG+EaisD+ZVwwHFa5m7M8wFwBlMmPJJssY+1aGBRW3b9InAeCnTU2Kt7gazqbg/9od1KnK6x5piQNVQZ4C/lrjsC2ScBrOydnw9ry9G2+voFCAk+dQGabIrIT6gqqDJNOqxgFiG/lA3Xx6KwpfwI2BH5f3ab2fHCR2BGAC5jlB2RJXPgly80hMxYEHqexhJxYRwC+deeLrQSG795we9rSzPmdz58t9+9jLTKkyyqWKe/hmBvty1AYrEmRsefu6/TUrIGi/UWJfa+RBIQtFgWqN6xT1F6rRwELeVOfwwr5tZbsmgWY5frZU3EOtVWcF7Ve3gfL"
+    # Remove stale per-VM entries and old exe.dev entries, then add fresh wildcard
+    sed -i.bak '/\.exe\.xyz/d; /^exe\.dev /d' "$known_hosts" && rm -f "${known_hosts}.bak"
+    echo "exe.dev $exe_rsa_key" >> "$known_hosts"
+    echo "*.exe.xyz $exe_rsa_key" >> "$known_hosts"
+    echo "  [+] exe.dev host key in known_hosts"
 
     # Ensure local config exists
     touch "$git_config_local"
@@ -675,9 +592,9 @@ run_stow() {
 
     # Platform-specific
     if [[ "$OS" == "macos" ]]; then
-        packages+=("1Password" "ghostty" "launchd" "vscode" "zed" "homebrew" "ssh")
+        packages+=("1Password" "ghostty" "launchd" "vscode" "zed" "homebrew")
     else
-        packages+=("aws" "ssh")
+        packages+=("aws")
     fi
 
     # Backup files/symlinks that conflict with the agents stow package.
@@ -1084,7 +1001,7 @@ setup_tailscale() {
                 local did
                 for did in $(curl -sL "$ts_proxy/api/v2/tailnet/-/devices" \
                     | jq -r --arg h "$TS_HOSTNAME" '.devices[] | select(.hostname == $h) | .id'); do
-                    curl -sL -X DELETE "$ts_proxy/api/v2/device/$did"
+                    curl -sL -X DELETE "$ts_proxy/api/v2/device/$did" >/dev/null
                 done
                 # Generate single-use ephemeral auth key
                 ts_key=$(curl -sL -X POST "$ts_proxy/api/v2/tailnet/-/keys" \
