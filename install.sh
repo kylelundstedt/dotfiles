@@ -514,6 +514,24 @@ SSHEOF
     elif [[ "$OS" == "linux" ]]; then
         cat > "$ssh_config" <<'SSHEOF'
 # Managed by dotfiles/install.sh — do not edit manually.
+SSHEOF
+
+        # CanonicalizeHostname must come BEFORE Host blocks. OpenSSH's
+        # "first obtained value" rule means Host blocks otherwise get
+        # evaluated against the short name, before canonicalization can
+        # rewrite it. Verified empirically: with these lines in the
+        # middle of the file, `ssh gitlake` from another VM falls through
+        # to default StrictHostKeyChecking and fails on host-key change.
+        if [[ -n "$tailnet_domain" ]]; then
+            cat >> "$ssh_config" <<SSHEOF
+
+CanonicalizeHostname yes
+CanonicalDomains $tailnet_domain
+CanonicalizeMaxDots 0
+SSHEOF
+        fi
+
+        cat >> "$ssh_config" <<SSHEOF
 
 Host github.com
   Hostname ssh.github.com
@@ -529,18 +547,6 @@ Host exe.dev *.exe.xyz
 
 Host *.exe.xyz
   User exedev
-SSHEOF
-
-        if [[ -n "$tailnet_domain" ]]; then
-            cat >> "$ssh_config" <<SSHEOF
-
-CanonicalizeHostname yes
-CanonicalDomains $tailnet_domain
-CanonicalizeMaxDots 0
-SSHEOF
-        fi
-
-        cat >> "$ssh_config" <<SSHEOF
 
 # Cross-VM ssh by Tailscale name: same dynamic tag check as macOS.
 Match host *.ts.net exec "$LOCAL_BIN/ssh-tailnet-tagged %h tag:dev"
