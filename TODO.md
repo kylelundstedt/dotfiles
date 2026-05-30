@@ -62,10 +62,12 @@ Cross-AI / multi-machine persistent memory via Basic Memory (basicmachines-co). 
 ## Done (2026-05-30)
 
 - [x] SSH config: single-source-of-truth rewrite — install.sh generates `~/.ssh/config` from scratch, removed ssh stow package
-- [x] Folded `exe-setup.sh` into install.sh's `setup_tailscale` (Tailscale proxy detection, auth key gen, ghost node cleanup)
+- [x] Duplicated `exe-setup.sh`'s Tailscale proxy / auth-key / ghost-node logic into install.sh's `setup_tailscale` so install.sh works standalone. (`exe-setup.sh` itself remains in the repo — it's the URL artifact exe.dev's default-setup-script hook fetches at first boot. The 93e4076 deletion of the file was a regression; restored same day along with a smoke test in test-install.sh.)
 - [x] Fixed `User exedev` scope — was `*.exe.xyz *.ts.net` (applied to all tailnet hosts incl. Macs), now `*.exe.xyz` only
 - [x] Pre-seed exe.dev host key in known_hosts (wildcard `*.exe.xyz` entry, no more `StrictHostKeyChecking=accept-new`)
 - [x] `TS_HOSTNAME` defaults to `$(hostname)` so Tailscale name always matches VM name
+- [x] Dynamic SSH routing for tag:dev tailnet peers — `Match host *.ts.net exec` block + `~/.local/bin/ssh-tailnet-tagged` helper. `ssh <vm>` now Just Works for any current/future exe.dev VM without re-running install.sh per host. Host-key checking disabled for matched hosts (WireGuard is the trust anchor).
+- [x] test-install.sh: `test_hook_url` smoke check on `raw.githubusercontent.com/.../master/exe-setup.sh` so a future delete/rename can't silently brick first-boot bootstrap again.
 
 ## Done (2026-05-23)
 

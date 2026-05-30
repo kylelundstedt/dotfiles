@@ -258,14 +258,31 @@ test_exe() {
     rm -rf "$ssh_mux_dir"
 }
 
+# --- Smoke checks (always run) ---
+# exe.dev's default-setup-script hook fetches a URL on master. If we ever
+# rename or delete exe-setup.sh, every new VM silently bricks at first boot.
+test_hook_url() {
+    echo ""
+    echo "=== Smoke: exe-setup.sh hook URL ==="
+    local url="https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/exe-setup.sh"
+    local code
+    code=$(curl -fsSL -o /dev/null -w "%{http_code}" "$url" 2>/dev/null || echo "000")
+    if [[ "$code" == "200" ]]; then
+        log_pass "exe-setup.sh hook URL returns 200"
+    else
+        log_fail "exe-setup.sh hook URL returned $code (exe.dev VMs won't bootstrap)"
+    fi
+}
+
 # --- Dispatch ---
 mode="${1:-all}"
 case "$mode" in
     container) test_container ;;
     sprite)    test_sprite ;;
-    exe)       test_exe ;;
-    all)       test_container; test_sprite; test_exe ;;
-    *)         echo "Usage: $0 [container|sprite|exe|all]"; exit 1 ;;
+    exe)       test_hook_url; test_exe ;;
+    all)       test_hook_url; test_container; test_sprite; test_exe ;;
+    hook)      test_hook_url ;;
+    *)         echo "Usage: $0 [container|sprite|exe|hook|all]"; exit 1 ;;
 esac
 
 TOTAL=$((PASS + FAIL))

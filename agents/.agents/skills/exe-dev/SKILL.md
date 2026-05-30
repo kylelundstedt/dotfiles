@@ -108,17 +108,30 @@ Host exe.dev *.exe.xyz
 
 The private key lives in 1Password ("SSH Key - exe.dev" in Employee vault). Only the public key is on disk at `~/.ssh/exe_dev.pub`.
 
-`install.sh` (macOS branch) adds two related stanzas:
+`install.sh` (macOS branch) adds these related stanzas:
 
 ```
-Host *.exe.xyz *.<tailnet>.ts.net
-  User exedev
-
 Host *.exe.xyz
+  User exedev
   LocalForward 8765 localhost:8765
+
+Match host *.ts.net exec "$HOME/.local/bin/ssh-tailnet-tagged %h tag:dev"
+  User exedev
+  IdentitiesOnly yes
+  IdentityFile ~/.ssh/exe_dev.pub
+  StrictHostKeyChecking no
+  UserKnownHostsFile /dev/null
+  LogLevel ERROR
+
+Host *.ts.net
+  ForwardAgent yes
 ```
 
-`User exedev` applies broadly so `ssh <vm>` and `ssh <vm>.exe.xyz` both default to exedev (exeuntu's default user). `LocalForward 8765` is scoped to **the `*.exe.xyz` form only** — the Tailscale name is deliberately left out so routine `ssh <vm>` connections don't race for port 8765. Zed's remote-server SSH keeps a persistent connection open; if the LocalForward were on the Tailscale pattern too, every subsequent terminal `ssh <vm>` would log `bind: Address already in use` and its tunnel would be dead.
+The `*.exe.xyz` block always applies — that's the lobby path. The `Match host *.ts.net exec` block is the dynamic part: it runs `ssh-tailnet-tagged` (a tiny helper install.sh writes to `~/.local/bin`) which queries `tailscale status --json` and exits 0 only when the canonicalized hostname is a peer carrying `tag:dev`. So `ssh <new-vm>` works the instant a freshly-bootstrapped exe.dev VM joins the tailnet — no per-VM ssh_config entries, no re-running install.sh on every other machine. Macs and other tailnet peers (no tag:dev) fall through to the plain `Host *.ts.net` block (`ForwardAgent yes` only) — which is why setting `User exedev` indiscriminately on `*.ts.net` was wrong (it tried to log Macs in as exedev).
+
+Host-key checking is disabled for matched hosts because WireGuard already authenticates the peer at the network layer — plain SSH host keys add nothing on the tailnet and rotate on every VM rebuild.
+
+`LocalForward 8765` is scoped to **the `*.exe.xyz` form only** — the Tailscale name is deliberately left out so routine `ssh <vm>` connections don't race for port 8765. Zed's remote-server SSH keeps a persistent connection open; if the LocalForward were on the Tailscale pattern too, every subsequent terminal `ssh <vm>` would log `bind: Address already in use` and its tunnel would be dead.
 
 **For MCP OAuth flows, use `ssh <vm>.exe.xyz`** — that gets the tunnel. Everyday work uses `ssh <vm>` (Tailscale) and stays clean.
 
@@ -140,6 +153,8 @@ A running VM is reachable at two SSH endpoints once dotfiles are installed:
 | `ssh <vm>` / `ssh <vm>.dojo-sun.ts.net` | **Default for all post-bootstrap work.** Forwards the 1Password SSH agent (private-repo clone, push, signing — no tokens on VM), bypasses exe.dev's per-IP rate limit, no SSH host-key churn on VM rebuild (Tailscale handles auth via WireGuard, not OpenSSH host keys), and same pattern as Apple Containers and Sprites for cross-platform habit. |
 
 **Rule of thumb:** if Tailscale is up on the VM, reach for `ssh <vm>` first. Reserve `ssh <vm>.exe.xyz` for the bootstrap window and emergencies.
+
+**How `ssh <vm>` knows to use `User exedev`:** `install.sh` emits a `Match host *.ts.net exec "..."` block in `~/.ssh/config` that runs `~/.local/bin/ssh-tailnet-tagged` at connect time. The helper queries `tailscale status --json` and exits 0 only when the peer carries `tag:dev`. So new exe.dev VMs Just Work the second they join the tailnet — no per-VM config, no re-running `install.sh` on every other machine when you add a VM. Macs and other tailnet peers (no `tag:dev`) fall through to the plain `Host *.ts.net` block (`ForwardAgent yes` only).
 
 ### VM-to-VM access
 
@@ -182,14 +197,14 @@ ssh exe.dev integrations add github --name github-<org>-<repo> --repository <org
 
 Integrations are scoped to minimize credential exposure across VMs:
 
-| Integration | Scope | Grants |
-|---|---|---|
-| `tailscale-api` | `auto:all` (personal) | Tailscale API — needed by setup script at boot |
-| `github-mcp-work` | `tag:iv` | Work GitHub API (issues, PRs, code search) |
-| `motherduck-mcp` | `tag:iv` | MotherDuck SQL queries |
-| `github-mcp-home` | `vm:` per VM | Personal GitHub API — only your VMs |
-| `github-<org>-<repo>` | `vm:` per VM | Git clone/push for a single repo |
-| `reflection` | `auto:all` | VM metadata (harmless) |
+| Integration           | Scope                 | Grants                                         |
+| --------------------- | --------------------- | ---------------------------------------------- |
+| `tailscale-api`       | `auto:all` (personal) | Tailscale API — needed by setup script at boot |
+| `github-mcp-work`     | `tag:iv`              | Work GitHub API (issues, PRs, code search)     |
+| `motherduck-mcp`      | `tag:iv`              | MotherDuck SQL queries                         |
+| `github-mcp-home`     | `vm:` per VM          | Personal GitHub API — only your VMs            |
+| `github-<org>-<repo>` | `vm:` per VM          | Git clone/push for a single repo               |
+| `reflection`          | `auto:all`            | VM metadata (harmless)                         |
 
 When team members join via SSO, they won't see personal integrations. Team integrations (`--team` flag) only support `tag:` attachment — use client-specific tags (e.g. `iv`, `usaa`) to scope access.
 
@@ -202,11 +217,15 @@ The default setup script (`exe-setup.sh` in the dotfiles repo) runs at first boo
 - Starts `tailscaled` and authenticates (Tailscale SSH available ~18s after VM creation)
 - Runs `install.sh` (full dotfiles ~60s)
 
-To set the default (one-time, already done):
+`exe-setup.sh` exists specifically so Tailscale comes up before the full install — the same auth-key/proxy logic also lives in `install.sh`'s `setup_tailscale` (used as a fallback when `install.sh` is invoked standalone), but running it via `exe-setup.sh` brings the VM onto the tailnet ~3 min sooner.
+
+To set the default (one-time, already done — if you ever rename or relocate the file, re-run this):
 
 ```bash
 ssh exe.dev "defaults write dev.exe new.setup-script 'curl -fsSL https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/exe-setup.sh | bash'"
 ```
+
+**Important:** the URL `raw.githubusercontent.com/.../master/exe-setup.sh` is a contract with exe.dev's hook system. Deleting or renaming the file in the repo silently bricks first-boot bootstrap for every new VM. `test-install.sh` includes a smoke check that the URL returns 200.
 
 ### 2. Commit signing
 
@@ -216,13 +235,13 @@ For commit signing, use Tailscale SSH (`ssh <vm>`) which forwards the 1Password 
 
 Three of five MCP servers connect automatically via exe.dev HTTP proxy integrations — no setup needed on new VMs:
 
-| Server | Proxy integration | Auth |
-|---|---|---|
-| motherduck | `motherduck-mcp.int.exe.xyz` | Static bearer token (auto) |
-| github-home | `github-mcp-home.int.exe.xyz` | Static bearer token (auto) |
-| github-work | `github-mcp-work.int.exe.xyz` | Static bearer token (auto) |
-| tigris | — | OAuth (one-time browser dance) |
-| readwise | — | OAuth (one-time browser dance) |
+| Server      | Proxy integration             | Auth                           |
+| ----------- | ----------------------------- | ------------------------------ |
+| motherduck  | `motherduck-mcp.int.exe.xyz`  | Static bearer token (auto)     |
+| github-home | `github-mcp-home.int.exe.xyz` | Static bearer token (auto)     |
+| github-work | `github-mcp-work.int.exe.xyz` | Static bearer token (auto)     |
+| tigris      | —                             | OAuth (one-time browser dance) |
+| readwise    | —                             | OAuth (one-time browser dance) |
 
 `install.sh` registers all five servers automatically. The three proxy-based servers show "Connected" immediately after install; Tigris and Readwise show "Needs authentication" until the OAuth flow is completed.
 

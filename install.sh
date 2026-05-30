@@ -427,14 +427,34 @@ EOF
         chmod 644 "$HOME/.ssh/exe_dev.pub"
     fi
 
-    if [[ "$OS" == "macos" ]]; then
-        # Detect tailnet domain for hostname canonicalization
-        local tailnet_domain=""
-        if tailscale status >/dev/null 2>&1; then
-            tailnet_domain=$(tailscale status --json 2>/dev/null \
-                | python3 -c "import sys,json; d=json.load(sys.stdin)['Self']['DNSName']; parts=d.rstrip('.').split('.'); print('.'.join(parts[1:]))" 2>/dev/null) || true
-        fi
+    # Helper used by ssh_config `Match exec` — exits 0 if the canonicalized
+    # tailnet peer carries the named tag. Lets a single Match block dynamically
+    # apply exe.dev settings (User exedev, IdentityFile, etc.) to ANY current
+    # or future tag:dev VM without re-running install.sh per host.
+    cat > "$LOCAL_BIN/ssh-tailnet-tagged" <<'HELPEREOF'
+#!/bin/sh
+# Usage: ssh-tailnet-tagged <hostname> <tag>
+host="$1"
+tag="$2"
+short="${host%%.*}"
+command -v tailscale >/dev/null 2>&1 || exit 1
+command -v jq >/dev/null 2>&1 || exit 1
+tailscale status --json 2>/dev/null \
+    | jq -e --arg short "$short" --arg tag "$tag" \
+        '.Peer[]? | select(.HostName == $short) | (.Tags // []) | index($tag)' \
+    >/dev/null 2>&1
+HELPEREOF
+    chmod +x "$LOCAL_BIN/ssh-tailnet-tagged"
 
+    # Detect tailnet domain for hostname canonicalization (used on both OSes
+    # so `ssh <shortname>` matches `Host *.ts.net` / Match host *.ts.net).
+    local tailnet_domain=""
+    if command -v tailscale >/dev/null 2>&1 && tailscale status >/dev/null 2>&1; then
+        tailnet_domain=$(tailscale status --json 2>/dev/null \
+            | jq -r '.MagicDNSSuffix // empty' 2>/dev/null) || true
+    fi
+
+    if [[ "$OS" == "macos" ]]; then
         cat > "$ssh_config" <<'SSHEOF'
 # Managed by dotfiles/install.sh — do not edit manually.
 SSHEOF
@@ -448,7 +468,7 @@ CanonicalizeMaxDots 0
 SSHEOF
         fi
 
-        cat >> "$ssh_config" <<'SSHEOF'
+        cat >> "$ssh_config" <<SSHEOF
 
 Host github.com
   ControlMaster auto
@@ -466,12 +486,22 @@ Host *.exe.xyz
   User exedev
   LocalForward 8765 localhost:8765
 
+# exe.dev VMs reached by Tailscale name: detected dynamically by tag,
+# so new VMs Just Work without re-running install.sh.
+# Host keys skipped — WireGuard already authenticates the peer.
+Match host *.ts.net exec "$LOCAL_BIN/ssh-tailnet-tagged %h tag:dev"
+  User exedev
+  IdentitiesOnly yes
+  IdentityFile ~/.ssh/exe_dev.pub
+  StrictHostKeyChecking no
+  UserKnownHostsFile /dev/null
+  LogLevel ERROR
+
 Host *.ts.net
   ForwardAgent yes
 SSHEOF
 
-        local op_agent_sock="$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
-        if [[ -S "$op_agent_sock" ]]; then
+        if [[ -S "$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock" ]]; then
             cat >> "$ssh_config" <<'SSHEOF'
 
 Host *
@@ -496,6 +526,30 @@ Host exe.dev *.exe.xyz
   ControlPersist 600
   IdentitiesOnly yes
   IdentityFile ~/.ssh/exe_dev.pub
+
+Host *.exe.xyz
+  User exedev
+SSHEOF
+
+        if [[ -n "$tailnet_domain" ]]; then
+            cat >> "$ssh_config" <<SSHEOF
+
+CanonicalizeHostname yes
+CanonicalDomains $tailnet_domain
+CanonicalizeMaxDots 0
+SSHEOF
+        fi
+
+        cat >> "$ssh_config" <<SSHEOF
+
+# Cross-VM ssh by Tailscale name: same dynamic tag check as macOS.
+Match host *.ts.net exec "$LOCAL_BIN/ssh-tailnet-tagged %h tag:dev"
+  User exedev
+  IdentitiesOnly yes
+  IdentityFile ~/.ssh/exe_dev.pub
+  StrictHostKeyChecking no
+  UserKnownHostsFile /dev/null
+  LogLevel ERROR
 SSHEOF
 
         echo "  [+] SSH config (Linux)"
