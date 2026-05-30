@@ -43,9 +43,18 @@ Decision (2026-05-01): exe.dev is the primary dev-VM platform. Apple Containers 
 
 Decision (2026-05-23): single tailnet for now (Option 1 — you create VMs, contractors use them via `*.exe.xyz`). Move to per-tenant tailnets (Option 2) when there's a paying client.
 
-- [ ] Per-tenant Tailscale tailnet + API key + `tailscale-api-<client>` integration scoped to `tag:<client>`
-- [ ] Per-tenant setup script (parameterize install.sh's `setup_tailscale`)
-- [ ] Team integrations (`--team`) for client-scoped MCP servers
+Decision (2026-05-30): when Option 2 lands, pair per-client tailnet with **per-client exe.dev account** and the "switch-the-Mac" operational pattern (`tailscale switch` between client tailnets). Full doc: `gitlake:iv/reference/exe_dev_multi_tenant.md`. Tag stays as `tag:dev` within each tailnet — isolation is at the account+tailnet boundary, not the tag.
+
+Pre-requisite dotfiles work (in order):
+
+- [ ] Factor `install.sh setup_git`'s SSH-config generation into a standalone `regen-ssh-config` script invoked by `ts-switch`
+- [ ] `ts-switch <clientid>` zsh function in `zsh/.zshrc`: `tailscale switch iv-<clientid> && regen-ssh-config`
+- [ ] `install.sh setup_tailscale` (macOS): support adding multiple `tailscale up` profiles, one per client tailnet
+- [ ] `install.sh setup_git`: emit per-account `Host exe-<clientid>.dev` blocks (with per-account `IdentityFile`) from a `clients.conf` at repo root
+- [ ] `test-install.sh test_hook_registration`: iterate over a list of accounts from `clients.conf`
+- [ ] `bin/add-client <clientid>` helper: one-shot create of tailnet API key + `tailscale-api` integration + hook registration + 1Password entries + `clients.conf` row
+- [ ] `exe-setup.sh`: honor `TS_HOSTNAME` env-var override (today always uses `$(hostname)`; install.sh already does override) — keeps Tailscale name distinct from exe.dev OS hostname when desired
+- [ ] Earlier items (still relevant): per-tenant Tailscale tailnet + API key + `tailscale-api-<client>` integration, team integrations (`--team`) for client-scoped MCP servers
 
 ## agent-shell (evaluation)
 

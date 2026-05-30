@@ -1007,6 +1007,21 @@ setup_tailscale() {
                 else
                     echo "  [!] tailscaled not running. Run: sudo brew services start tailscale"
                 fi
+            else
+                # tailscaled is running — check for CLI/daemon version skew (occurs when
+                # `brew upgrade` updates the formula but doesn't restart the service).
+                local cli_ver daemon_ver
+                cli_ver=$(tailscale version 2>/dev/null | head -1)
+                daemon_ver=$(tailscale status --json 2>/dev/null | jq -r '.Version // empty' | sed 's/-t.*//')
+                if [[ -n "$cli_ver" && -n "$daemon_ver" && "$cli_ver" != "$daemon_ver" ]]; then
+                    if sudo -n true 2>/dev/null; then
+                        echo "  Version skew (cli=$cli_ver daemon=$daemon_ver), restarting tailscaled..."
+                        sudo brew services restart tailscale 2>/dev/null && sleep 2
+                        echo "  [+] tailscaled restarted"
+                    else
+                        echo "  [!] Version skew (cli=$cli_ver daemon=$daemon_ver). Run: sudo brew services restart tailscale"
+                    fi
+                fi
             fi
 
             # Authenticate with SSH enabled
