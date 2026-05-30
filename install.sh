@@ -1033,8 +1033,12 @@ setup_tailscale() {
 
     # --- Linux ---
 
-    # If Tailscale is already connected (e.g. exe-setup.sh ran before us),
-    # just ensure SSH+DNS flags and set up the cron entry.
+    # Default TS_HOSTNAME to the system hostname so the Tailscale name
+    # always matches the VM name (exe.dev sets hostname to the VM name).
+    : "${TS_HOSTNAME:=$(hostname)}"
+
+    # If Tailscale is already connected, just ensure SSH+DNS flags and
+    # set up the cron entry.
     if tailscale status >/dev/null 2>&1; then
         echo "  Already connected"
         $SUDO tailscale set --ssh --accept-dns 2>/dev/null || true
@@ -1068,11 +1072,31 @@ setup_tailscale() {
             fi
         fi
 
-        # Authenticate with --ssh if we have an auth key
+        # On exe.dev VMs, the tailscale-api integration proxy is reachable
+        # and can generate auth keys without any secrets on disk. Use it
+        # when TS_AUTHKEY wasn't provided explicitly.
         local ts_key="${TS_AUTHKEY:-}"
+        if [[ -z "$ts_key" ]]; then
+            local ts_proxy="https://tailscale-api.int.exe.xyz"
+            if curl -sfo /dev/null --connect-timeout 2 "$ts_proxy/api/v2/tailnet/-/devices" 2>/dev/null; then
+                echo "  exe.dev proxy reachable — generating auth key"
+                # Clean stale nodes with same hostname (prevents -2 suffix)
+                local did
+                for did in $(curl -sL "$ts_proxy/api/v2/tailnet/-/devices" \
+                    | jq -r --arg h "$TS_HOSTNAME" '.devices[] | select(.hostname == $h) | .id'); do
+                    curl -sL -X DELETE "$ts_proxy/api/v2/device/$did"
+                done
+                # Generate single-use ephemeral auth key
+                ts_key=$(curl -sL -X POST "$ts_proxy/api/v2/tailnet/-/keys" \
+                    -H "Content-Type: application/json" \
+                    -d '{"capabilities":{"devices":{"create":{"reusable":false,"ephemeral":true,"preauthorized":true,"tags":["tag:dev"]}}}}' \
+                    | jq -r '.key')
+            fi
+        fi
+
+        # Authenticate with --ssh if we have an auth key
         if [[ -n "$ts_key" ]]; then
-            local ts_hostname="${TS_HOSTNAME:-}"
-            $SUDO tailscale up --ssh --accept-dns --authkey="$ts_key" ${ts_hostname:+--hostname "$ts_hostname"} 2>/dev/null && echo "  [+] Tailscale up (SSH enabled${ts_hostname:+, hostname=$ts_hostname})" || echo "  [!] tailscale up failed"
+            $SUDO tailscale up --ssh --accept-dns --authkey="$ts_key" --hostname "$TS_HOSTNAME" 2>/dev/null && echo "  [+] Tailscale up (SSH enabled, hostname=$TS_HOSTNAME)" || echo "  [!] tailscale up failed"
         else
             echo "  No auth key found. Run: sudo tailscale up --ssh"
         fi
