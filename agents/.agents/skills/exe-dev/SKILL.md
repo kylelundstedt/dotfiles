@@ -214,8 +214,8 @@ The default setup script (`exe-setup.sh` in the dotfiles repo) runs at first boo
 
 - Deletes stale Tailscale nodes with the same hostname (prevents `-2` suffix)
 - Generates a single-use ephemeral auth key via the `tailscale-api` HTTP proxy integration
-- Starts `tailscaled` and authenticates (`ssh <vm>` works ~35–40s after `ssh exe.dev new` returns: VM boot + hook fetch + `tailscale up` + coord-server propagation)
-- Runs `install.sh` (full dotfiles ~60s, runs in foreground after Tailscale is up)
+- Starts `tailscaled` and authenticates (peer visible in `tailscale status` ~6s after `ssh exe.dev new` returns; `ssh <vm>` by short name works ~10–12s after)
+- Runs `install.sh` in foreground (~60s) after Tailscale is up
 
 `exe-setup.sh` exists specifically so Tailscale comes up before the full install — the same auth-key/proxy logic also lives in `install.sh`'s `setup_tailscale` (used as a fallback when `install.sh` is invoked standalone), but running it via `exe-setup.sh` brings the VM onto the tailnet ~3 min sooner.
 
@@ -225,7 +225,19 @@ To set the default (one-time, already done — if you ever rename or relocate th
 ssh exe.dev "defaults write dev.exe new.setup-script 'curl -fsSL https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/exe-setup.sh | bash'"
 ```
 
-**Important:** the URL `raw.githubusercontent.com/.../master/exe-setup.sh` is a contract with exe.dev's hook system. Deleting or renaming the file in the repo silently bricks first-boot bootstrap for every new VM. `test-install.sh` includes a smoke check that the URL returns 200.
+**Two contracts with exe.dev's hook system, both have to be right:**
+
+1. **The URL the registration points at must exist.** `raw.githubusercontent.com/.../master/exe-setup.sh` must return 200.
+2. **The registration must point at `exe-setup.sh`, not `install.sh`.** They both work, but `install.sh` brings Tailscale up only after apt + CLI tool installs (~30s delay before Tailscale; observed 34–36s to peer visibility). `exe-setup.sh` is Tailscale-first (~6s to peer visibility). Drift between which one is registered is silent — VMs still bootstrap, just slowly.
+
+Verify both at once:
+
+```bash
+ssh exe.dev "defaults read dev.exe new.setup-script"   # should contain exe-setup.sh, not install.sh
+./test-install.sh hook                                  # verifies URL returns 200
+```
+
+If the registration ever drifts, re-set it with the `defaults write` command above. `test-install.sh hook` checks the URL but not which file is registered — the user-facing symptom of drift is "VMs take 30s instead of 6s to appear on the tailnet."
 
 ### 2. Commit signing
 

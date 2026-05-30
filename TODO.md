@@ -67,7 +67,8 @@ Cross-AI / multi-machine persistent memory via Basic Memory (basicmachines-co). 
 - [x] Pre-seed exe.dev host key in known_hosts (wildcard `*.exe.xyz` entry, no more `StrictHostKeyChecking=accept-new`)
 - [x] `TS_HOSTNAME` defaults to `$(hostname)` so Tailscale name always matches VM name
 - [x] Dynamic SSH routing for tag:dev tailnet peers — `Match host *.ts.net exec` block + `~/.local/bin/ssh-tailnet-tagged` helper. `ssh <vm>` now Just Works for any current/future exe.dev VM without re-running install.sh per host. Host-key checking disabled for matched hosts (WireGuard is the trust anchor).
-- [x] test-install.sh: `test_hook_url` smoke check on `raw.githubusercontent.com/.../master/exe-setup.sh` so a future delete/rename can't silently brick first-boot bootstrap again.
+- [x] test-install.sh: `test_hook_url` + `test_hook_registration` smoke checks. The second one catches drift between `exe-setup.sh` (fast, Tailscale-first ~6s) and `install.sh` (slow, Tailscale-last ~34s) being registered as the hook — both are functional, so the failure mode is silent slowness, not breakage.
+- [x] Re-registered exe.dev hook to `exe-setup.sh`. Had drifted to `install.sh` (likely during 93e4076's "fold exe-setup.sh into install.sh"). VMs were bootstrapping but taking ~34s to tailnet instead of ~6s. Measured 5.84s peer-visible after fix.
 
 ## Done (2026-05-23)
 
