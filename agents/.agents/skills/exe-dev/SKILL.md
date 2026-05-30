@@ -214,8 +214,8 @@ The default setup script (`exe-setup.sh` in the dotfiles repo) runs at first boo
 
 - Deletes stale Tailscale nodes with the same hostname (prevents `-2` suffix)
 - Generates a single-use ephemeral auth key via the `tailscale-api` HTTP proxy integration
-- Starts `tailscaled` and authenticates (Tailscale SSH available ~18s after VM creation)
-- Runs `install.sh` (full dotfiles ~60s)
+- Starts `tailscaled` and authenticates (`ssh <vm>` works ~35–40s after `ssh exe.dev new` returns: VM boot + hook fetch + `tailscale up` + coord-server propagation)
+- Runs `install.sh` (full dotfiles ~60s, runs in foreground after Tailscale is up)
 
 `exe-setup.sh` exists specifically so Tailscale comes up before the full install — the same auth-key/proxy logic also lives in `install.sh`'s `setup_tailscale` (used as a fallback when `install.sh` is invoked standalone), but running it via `exe-setup.sh` brings the VM onto the tailnet ~3 min sooner.
 
