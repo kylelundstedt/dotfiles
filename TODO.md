@@ -8,16 +8,16 @@
 
 Strategy: no plaintext secrets on VM disk. Each secret uses the narrowest delivery mechanism available.
 
-| Secret                                   | Mechanism                                                  | Status            |
-| ---------------------------------------- | ---------------------------------------------------------- | ----------------- |
-| GitHub clone/push                        | exe.dev GitHub integration                                 | Done              |
-| Tailscale auth key                       | exe.dev HTTP proxy integration → ephemeral key per boot    | Done (2026-05-23) |
-| Tailscale ghost node cleanup             | Setup script via same HTTP proxy                           | Done (2026-05-23) |
-| Git commit signing                       | SSH agent forwarding via Tailscale                         | Done              |
-| MCP MotherDuck                           | exe.dev HTTP proxy integration (`motherduck-mcp`)          | Done (2026-05-23) |
-| MCP OAuth (Tigris, Readwise)             | `LocalForward 8765` on `*.exe.xyz`; browser dance          | Done (2026-05-17) |
-| GitHub MCP PATs on VMs                   | exe.dev HTTP proxy integration (`github-mcp-home`, `github-mcp-work`) | Done (2026-05-23) |
-| Per-project app secrets                  | 1P service account + `op run --env-file`                   | Not started       |
+| Secret                       | Mechanism                                                             | Status            |
+| ---------------------------- | --------------------------------------------------------------------- | ----------------- |
+| GitHub clone/push            | exe.dev GitHub integration                                            | Done              |
+| Tailscale auth key           | exe.dev HTTP proxy integration → ephemeral key per boot               | Done (2026-05-23) |
+| Tailscale ghost node cleanup | Setup script via same HTTP proxy                                      | Done (2026-05-23) |
+| Git commit signing           | SSH agent forwarding via Tailscale                                    | Done              |
+| MCP MotherDuck               | exe.dev HTTP proxy integration (`motherduck-mcp`)                     | Done (2026-05-23) |
+| MCP OAuth (Tigris, Readwise) | `LocalForward 8765` on `*.exe.xyz`; browser dance                     | Done (2026-05-17) |
+| GitHub MCP PATs on VMs       | exe.dev HTTP proxy integration (`github-mcp-home`, `github-mcp-work`) | Done (2026-05-23) |
+| Per-project app secrets      | 1P service account + `op run --env-file`                              | Not started       |
 
 ### To do
 
