@@ -47,6 +47,16 @@ Decision (2026-05-23): single tailnet for now (Option 1 — you create VMs, cont
 - [ ] Per-tenant setup script (parameterize install.sh's `setup_tailscale`)
 - [ ] Team integrations (`--team`) for client-scoped MCP servers
 
+## agent-shell (evaluation)
+
+Tigris-backed virtual shell for agent workspaces — atomic writes, fork/snapshot, multi-mount. See `agent_docs/agent-shell-eval.md`.
+
+- [ ] Smoke-test: install, write/read/flush against existing Tigris bucket
+- [ ] Test fork semantics: fork, write to fork, verify source unchanged, delete fork
+- [ ] Test atomic failure: write files, throw before flush, confirm bucket clean
+- [ ] Integration test on exe.dev VM (auth via integration proxy or forwarded creds)
+- [ ] Prototype: IV digest using llm-digest pattern (cron → agent → flush → presign → Slack)
+
 ## Basic Memory (evaluation)
 
 Cross-AI / multi-machine persistent memory via Basic Memory (basicmachines-co). Claude Code's built-in auto-memory is per-machine, not synced, and Claude-only; Codex has its own native memory.
