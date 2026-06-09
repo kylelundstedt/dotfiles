@@ -54,6 +54,12 @@
   - `/exe-dev` — use when the user wants to manage exe.dev VMs.
 - **Remote VMs** — For remote dev environments, use Apple Containers (`/apple-containers`), Sprites (`/sprites-dev`), or exe.dev (`/exe-dev`). All three give a full Linux VM with sudo and Tailscale; pick whichever is convenient.
 
+## exe.dev SSH
+
+- **Never launch parallel SSH attempts to `*.exe.xyz`.** One attempt at a time — wait for the result before retrying.
+- exe.dev silently drops TCP SYNs per source IP. Multiple concurrent attempts (including background retry loops) trigger a minutes-long lockout.
+- After creating a VM, wait ~20s, then try **one** SSH with `ConnectTimeout=30`. If it fails, wait 30–60s before **one** more attempt.
+
 ## Writing
 
 - Use proper dashes in prose (em dash or spaced en dash), not unspaced hyphens.
