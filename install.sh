@@ -621,10 +621,19 @@ set_shell() {
     local desired_shell
     desired_shell="$(command -v zsh || true)"
     if [[ -n "$desired_shell" && "$SHELL" != "$desired_shell" ]]; then
+        # Ensure zsh is listed in /etc/shells (required by chsh)
+        if ! grep -qx "$desired_shell" /etc/shells 2>/dev/null; then
+            echo "$desired_shell" | sudo tee -a /etc/shells >/dev/null 2>/dev/null || true
+        fi
         if [[ "$(id -u)" -eq 0 ]]; then
-            chsh -s "$desired_shell" 2>/dev/null || echo "  Note: could not change shell to zsh"
+            chsh -s "$desired_shell" 2>/dev/null \
+                || usermod -s "$desired_shell" "$(whoami)" 2>/dev/null \
+                || echo "  Note: could not change shell to zsh"
         else
-            sudo chsh -s "$desired_shell" "$(whoami)" 2>/dev/null || chsh -s "$desired_shell" 2>/dev/null || echo "  Note: could not change shell to zsh"
+            sudo chsh -s "$desired_shell" "$(whoami)" 2>/dev/null \
+                || sudo usermod -s "$desired_shell" "$(whoami)" 2>/dev/null \
+                || chsh -s "$desired_shell" 2>/dev/null \
+                || echo "  Note: could not change shell to zsh"
         fi
     fi
 }
@@ -1018,7 +1027,7 @@ setup_tailscale() {
     # set up the cron entry.
     if tailscale status >/dev/null 2>&1; then
         echo "  Already connected"
-        $SUDO tailscale set --ssh --accept-dns 2>/dev/null || true
+        $SUDO tailscale set --ssh --accept-dns --accept-routes 2>/dev/null || true
     else
         # Install if missing
         if ! command -v tailscale >/dev/null 2>&1; then
@@ -1073,7 +1082,7 @@ setup_tailscale() {
 
         # Authenticate with --ssh if we have an auth key
         if [[ -n "$ts_key" ]]; then
-            $SUDO tailscale up --ssh --accept-dns --authkey="$ts_key" --hostname "$TS_HOSTNAME" 2>/dev/null && echo "  [+] Tailscale up (SSH enabled, hostname=$TS_HOSTNAME)" || echo "  [!] tailscale up failed"
+            $SUDO tailscale up --ssh --accept-dns --accept-routes --authkey="$ts_key" --hostname "$TS_HOSTNAME" 2>/dev/null && echo "  [+] Tailscale up (SSH enabled, hostname=$TS_HOSTNAME)" || echo "  [!] tailscale up failed"
         else
             echo "  No auth key found. Run: sudo tailscale up --ssh"
         fi
