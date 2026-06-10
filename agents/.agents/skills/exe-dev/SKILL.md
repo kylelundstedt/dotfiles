@@ -172,16 +172,22 @@ This requires the Tailscale ACL to permit `tag:dev` → `tag:dev` for both the n
 
 ## Setting Up a Dev VM
 
-A default setup script (`exe-setup.sh`) is registered via `ssh exe.dev defaults write` so every new VM automatically gets Tailscale + dotfiles. Two commands to a working repo:
+Three layers, each opt-in:
 
-### 1. Create VM + clone repo (~4s)
+1. **iv-image** (team) — Tailscale bootstrap + DuckDB + Quarto. Baked into the image, runs automatically at first boot.
+2. **Dotfiles** (personal, opt-in) — shell, editors, MCP servers, skills, AGENTS.md.
+3. **Repo clone** — via exe.dev GitHub integration.
+
+### 1. Create VM + clone repo
 
 ```bash
-ssh exe.dev new --name=<vm> --tag=iv \
-  --integration=github-<org>-<repo>
+ssh exe.dev new --image=iv-registry.exe.xyz:5000/iv-image:1.4 \
+  --name=<vm> --tag=iv --integration=github-<org>-<repo>
 ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new <vm>.exe.xyz \
   "git clone https://github-<org>-<repo>.int.exe.xyz/<org>/<repo>.git ~/<repo>"
 ```
+
+Tailscale comes up automatically at first boot (~6s) via `ts-bootstrap`, which is baked into iv-image. The VM is reachable by short name (`ssh <vm>`) ~10–12s after creation.
 
 - `--tag=iv` grants the VM access to IV-scoped integrations (work GitHub MCP, MotherDuck)
 - `--integration=github-<org>-<repo>` attaches the per-repo clone/push integration
@@ -193,13 +199,23 @@ GitHub integrations are named `github-<org>-<repo>` (e.g. `github-kylelundstedt-
 ssh exe.dev integrations add github --name github-<org>-<repo> --repository <org>/<repo>
 ```
 
+### Optional: install dotfiles
+
+Dotfiles are not installed automatically — run this one-liner when you want your full dev environment:
+
+```bash
+ssh <vm>.exe.xyz "curl -fsSL https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/install.sh | bash"
+```
+
+This installs shell config, editor settings, MCP servers, skills, and AGENTS.md. It detects that Tailscale is already up and skips its own bootstrap.
+
 ### Integration scoping
 
 Integrations are scoped to minimize credential exposure across VMs:
 
 | Integration           | Scope                 | Grants                                         |
 | --------------------- | --------------------- | ---------------------------------------------- |
-| `tailscale-api`       | `auto:all` (personal) | Tailscale API — needed by setup script at boot |
+| `tailscale-api`       | `auto:all` (personal) | Tailscale API — used by `ts-bootstrap` at boot |
 | `github-mcp-work`     | `tag:iv`              | Work GitHub API (issues, PRs, code search)     |
 | `motherduck-mcp`      | `tag:iv`              | MotherDuck SQL queries                         |
 | `github-mcp-home`     | `vm:` per VM          | Personal GitHub API — only your VMs            |
@@ -208,36 +224,30 @@ Integrations are scoped to minimize credential exposure across VMs:
 
 When team members join via SSO, they won't see personal integrations. Team integrations (`--team` flag) only support `tag:` attachment — use client-specific tags (e.g. `iv`, `usaa`) to scope access.
 
-### Setup script
+### Tailscale bootstrap
 
-The default setup script (`exe-setup.sh` in the dotfiles repo) runs at first boot and:
+`ts-bootstrap` is baked into iv-image at `/usr/local/bin/ts-bootstrap`. It runs at first boot via exeuntu's `exe-setup.service` and:
 
 - Deletes stale Tailscale nodes with the same hostname (prevents `-2` suffix)
 - Generates a single-use ephemeral auth key via the `tailscale-api` HTTP proxy integration
-- Starts `tailscaled` and authenticates (peer visible in `tailscale status` ~6s after `ssh exe.dev new` returns; `ssh <vm>` by short name works ~10–12s after)
-- Runs `install.sh` in foreground (~60s) after Tailscale is up
+- Waits for `tailscaled` (started by systemd) and authenticates with `--ssh`
 
-`exe-setup.sh` exists specifically so Tailscale comes up before the full install — the same auth-key/proxy logic also lives in `install.sh`'s `setup_tailscale` (used as a fallback when `install.sh` is invoked standalone), but running it via `exe-setup.sh` brings the VM onto the tailnet ~3 min sooner.
+It uses only exe.dev-internal DNS (`tailscale-api.int.exe.xyz`) — no external network needed.
 
-To set the default (one-time, already done — if you ever rename or relocate the file, re-run this):
-
-```bash
-ssh exe.dev "defaults write dev.exe new.setup-script 'curl -fsSL https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/exe-setup.sh | bash'"
-```
-
-**Two contracts with exe.dev's hook system, both have to be right:**
-
-1. **The URL the registration points at must exist.** `raw.githubusercontent.com/.../master/exe-setup.sh` must return 200.
-2. **The registration must point at `exe-setup.sh`, not `install.sh`.** They both work, but `install.sh` brings Tailscale up only after apt + CLI tool installs (~30s delay before Tailscale; observed 34–36s to peer visibility). `exe-setup.sh` is Tailscale-first (~6s to peer visibility). Drift between which one is registered is silent — VMs still bootstrap, just slowly.
-
-Verify both at once:
+The `exe-setup.service` hook is registered to call `ts-bootstrap` directly (no curl fetch):
 
 ```bash
-ssh exe.dev "defaults read dev.exe new.setup-script"   # should contain exe-setup.sh, not install.sh
-./test-install.sh hook                                  # verifies URL returns 200
+ssh exe.dev "defaults write dev.exe new.setup-script /usr/local/bin/ts-bootstrap"
 ```
 
-If the registration ever drifts, re-set it with the `defaults write` command above. `test-install.sh hook` checks the URL but not which file is registered — the user-facing symptom of drift is "VMs take 30s instead of 6s to appear on the tailnet."
+Verify:
+
+```bash
+ssh exe.dev "defaults read dev.exe new.setup-script"   # should contain ts-bootstrap
+./test-install.sh hook                                  # checks registration
+```
+
+**On stock exeuntu VMs** (without iv-image), `ts-bootstrap` is not present and the service is a no-op. Run `install.sh` manually — its `setup_tailscale` has the same proxy logic as a fallback.
 
 ### 2. Commit signing
 

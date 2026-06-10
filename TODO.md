@@ -69,6 +69,13 @@ Cross-AI / multi-machine persistent memory via Basic Memory (basicmachines-co). 
 
 - [ ] Replace swallowed errors in `setup_agents` (`>/dev/null 2>&1 || true` → explicit `echo "[!] X failed"` on non-zero)
 
+## Done (2026-06-10)
+
+- [x] Moved Tailscale bootstrap from dotfiles `exe-setup.sh` into iv-image as `bin/ts-bootstrap` — uses only exe.dev-internal DNS, fixes boot race where external DNS wasn't ready. Dotfiles are now opt-in (`curl | bash install.sh` after VM creation).
+- [x] Deleted `exe-setup.sh` from dotfiles — logic lives in iv-image now
+- [x] Updated `defaults write` registration to `/usr/local/bin/ts-bootstrap` (no curl fetch)
+- [x] Rewrote exe-dev skill setup section for the three-layer model (iv-image → dotfiles → repo clone)
+
 ## Done (2026-05-30)
 
 - [x] SSH config: single-source-of-truth rewrite — install.sh generates `~/.ssh/config` from scratch, removed ssh stow package

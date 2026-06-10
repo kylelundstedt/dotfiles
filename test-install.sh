@@ -259,40 +259,18 @@ test_exe() {
 }
 
 # --- Smoke checks (always run) ---
-# Two ways the exe.dev hook can be silently wrong:
-#   (1) URL 404s — VMs run `bash` on an empty response → no bootstrap
-#   (2) URL points at install.sh instead of exe-setup.sh — VMs bootstrap, but
-#       Tailscale only comes up after apt + CLI installs (~30s vs ~6s).
-test_hook_url() {
-    echo ""
-    echo "=== Smoke: exe-setup.sh hook URL ==="
-    local url="https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/exe-setup.sh"
-    local code
-    code=$(curl -fsSL -o /dev/null -w "%{http_code}" "$url" 2>/dev/null || echo "000")
-    if [[ "$code" == "200" ]]; then
-        log_pass "exe-setup.sh hook URL returns 200"
-    else
-        log_fail "exe-setup.sh hook URL returned $code (exe.dev VMs won't bootstrap)"
-    fi
-}
-
+# Verify the exe.dev setup hook points at ts-bootstrap (baked into iv-image).
 test_hook_registration() {
     echo ""
     echo "=== Smoke: exe.dev hook registration ==="
-    # exe.dev's `defaults read` truncates output around 80 chars, so we can't
-    # reliably match the full URL. Disambiguate on the path suffix at the
-    # truncation point: ".../master/ex..." (exe-setup.sh, fast) vs
-    # ".../master/in..." (install.sh, slow Tailscale-late path).
     local registered
     registered=$(ssh -o ConnectTimeout=10 -o BatchMode=yes exe.dev "defaults read dev.exe new.setup-script" 2>/dev/null || echo "")
     if [[ -z "$registered" ]]; then
         log_fail "Could not read exe.dev hook registration (ssh failed or no setting)"
-    elif [[ "$registered" == */master/ex* ]]; then
-        log_pass "hook registered to exe-setup.sh (fast path: Tailscale-first ~6s)"
-    elif [[ "$registered" == */master/in* ]]; then
-        log_fail "hook registered to install.sh — Tailscale comes up ~30s late. Re-register: ssh exe.dev \"defaults write dev.exe new.setup-script 'curl -fsSL https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/exe-setup.sh | bash'\""
+    elif [[ "$registered" == *ts-bootstrap* ]]; then
+        log_pass "hook registered to ts-bootstrap (baked into iv-image)"
     else
-        log_fail "hook registered to unrecognized URL: $registered"
+        log_fail "hook not pointing at ts-bootstrap: $registered. Re-register: ssh exe.dev \"defaults write dev.exe new.setup-script /usr/local/bin/ts-bootstrap\""
     fi
 }
 
@@ -301,9 +279,9 @@ mode="${1:-all}"
 case "$mode" in
     container) test_container ;;
     sprite)    test_sprite ;;
-    exe)       test_hook_url; test_hook_registration; test_exe ;;
-    all)       test_hook_url; test_hook_registration; test_container; test_sprite; test_exe ;;
-    hook)      test_hook_url; test_hook_registration ;;
+    exe)       test_hook_registration; test_exe ;;
+    all)       test_hook_registration; test_container; test_sprite; test_exe ;;
+    hook)      test_hook_registration ;;
     *)         echo "Usage: $0 [container|sprite|exe|hook|all]"; exit 1 ;;
 esac
 
