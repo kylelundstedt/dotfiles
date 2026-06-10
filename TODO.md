@@ -69,12 +69,11 @@ Cross-AI / multi-machine persistent memory via Basic Memory (basicmachines-co). 
 
 - [ ] Replace swallowed errors in `setup_agents` (`>/dev/null 2>&1 || true` → explicit `echo "[!] X failed"` on non-zero)
 
-## Done (2026-06-10)
+## Blocked (2026-06-10) — waiting on exe.dev Discord
 
-- [x] Moved Tailscale bootstrap from dotfiles `exe-setup.sh` into iv-image as `bin/ts-bootstrap` — uses only exe.dev-internal DNS, fixes boot race where external DNS wasn't ready. Dotfiles are now opt-in (`curl | bash install.sh` after VM creation).
-- [x] Deleted `exe-setup.sh` from dotfiles — logic lives in iv-image now
-- [x] Updated `defaults write` registration to `/usr/local/bin/ts-bootstrap` (no curl fetch)
+- [ ] Move Tailscale bootstrap into iv-image (`ts-bootstrap`). iv-image 1.4.0 has the script but it takes ~110s at boot because the link-local metadata proxy (`169.254.169.254`) is slow to route on BYO images. Reverted to `exe-setup.sh` curl path. Asked Bold in Discord.
 - [x] Rewrote exe-dev skill setup section for the three-layer model (iv-image → dotfiles → repo clone)
+- [x] SSH guard hook in `~/.claude/settings.json` — blocks concurrent SSH to exe.dev hosts
 
 ## Done (2026-05-30)
 
