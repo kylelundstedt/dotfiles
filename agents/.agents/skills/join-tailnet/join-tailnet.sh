@@ -46,11 +46,17 @@ case "$key" in
      exit 1 ;;
 esac
 
-# tailscaled is enabled in iv-image but sshd may be reachable before it; wait.
-for _ in $(seq 1 30); do
-  if [ -S /var/run/tailscale/tailscaled.sock ] || [ -S /run/tailscale/tailscaled.sock ]; then break; fi
-  sleep 1
-done
+# Ensure tailscaled is running. iv-image enables it, but stock exeuntu may not —
+# start it if the socket isn't present, then wait for it.
+sock() { [ -S /var/run/tailscale/tailscaled.sock ] || [ -S /run/tailscale/tailscaled.sock ]; }
+if ! sock; then
+  sudo systemctl start tailscaled 2>/dev/null || true
+fi
+for _ in $(seq 1 30); do sock && break; sleep 1; done
+if ! sock; then
+  echo "join-tailnet: tailscaled socket never appeared (is Tailscale installed on this VM?)" >&2
+  exit 1
+fi
 
 sudo tailscale up --ssh --accept-dns --hostname="$(hostname)" --authkey="$key" --timeout=60s
 tailscale status
