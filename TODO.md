@@ -75,7 +75,7 @@ Cross-AI / multi-machine persistent memory via Basic Memory (basicmachines-co). 
 
 ## Done (2026-06-10)
 
-- [x] Switched to iv-image 1.5 + `ts-bootstrap` as the setup script (deleted `exe-setup.sh`)
+- [x] Switched to iv-image 1.7 + `ts-bootstrap` as the setup script (deleted `exe-setup.sh`). Fixed stale node race (1.6) and POST retry (1.7).
 - [x] Rewrote exe-dev skill setup section for the three-layer model (iv-image → dotfiles → repo clone)
 - [x] SSH guard hook in `~/.claude/settings.json` — blocks concurrent SSH to exe.dev hosts
 

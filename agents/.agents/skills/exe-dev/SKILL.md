@@ -181,7 +181,7 @@ Three layers, each opt-in:
 ### 1. Create VM + clone repo
 
 ```bash
-ssh exe.dev new --image=iv-registry.exe.xyz:5000/iv-image:1.5 \
+ssh exe.dev new --image=iv-registry.exe.xyz:5000/iv-image:1.7 \
   --name=<vm> --tag=iv --integration=github-<org>-<repo>
 ssh -o ConnectTimeout=30 <vm>.exe.xyz \
   "git clone https://github-<org>-<repo>.int.exe.xyz/<org>/<repo>.git ~/<repo>"
