@@ -76,6 +76,7 @@ Cross-AI / multi-machine persistent memory via Basic Memory (basicmachines-co). 
 - [x] Gated shared skills in `install.sh` to macOS-only (Linux VMs get them from iv-image).
 - [x] Created `join-tailnet` and `upgrade-vm` skills (in iv-image repo + dotfiles). These were documented in tailnet.md but never committed as actual skills.
 - [x] Upgraded all three VMs (iv-iv, iv-gitlake, iv-gitlake-examples) to iv-image:2.1.0 using upgrade-vm skill. Re-attached repo integrations and re-provisioned doc sites.
+- [x] Renamed `kylelundstedt/iv` repo to `kylelundstedt/iv-docs`. Replaced iv-iv VM with iv-docs VM. Updated exe.dev integration (`github-kylelundstedt-iv-docs`), local clone (`~/github/kylelundstedt/iv-docs`), and remote URL.
 
 ## Done (2026-06-11) — earlier
 
