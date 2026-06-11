@@ -258,19 +258,19 @@ test_exe() {
     rm -rf "$ssh_mux_dir"
 }
 
-# --- Smoke checks (always run) ---
-# Verify the exe.dev setup hook points at ts-bootstrap (baked into iv-image).
-test_hook_registration() {
+# --- Smoke check (always run) ---
+# iv-image VMs join the tailnet on demand (the `join-tailnet` skill), not via a
+# setup-script hook. Verify no auto-bootstrap hook is registered, so a stray
+# `defaults write` can't silently reintroduce auto-join on every new VM.
+test_no_hook() {
     echo ""
-    echo "=== Smoke: exe.dev hook registration ==="
+    echo "=== Smoke: exe.dev has no auto-join setup-script hook ==="
     local registered
     registered=$(ssh -o ConnectTimeout=10 -o BatchMode=yes exe.dev "defaults read dev.exe new.setup-script" 2>/dev/null || echo "")
     if [[ -z "$registered" ]]; then
-        log_fail "Could not read exe.dev hook registration (ssh failed or no setting)"
-    elif [[ "$registered" == *ts-bootstrap* ]]; then
-        log_pass "hook registered to ts-bootstrap (baked into iv-image)"
+        log_pass "no new.setup-script hook registered (on-demand join only)"
     else
-        log_fail "hook not pointing at ts-bootstrap: $registered. Re-register: ssh exe.dev \"defaults write dev.exe new.setup-script /usr/local/bin/ts-bootstrap\""
+        log_fail "a setup-script hook is registered ('$registered') — VMs will auto-run it at boot. Clear it: ssh exe.dev \"defaults delete dev.exe new.setup-script\""
     fi
 }
 
@@ -279,9 +279,9 @@ mode="${1:-all}"
 case "$mode" in
     container) test_container ;;
     sprite)    test_sprite ;;
-    exe)       test_hook_registration; test_exe ;;
-    all)       test_hook_registration; test_container; test_sprite; test_exe ;;
-    hook)      test_hook_registration ;;
+    exe)       test_no_hook; test_exe ;;
+    all)       test_no_hook; test_container; test_sprite; test_exe ;;
+    hook)      test_no_hook ;;
     *)         echo "Usage: $0 [container|sprite|exe|hook|all]"; exit 1 ;;
 esac
 

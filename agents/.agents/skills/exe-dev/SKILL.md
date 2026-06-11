@@ -172,22 +172,22 @@ This requires the Tailscale ACL to permit `tag:dev` → `tag:dev` for both the n
 
 ## Setting Up a Dev VM
 
-Three layers, each opt-in:
+New VMs do **not** auto-join the tailnet or auto-run dotfiles. Three layers, each opt-in:
 
-1. **iv-image** (team) — Tailscale bootstrap + DuckDB + Quarto. Baked into the image, runs automatically at first boot.
+1. **iv-image** (team) — DuckDB + Quarto + doc-site tooling; `tailscaled` enabled but idle. Does **not** auto-join the tailnet (>= 2.0.0) — join on demand with the `join-tailnet` skill.
 2. **Dotfiles** (personal, opt-in) — shell, editors, MCP servers, skills, AGENTS.md.
 3. **Repo clone** — via exe.dev GitHub integration.
 
 ### 1. Create VM + clone repo
 
 ```bash
-ssh exe.dev new --image=iv-registry.exe.xyz:5000/iv-image:1.7 \
+ssh exe.dev new --image=iv-registry.exe.xyz:5000/iv-image:2 \
   --name=<vm> --tag=iv --integration=github-<org>-<repo>
 ssh -o ConnectTimeout=30 <vm>.exe.xyz \
   "git clone https://github-<org>-<repo>.int.exe.xyz/<org>/<repo>.git ~/<repo>"
 ```
 
-Tailscale comes up automatically at first boot via `ts-bootstrap`, which is baked into iv-image. The metadata proxy is slow to route on BYO images (~90–110s), so expect ~2 minutes from creation to the VM being reachable by short name (`ssh <vm>`).
+A fresh VM is reachable over the exe.dev edge (`ssh <vm>.exe.xyz`) immediately. It is **not** on the tailnet until you run the `join-tailnet` skill (see below); after that, `ssh <vm>` works by short name.
 
 - `--tag=iv` grants the VM access to IV-scoped integrations (work GitHub MCP, MotherDuck)
 - `--integration=github-<org>-<repo>` attaches the per-repo clone/push integration
@@ -207,7 +207,7 @@ Dotfiles are not installed automatically — run this one-liner when you want yo
 ssh <vm>.exe.xyz "curl -fsSL https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/install.sh | bash"
 ```
 
-This installs shell config, editor settings, MCP servers, skills, and AGENTS.md. It detects that Tailscale is already up and skips its own bootstrap.
+This installs shell config, editor settings, MCP servers, skills, and AGENTS.md. Its `setup_tailscale` no-ops if the VM is already on the tailnet.
 
 ### Integration scoping
 
@@ -215,7 +215,7 @@ Integrations are scoped to minimize credential exposure across VMs:
 
 | Integration           | Scope                 | Grants                                         |
 | --------------------- | --------------------- | ---------------------------------------------- |
-| `tailscale-api`       | `auto:all` (personal) | Tailscale API — used by `ts-bootstrap` at boot |
+| `tailscale-api`       | `auto:all` (personal) | Tailscale API — lets the `join-tailnet` skill mint an auth key |
 | `github-mcp-work`     | `tag:iv`              | Work GitHub API (issues, PRs, code search)     |
 | `motherduck-mcp`      | `tag:iv`              | MotherDuck SQL queries                         |
 | `github-mcp-home`     | `vm:` per VM          | Personal GitHub API — only your VMs            |
@@ -224,30 +224,37 @@ Integrations are scoped to minimize credential exposure across VMs:
 
 When team members join via SSO, they won't see personal integrations. Team integrations (`--team` flag) only support `tag:` attachment — use client-specific tags (e.g. `iv`, `usaa`) to scope access.
 
-### Tailscale bootstrap
+### Joining the tailnet (on demand)
 
-`ts-bootstrap` is baked into iv-image at `/usr/local/bin/ts-bootstrap`. It runs at first boot via exeuntu's `exe-setup.service` and:
-
-- Deletes stale Tailscale nodes with the same hostname (prevents `-2` suffix)
-- Generates a single-use ephemeral auth key via the `tailscale-api` HTTP proxy integration
-- Waits for `tailscaled` (started by systemd) and authenticates with `--ssh`
-
-It uses only exe.dev-internal DNS (`tailscale-api.int.exe.xyz`) — no external network needed. Note: the link-local metadata proxy (`169.254.169.254`) takes ~90–110s to become routable on BYO images, so `ts-bootstrap` blocks for that long at boot. This is a known exe.dev limitation.
-
-The `exe-setup.service` hook is registered to call `ts-bootstrap` directly (no curl fetch):
+VMs do not auto-join. Bring one on with the `join-tailnet` skill:
 
 ```bash
-ssh exe.dev "defaults write dev.exe new.setup-script /usr/local/bin/ts-bootstrap"
+~/.agents/skills/join-tailnet/join-tailnet.sh <vm>
 ```
 
-Verify:
+It SSHes into `<vm>.exe.xyz`, mints a one-use ephemeral `tag:dev` key through the
+`tailscale-api` proxy, and runs `tailscale up --ssh --accept-dns` — the Tailscale
+API secret never touches the VM. Requires the VM created with `--tag=iv` (so
+`tailscale-api` is attached) and built from `iv-image >= 2.0.0` (ships `tailscaled`
+enabled but idle). After it joins, use `ssh <vm>` for the rest.
+
+There is intentionally **no** `new.setup-script` hook. Auto-join on boot was
+removed: it put every VM on the tailnet whether it belonged there or not, and
+coupled the hook to a specific image. Verify nothing reintroduced it:
 
 ```bash
-ssh exe.dev "defaults read dev.exe new.setup-script"   # should contain ts-bootstrap
-./test-install.sh hook                                  # checks registration
+ssh exe.dev "defaults read dev.exe new.setup-script"   # expect: empty
+./test-install.sh hook                                  # passes only when no hook is set
 ```
 
-**On stock exeuntu VMs** (without iv-image), `ts-bootstrap` is not present and the service is a no-op. Run `install.sh` manually — its `setup_tailscale` has the same proxy logic as a fallback.
+If a stray `defaults write` ever sets it, clear it:
+
+```bash
+ssh exe.dev "defaults delete dev.exe new.setup-script"
+```
+
+To install the full dotfiles on a VM, run `install.sh` manually — its
+`setup_tailscale` no-ops if the VM is already on the tailnet.
 
 ### 2. Commit signing
 
