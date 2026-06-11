@@ -1,55 +1,116 @@
 ---
 name: upgrade-vm
-description: Reprovision an exe.dev VM onto a new iv-image version without getting a -1 tailnet name. Use when moving a running VM to a newer image (e.g. iv-image:2 → a later build) — exe.dev only applies an image at creation, so this destroys + recreates the VM with the same name, deleting the stale Tailscale node first so the new VM keeps the clean name.
+description: Upgrade an iv-image exe.dev VM to a newer image version. Destroys and recreates the VM, deletes the stale tailnet node, and rejoins. Wipes the VM's local disk.
 ---
 
-# upgrade-vm
+# Upgrade VM
 
-exe.dev applies an image **only at VM creation** — there is no in-place image
-upgrade. So upgrading a VM to a newer image means destroy + recreate with the
-same name. If the old ephemeral Tailscale node still holds the name when the new
-VM joins, the new VM lands as `<name>-1`. This skill prevents that.
+Upgrades an exe.dev VM to a newer iv-image by destroying and recreating it.
+This **wipes the VM's local disk** -- it reprovisions, it does not migrate state.
 
-## Run it (from a control node)
+## Usage
+
+The user provides:
+- **VM name** (e.g. `iv-gitlake`) -- required
+- **Target image** (e.g. `iv-image:2.1.0` or `iv-image:2`) -- defaults to `iv-image:2` (latest major)
+- **Tag** -- defaults to `iv`
+- **Integrations** to attach after creation (e.g. `github-iv-cmg-iv-gitlake`) -- optional
+
+## Steps
+
+Run these sequentially. **One SSH command at a time** -- never parallel SSH to exe.dev.
+
+### 1. Confirm with the user
+
+This is destructive. Confirm the VM name and that wiping its disk is acceptable.
+
+### 2. Delete the stale Tailscale node
+
+The old VM's tailnet node must be deleted before the new one joins, otherwise
+the new VM gets a `-1` suffix. Use the Tailscale API from the Mac (which has
+the real API credential via 1Password):
 
 ```bash
-~/.agents/skills/upgrade-vm/upgrade-vm.sh <vm> [image]
+# Get the Tailscale API key
+TS_API_KEY=$(op read "op://Employee/Tailscale - API Key/credential" --account industryvault.1password.com)
+
+# Find the node ID by hostname
+NODE_ID=$(curl -fsSL -H "Authorization: Bearer $TS_API_KEY" \
+  https://api.tailscale.com/api/v2/tailnet/-/devices \
+  | jq -r '.devices[] | select(.hostname == "<vm>") | .id')
+
+# Delete the node
+curl -fsSL -X DELETE -H "Authorization: Bearer $TS_API_KEY" \
+  "https://api.tailscale.com/api/v2/device/$NODE_ID"
 ```
 
-- `<vm>` — the exe.dev VM name to reprovision.
-- `[image]` — defaults to `iv-registry.exe.xyz:5000/iv-image:2`.
+### 3. Destroy the old VM
 
-**Run this from a control node**, not the VM being upgraded — a machine that can
-reach `https://tailscale-api.int.exe.xyz` (an exe.dev VM with the `tailscale-api`
-integration attached, e.g. `iv-registry`). The device-delete authority lives
-here, deliberately not on disposable VMs.
+```bash
+ssh -o ConnectTimeout=30 exe.dev rm <vm>
+```
 
-## What it does
+### 4. Remove stale SSH state
 
-1. `ssh exe.dev rm <vm>` — destroy the old VM (no-op if it doesn't exist).
-2. Delete the stale tailnet node(s) whose hostname is `<vm>` (this also catches a
-   prior `<vm>-1`), polling `/devices` until the name clears — deletion needs a
-   moment to propagate. Aborts if it can't clear, rather than create a `-1`.
-3. `ssh exe.dev new --name=<vm> --tag=iv --image=<image>` — recreate.
-4. Call the `join-tailnet` skill — the new VM now claims the clean `<vm>` name.
+```bash
+# Remove old host key from known_hosts (the *.exe.xyz wildcard covers it,
+# but the tailnet hostname may have a cached key)
+ssh-keygen -R <vm> 2>/dev/null || true
 
-## Why the delete lives here, not on the VM
+# Kill any stale SSH multiplexed connection
+ssh -O exit <vm> 2>/dev/null || true
+ssh -O exit <vm>.exe.xyz 2>/dev/null || true
+```
 
-iv-image `>= 2.0.0` intentionally removed device-delete authority from VMs (an
-ephemeral VM holding API delete rights is a bigger blast radius than it needs).
-This skill keeps that property: the stale-node cleanup runs from a trusted
-control node that already holds tailnet/proxy access, so the new VM never needs
-delete rights to get a clean name.
+### 5. Create the new VM
 
-## Overrides
+```bash
+ssh -o ConnectTimeout=30 exe.dev new \
+  --image=iv-registry.exe.xyz:5000/<image> \
+  --name=<vm> --tag=<tag>
+```
 
-- `IV_VM_IMAGE` — default image when `[image]` is omitted.
-- `IV_VM_TAG` — VM tag (default `iv`).
-- `IV_TAILSCALE_API_URL` — proxy base URL.
+If the user specified integrations, attach them:
 
-## Notes
+```bash
+ssh -o ConnectTimeout=30 exe.dev integrations attach <integration> vm:<vm>
+```
 
-- This destroys the VM's local disk. Anything not persisted off-box is lost —
-  this reprovisions, it does not migrate state.
-- If the join step fails (VM slow to become reachable), re-run `join-tailnet <vm>`
-  by hand — one attempt at a time (`*.exe.xyz` rate-limits SYN bursts).
+### 6. Wait for the VM to boot
+
+Wait ~20s, then try one SSH with `ConnectTimeout=30`:
+
+```bash
+sleep 20
+ssh -o ConnectTimeout=30 <vm>.exe.xyz echo "VM is up"
+```
+
+If it fails, wait 30-60s and try once more.
+
+### 7. Rejoin the tailnet
+
+Use the `join-tailnet` skill (or run the commands directly):
+
+```bash
+ssh -o ConnectTimeout=30 <vm>.exe.xyz 'bash -s' <<'REMOTE'
+set -euo pipefail
+KEY=$(curl -fsSL -X POST https://tailscale-api.int.exe.xyz/api/v2/tailnet/-/keys \
+  -H "Content-Type: application/json" \
+  -d '{"capabilities":{"devices":{"create":{"reusable":false,"ephemeral":true,"preauthorized":true,"tags":["tag:dev"]}}}}' \
+  | jq -r .key)
+sudo tailscale up --ssh --accept-dns --hostname="$(hostname)" --authkey="$KEY"
+tailscale status
+REMOTE
+```
+
+### 8. Verify
+
+```bash
+tailscale status | grep <vm>
+```
+
+## SSH discipline
+
+- **One SSH attempt at a time.** Never launch parallel SSH to `*.exe.xyz` or `exe.dev`.
+- Wait for each command to complete before starting the next.
+- If SSH fails, wait 30-60s before one more attempt.

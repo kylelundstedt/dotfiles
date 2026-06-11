@@ -1,51 +1,45 @@
 ---
 name: join-tailnet
-description: Bring an exe.dev VM onto IV's Tailscale tailnet on demand. Use when an iv-image VM (>= 2.0.0) needs to join the tailnet — iv-image no longer auto-joins at boot. SSHes in over *.exe.xyz and runs `tailscale up` with a one-use key minted through the exe.dev tailscale-api proxy.
+description: Join an iv-image exe.dev VM to the Tailscale tailnet on demand. SSHes in over *.exe.xyz and runs tailscale up with a one-use key minted via the tailscale-api proxy.
 ---
 
-# join-tailnet
+# Join Tailnet
 
-iv-image `>= 2.0.0` does **not** auto-join the tailnet. A fresh VM is reachable
-only over the exe.dev edge (`ssh <vm>.exe.xyz`). Use this skill to put it on IV's
-tailnet when you actually want it there.
+Joins an iv-image exe.dev VM to the IV Tailscale tailnet. The VM must have
+the `tailscale-api` integration attached (use `--tag=iv` at creation).
 
-## Use it
+## Usage
+
+The user provides a VM name (e.g. `iv-gitlake`). The skill SSHes in over
+the exe.dev edge and runs two commands on the VM.
+
+## Steps
+
+1. **SSH into the VM over `*.exe.xyz`** (one attempt, `ConnectTimeout=30`).
+2. **Run the join commands** on the VM:
 
 ```bash
-~/.agents/skills/join-tailnet/join-tailnet.sh <vm-name>
+ssh -o ConnectTimeout=30 <vm>.exe.xyz 'bash -s' <<'REMOTE'
+set -euo pipefail
+KEY=$(curl -fsSL -X POST https://tailscale-api.int.exe.xyz/api/v2/tailnet/-/keys \
+  -H "Content-Type: application/json" \
+  -d '{"capabilities":{"devices":{"create":{"reusable":false,"ephemeral":true,"preauthorized":true,"tags":["tag:dev"]}}}}' \
+  | jq -r .key)
+sudo tailscale up --ssh --accept-dns --hostname="$(hostname)" --authkey="$KEY"
+tailscale status
+REMOTE
 ```
 
-`<vm-name>` is the exe.dev VM name (the `--name` you passed to `ssh exe.dev new`),
-not a `.exe.xyz` or `.ts.net` FQDN.
+3. **Verify** the VM appears in `tailscale status` output.
 
-After it succeeds, reach the VM with `ssh <vm>` (Tailscale SSH) for everything
-else — faster, no exe.dev edge rate limit, agent forwarding.
+After it joins, use `ssh <vm>` (Tailscale SSH) for everything else.
 
-## What it does
+## Prerequisites
 
-1. SSH into `<vm>.exe.xyz` (edge path — no tailnet needed to bootstrap the tailnet).
-2. If the VM is already `Running` on the tailnet, print status and exit (idempotent).
-3. Otherwise POST to `https://tailscale-api.int.exe.xyz/api/v2/tailnet/-/keys` to
-   mint a one-use, ephemeral, preauthorized `tag:dev` auth key. exe.dev injects
-   the real Tailscale API credential at the proxy layer — the VM never sees it.
-4. `sudo tailscale up --ssh --accept-dns --hostname=$(hostname) --authkey=<key>`.
+- The VM must be created with `--tag=iv` so the `tailscale-api` integration is attached.
+- `tailscaled` must be running (iv-image ships it enabled but idle).
 
-## Preconditions
+## SSH discipline
 
-- VM created from iv-image `>= 2.0.0` (ships `tailscaled` enabled, plus `curl`/`jq`).
-- VM created with `--tag=iv` so the `tailscale-api` integration is attached — the
-  mint step needs it. Without it, the script exits with a clear error.
-
-## Overrides
-
-- `IV_TAILSCALE_TAG` — tailnet tag (default `tag:dev`).
-- `IV_TAILSCALE_API_URL` — proxy base URL (default `https://tailscale-api.int.exe.xyz`).
-
-## Notes
-
-- The minted key is short-lived, non-reusable, and tagged; no Tailscale secret is
-  written to the VM.
-- Reusing a VM name before its old ephemeral node is reaped can produce a
-  MagicDNS `-1` suffix. This skill does not delete stale nodes (it holds no
-  device-delete authority) — clean those from an admin context. See `tailnet.md`
-  in the iv-image repo.
+- **One SSH attempt at a time.** Never launch parallel SSH to `*.exe.xyz`.
+- If SSH fails, wait 30-60s before one more attempt.
