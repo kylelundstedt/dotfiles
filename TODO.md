@@ -69,9 +69,13 @@ Cross-AI / multi-machine persistent memory via Basic Memory (basicmachines-co). 
 
 - [ ] Replace swallowed errors in `setup_agents` (`>/dev/null 2>&1 || true` → explicit `echo "[!] X failed"` on non-zero)
 
-## Blocked (2026-06-10) — waiting on exe.dev Discord
+## Nice-to-fix — exe.dev proxy delay
 
-- [ ] Move Tailscale bootstrap into iv-image (`ts-bootstrap`). iv-image 1.4.0 has the script but it takes ~110s at boot because the link-local metadata proxy (`169.254.169.254`) is slow to route on BYO images. Reverted to `exe-setup.sh` curl path. Asked Bold in Discord.
+- [ ] Link-local metadata proxy (`169.254.169.254`) takes ~90–110s to route on BYO images. `ts-bootstrap` works but boot-to-tailnet is ~2min instead of ~6s. Asked Bold in Discord (2026-06-10), no response yet.
+
+## Done (2026-06-10)
+
+- [x] Switched to iv-image 1.5 + `ts-bootstrap` as the setup script (deleted `exe-setup.sh`)
 - [x] Rewrote exe-dev skill setup section for the three-layer model (iv-image → dotfiles → repo clone)
 - [x] SSH guard hook in `~/.claude/settings.json` — blocks concurrent SSH to exe.dev hosts
 

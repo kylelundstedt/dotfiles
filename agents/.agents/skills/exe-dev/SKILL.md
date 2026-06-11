@@ -181,13 +181,13 @@ Three layers, each opt-in:
 ### 1. Create VM + clone repo
 
 ```bash
-ssh exe.dev new --image=iv-registry.exe.xyz:5000/iv-image:1.4 \
+ssh exe.dev new --image=iv-registry.exe.xyz:5000/iv-image:1.5 \
   --name=<vm> --tag=iv --integration=github-<org>-<repo>
-ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new <vm>.exe.xyz \
+ssh -o ConnectTimeout=30 <vm>.exe.xyz \
   "git clone https://github-<org>-<repo>.int.exe.xyz/<org>/<repo>.git ~/<repo>"
 ```
 
-Tailscale comes up automatically at first boot (~6s) via `ts-bootstrap`, which is baked into iv-image. The VM is reachable by short name (`ssh <vm>`) ~10–12s after creation.
+Tailscale comes up automatically at first boot via `ts-bootstrap`, which is baked into iv-image. The metadata proxy is slow to route on BYO images (~90–110s), so expect ~2 minutes from creation to the VM being reachable by short name (`ssh <vm>`).
 
 - `--tag=iv` grants the VM access to IV-scoped integrations (work GitHub MCP, MotherDuck)
 - `--integration=github-<org>-<repo>` attaches the per-repo clone/push integration
@@ -232,7 +232,7 @@ When team members join via SSO, they won't see personal integrations. Team integ
 - Generates a single-use ephemeral auth key via the `tailscale-api` HTTP proxy integration
 - Waits for `tailscaled` (started by systemd) and authenticates with `--ssh`
 
-It uses only exe.dev-internal DNS (`tailscale-api.int.exe.xyz`) — no external network needed.
+It uses only exe.dev-internal DNS (`tailscale-api.int.exe.xyz`) — no external network needed. Note: the link-local metadata proxy (`169.254.169.254`) takes ~90–110s to become routable on BYO images, so `ts-bootstrap` blocks for that long at boot. This is a known exe.dev limitation.
 
 The `exe-setup.service` hook is registered to call `ts-bootstrap` directly (no curl fetch):
 
