@@ -40,6 +40,14 @@ stale_ids() {
 log "destroying old VM '$VM' (if any)"
 ssh -o ConnectTimeout=30 exe.dev rm "$VM" 2>&1 | sed 's/^/  rm> /' || true
 
+# Drop any persistent SSH master to this hostname. ControlPersist keeps it alive
+# for minutes, but it now points at the VM we just destroyed — reusing it after
+# recreate would hang the rejoin. Force the next connection to be fresh.
+ssh -O exit "${VM}.exe.xyz" 2>/dev/null || true
+# The recreated VM gets a new host key; clear the stale one so accept-new works
+# instead of failing with "host identification has changed".
+ssh-keygen -R "${VM}.exe.xyz" >/dev/null 2>&1 || true
+
 # 2. delete stale tailnet node(s) with this hostname; poll until the name clears.
 #    Filtering on .hostname catches both <name> and a prior <name>-1.
 for _ in $(seq 1 12); do
