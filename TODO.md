@@ -69,9 +69,13 @@ Cross-AI / multi-machine persistent memory via Basic Memory (basicmachines-co). 
 
 - [ ] Replace swallowed errors in `setup_agents` (`>/dev/null 2>&1 || true` → explicit `echo "[!] X failed"` on non-zero)
 
-## Nice-to-fix — exe.dev proxy delay
+## Done (2026-06-11)
 
-- [ ] Link-local metadata proxy (`169.254.169.254`) takes ~90–110s to route on BYO images. `ts-bootstrap` works but boot-to-tailnet is ~2min instead of ~6s. Asked Bold in Discord (2026-06-10), no response yet.
+- [x] **Removed baked Tailscale auto-join — switched to on-demand (iv-image 2.0).** Deleted `ts-bootstrap`/`iv-tailscale-join`/service from iv-image; image now ships `tailscaled` enabled but idle. Cleared the exe.dev `new.setup-script` account default (was `/usr/local/bin/ts-bootstrap`, which silently broke plain exeuntu VMs). Deleted `exe-setup.sh`.
+- [x] New `join-tailnet` skill — SSHes into a VM over `*.exe.xyz` and runs `tailscale up` with a one-use key minted via the `tailscale-api` proxy; starts `tailscaled` if not running (works on stock exeuntu too).
+- [x] New `upgrade-vm` skill — reprovisions a VM onto a newer image without a `-1` tailnet name: deletes the stale node and tears down the stale SSH master + known_hosts entry before recreating. Migrated `iv-iv`, `iv-gitlake`, `iv-gitlake-examples` to `iv-image:2`.
+- [x] `test-install.sh` hook check inverted: now asserts **no** `new.setup-script` hook is registered (auto-join must not silently return).
+- Obsoletes the exe.dev metadata-proxy boot delay: on-demand join doesn't run at boot, so the ~90–110s `169.254.169.254` routing delay no longer gates tailnet access.
 
 ## Done (2026-06-10)
 
