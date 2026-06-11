@@ -71,9 +71,11 @@ Cross-AI / multi-machine persistent memory via Basic Memory (basicmachines-co). 
 
 ## Done (2026-06-11)
 
-- [x] **Baked team agent config into iv-image.** New `agent/` directory: team AGENTS.md, Claude Code settings.json (SSH guard hook), MCP pre-registration (motherduck + github-work via proxy), skills pre-installed at build time. Personal dotfiles layer on top.
+- [x] **iv-image 2.1.0: baked team agent config.** New `agent/` directory: team AGENTS.md, Claude Code settings.json (SSH guard hook), MCP pre-registration (motherduck + github-work via proxy), skills pre-installed at build time. Needed fnm + node install in Dockerfile (exeuntu base doesn't ship node — installed at runtime by exe.dev init). Personal dotfiles layer on top.
 - [x] Removed `bootstrap-project`, `data-pipelines`, `exe-dev` skills from dotfiles (not providing enough value; SSH guard hook handles the main exe.dev pain point).
 - [x] Gated shared skills in `install.sh` to macOS-only (Linux VMs get them from iv-image).
+- [x] Created `join-tailnet` and `upgrade-vm` skills (in iv-image repo + dotfiles). These were documented in tailnet.md but never committed as actual skills.
+- [x] Upgraded all three VMs (iv-iv, iv-gitlake, iv-gitlake-examples) to iv-image:2.1.0 using upgrade-vm skill. Re-attached repo integrations and re-provisioned doc sites.
 
 ## Done (2026-06-11) — earlier
 
