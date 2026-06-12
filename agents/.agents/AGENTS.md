@@ -47,8 +47,10 @@
 - Put always-on rules in `AGENTS.md`. Put on-demand workflows and domain knowledge in skills.
 - **Read skills before touching a platform.** Before writing code, running commands, or creating/managing VMs on any platform that has a skill, you MUST read the relevant SKILL.md file first. Do not proceed from memory — skills contain platform-specific gotchas that cause hours of debugging when ignored. This applies to both code changes (e.g. editing install.sh) and interactive work (e.g. creating a Sprite or exe.dev VM).
 - When to use specific skills:
-  - `/apple-containers` — use when creating, configuring, or managing Apple Container VMs on macOS.
-  - `/sprites-dev` — use when the user wants to manage remote Sprites (Fly.io microVMs) from the local machine.
+  - `/join-tailnet` — use when joining an exe.dev VM to the Tailscale tailnet.
+  - `/upgrade-vm` — use when upgrading an exe.dev VM to a newer image version.
+  - `/apple-containers` — Apple Container VMs on macOS (back-burnered, exe.dev is primary).
+  - `/sprites-dev` — Fly.io Sprites (back-burnered, exe.dev is primary).
 
 ## exe.dev SSH
 

@@ -4,7 +4,7 @@ One command to set up a fully configured development environment on macOS or Lin
 
 ## What You Get
 
-**AI agent platform** — [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [Codex CLI](https://github.com/openai/codex) with a shared instruction system (`AGENTS.md`), cross-agent skills (`bootstrap-project`, `data-pipelines`, `apple-containers`, `sprites-dev`, `exe-dev`, `mviz`, `find-skills`), four remote MCP servers (GitHub home/work, MotherDuck, Tigris) via HTTP transport, and a convention for per-project agent context (`agent_docs/`)
+**AI agent platform** — [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [Codex CLI](https://github.com/openai/codex) with a shared instruction system (`AGENTS.md`), cross-agent skills (`join-tailnet`, `upgrade-vm`, `apple-containers`, `sprites-dev`, `mviz`, `find-skills`), four remote MCP servers (GitHub home/work, MotherDuck, Tigris) via HTTP transport, and a convention for per-project agent context (`agent_docs/`)
 
 **Shell** — Zsh with [Starship](https://starship.rs/) prompt, [Atuin](https://atuin.sh/) history sync, [Zoxide](https://github.com/ajeetdsouza/zoxide) smart `cd`, [Carapace](https://carapace.sh/) completions, and [Direnv](https://direnv.net/)
 
@@ -12,7 +12,7 @@ One command to set up a fully configured development environment on macOS or Lin
 
 **Dev tools** — Git with 1Password SSH signing, AWS CLI v2, DuckDB, Python via [uv](https://docs.astral.sh/uv/)
 
-**Remote development** — Zed's [remote development](https://zed.dev/docs/remote-development) opens projects over SSH. Create a VM on [Apple Containers](https://github.com/apple/container), [exe.dev](https://exe.dev), or [Sprites](https://sprites.dev), run `install.sh` with a Tailscale auth key, and connect from Zed with `zed ssh://host/path`. Tailscale provides stable hostnames, and SSH agent forwarding from the Mac's 1Password agent enables git clone/push and commit signing on all three platforms — no tokens needed on the VMs.
+**Remote development** — Primary platform is [exe.dev](https://exe.dev) with a custom image (`iv-image`) that bakes in team agent config, MCP servers, and skills. Personal dotfiles (`install.sh`) layer on top for shell, CLI tools, and personal MCP servers. Zed's [remote development](https://zed.dev/docs/remote-development) connects over SSH. Tailscale provides stable hostnames, and SSH agent forwarding from the Mac's 1Password agent enables git clone/push and commit signing — no tokens needed on the VMs.
 
 ---
 
@@ -46,8 +46,6 @@ claude    # or codex — AGENTS.md is already in place
 ```
 
 From here, the agent can walk you through customization (git identity, AWS, SSH) or you can browse `agent_docs/` for details on secrets, platform setup, and agent workflows.
-
-To bring the same agent setup to another project, use the `/bootstrap-project` skill inside Claude or Codex. It reads the repo (README, manifest, CI config, directory structure) and generates a tailored `AGENTS.md` with the project's stack, commands, and conventions — plus a `CLAUDE.md` symlink and an `agent_docs/` directory for supplementary context.
 
 ---
 
@@ -93,29 +91,28 @@ Both Claude Code and Codex CLI share a single instruction file (`AGENTS.md`) dep
 **Two levels of instructions:**
 
 - **Global** (`agents/.agents/AGENTS.md`) — rules for every repo: honesty, communication, code conventions, skill usage. Stow creates `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md` as symlinks so both agents read the same file.
-- **Per-project** (`AGENTS.md` at repo root) — context specific to each repo. In this repo, `CLAUDE.md` is a symlink to `AGENTS.md`. Use `/bootstrap-project` to generate these for other repos.
+- **Per-project** (`AGENTS.md` at repo root) — context specific to each repo. In this repo, `CLAUDE.md` is a symlink to `AGENTS.md`.
 
 **Skills** — Installed by `npx -y skills add -g -y` (the [skills CLI](https://github.com/vercel-labs/skills)) directly into `~/.claude/skills/` and `~/.codex/skills/`. Canonical source files live in `agents/.agents/skills/`:
 
-| Skill               | Source                                                                                  | Purpose                                                                   |
-| ------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `bootstrap-project` | This repo                                                                               | Scaffolds per-project `AGENTS.md`, `CLAUDE.md` symlink, and `agent_docs/` |
-| `data-pipelines`    | This repo                                                                               | DuckDB-centric data stack — dlt, sqlmesh, polars, marimo, uv              |
-| `apple-containers`  | This repo                                                                               | Apple Container VM lifecycle on macOS                                     |
-| `sprites-dev`       | This repo                                                                               | Manage remote Sprites (Fly.io microVMs) from local machine                |
-| `exe-dev`           | This repo                                                                               | exe.dev VM management guide                                               |
-| `mviz`              | [matsonj/mviz](https://github.com/matsonj/mviz)                                         | Chart and report builder                                                  |
-| `find-skills`       | [vercel-labs/skills](https://github.com/vercel-labs/skills)                             | Skill discovery and installation                                          |
-| 5 Tigris skills     | [tigrisdata/tigris-agents-plugins](https://github.com/tigrisdata/tigris-agents-plugins) | Tigris CLI — auth, buckets, objects, access keys, IAM                     |
-| DuckDB skills       | [duckdb/duckdb-skills](https://github.com/duckdb/duckdb-skills)                         | DuckDB query, file reading, database management                           |
-| `quarto-authoring`  | [posit-dev/skills](https://github.com/posit-dev/skills)                                 | Quarto document authoring                                                 |
-| `brand-yml`         | [posit-dev/skills](https://github.com/posit-dev/skills)                                 | Brand styling for Shiny/Quarto                                            |
-| `marimo-notebook`   | [marimo-team/skills](https://github.com/marimo-team/skills)                             | Write marimo notebooks                                                    |
-| `marimo-batch`      | [marimo-team/skills](https://github.com/marimo-team/skills)                             | Prepare marimo notebooks for scheduled runs                               |
-| `marimo-pair`       | [marimo-team/marimo-pair](https://github.com/marimo-team/marimo-pair)                   | Drop agents inside running marimo notebook sessions                       |
-| `archil-guide`      | [archil.com](https://archil.com/skill.md)                                               | Archil distributed filesystem setup and usage                             |
+| Skill              | Source                                                                                  | Purpose                                                 |
+| ------------------ | --------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `join-tailnet`     | This repo                                                                               | Join an exe.dev VM to the Tailscale tailnet on demand   |
+| `upgrade-vm`       | This repo                                                                               | Upgrade an exe.dev VM to a newer image version          |
+| `apple-containers` | This repo                                                                               | Apple Container VM lifecycle on macOS (back-burnered)   |
+| `sprites-dev`      | This repo                                                                               | Manage remote Sprites (Fly.io microVMs) — back-burnered |
+| `mviz`             | [matsonj/mviz](https://github.com/matsonj/mviz)                                         | Chart and report builder                                |
+| `find-skills`      | [vercel-labs/skills](https://github.com/vercel-labs/skills)                             | Skill discovery and installation                        |
+| 5 Tigris skills    | [tigrisdata/tigris-agents-plugins](https://github.com/tigrisdata/tigris-agents-plugins) | Tigris CLI — auth, buckets, objects, access keys, IAM   |
+| DuckDB skills      | [duckdb/duckdb-skills](https://github.com/duckdb/duckdb-skills)                         | DuckDB query, file reading, database management         |
+| `quarto-authoring` | [posit-dev/skills](https://github.com/posit-dev/skills)                                 | Quarto document authoring                               |
+| `brand-yml`        | [posit-dev/skills](https://github.com/posit-dev/skills)                                 | Brand styling for Shiny/Quarto                          |
+| `marimo-notebook`  | [marimo-team/skills](https://github.com/marimo-team/skills)                             | Write marimo notebooks                                  |
+| `marimo-batch`     | [marimo-team/skills](https://github.com/marimo-team/skills)                             | Prepare marimo notebooks for scheduled runs             |
+| `marimo-pair`      | [marimo-team/marimo-pair](https://github.com/marimo-team/marimo-pair)                   | Drop agents inside running marimo notebook sessions     |
+| `archil-guide`     | [archil.com](https://archil.com/skill.md)                                               | Archil distributed filesystem setup and usage           |
 
-Invoke a skill by typing `/skill-name` in Claude Code or Codex (e.g. `/bootstrap-project`).
+Invoke a skill by typing `/skill-name` in Claude Code or Codex (e.g. `/join-tailnet`).
 
 **MCP servers** — Remote HTTP transport. OAuth servers (MotherDuck, Tigris) work on all environments after initial browser auth. GitHub servers use PATs resolved from 1Password at install time (macOS only). `install.sh` registers them for Claude Code:
 
@@ -126,7 +123,7 @@ Invoke a skill by typing `/skill-name` in Claude Code or Codex (e.g. `/bootstrap
 | `github-home` | GitHub API (personal account) | PAT   |
 | `github-work` | GitHub API (work account)     | PAT   |
 
-**Per-project context** — Use the `/bootstrap-project` skill in any repo to generate a tailored `AGENTS.md`, a `CLAUDE.md` symlink, and an `agent_docs/` directory.
+**Per-project context** — Create an `AGENTS.md` at the repo root with project-specific conventions, a `CLAUDE.md` symlink to it, and an `agent_docs/` directory for supplementary context.
 
 ---
 
