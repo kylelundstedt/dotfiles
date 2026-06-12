@@ -32,7 +32,7 @@ Strategy: no plaintext secrets on VM disk. Each secret uses the narrowest delive
 Decision (2026-05-01): exe.dev is the primary dev-VM platform. Apple Containers and Sprites are on back burner.
 
 - [x] Demote `apple-containers` and `sprites-dev` in `CLAUDE.md` and `AGENTS.md` to "alternative, not actively maintained"
-- [ ] Mark `test-install.sh`'s Apple Container and Sprite paths informational
+- [x] Mark `test-install.sh`'s Apple Container and Sprite paths informational
 
 ## Tailscale ACL
 

@@ -1,9 +1,11 @@
 #!/bin/bash
 # Test install.sh across VM backends.
+# exe.dev is the primary platform; Apple Container and Sprite paths are
+# back-burnered but kept for occasional validation.
 # Usage: ./test-install.sh [container|sprite|exe|all]
-#   container — Apple Container (klundstedt user, sudo available)
-#   sprite    — Fly.io Sprite (klundstedt user, sudo available)
-#   exe       — exe.dev VM (default user, sudo available)
+#   container — Apple Container (back-burnered, kept for validation)
+#   sprite    — Fly.io Sprite (back-burnered, kept for validation)
+#   exe       — exe.dev VM (primary platform)
 #   all       — all backends (default)
 
 set -euo pipefail
@@ -94,7 +96,7 @@ parse_results() {
     done <<< "$output"
 }
 
-# --- Apple Container (klundstedt user, sudo available) ---
+# --- Apple Container (back-burnered, kept for validation) ---
 test_container() {
     if ! command -v container >/dev/null 2>&1; then
         echo "container CLI not found — skipping container test."
@@ -138,7 +140,7 @@ test_container() {
     container stop "$name" 2>/dev/null; container rm "$name" 2>/dev/null || true
 }
 
-# --- Sprite (klundstedt user, sudo available) ---
+# --- Sprite (back-burnered, kept for validation) ---
 test_sprite() {
     if ! command -v sprite >/dev/null 2>&1; then
         echo "sprite CLI not found — skipping sprite test."
