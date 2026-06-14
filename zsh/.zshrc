@@ -25,7 +25,7 @@ if [[ $(uname) == "Darwin" ]]; then
 fi
 
 # Enable git commit signing when SSH agent is forwarded (Linux VMs via Tailscale)
-if [[ -n "${SSH_AUTH_SOCK:-}" ]] && ! git config --global commit.gpgsign >/dev/null 2>&1; then
+if [[ -n "${SSH_AUTH_SOCK:-}" ]] && ! git config commit.gpgsign >/dev/null 2>&1; then
     git config --file ~/.gitconfig_local commit.gpgsign true
 fi
 
