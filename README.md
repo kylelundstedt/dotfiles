@@ -143,6 +143,18 @@ brew bundle --file=~/dotfiles/homebrew/Brewfile    # Homebrew packages (macOS)
 atuin sync                                        # Shell history
 ```
 
+**Update already-running VMs** — Configs are symlinks into `~/dotfiles`, so a plain `git pull` makes edits to *existing* files take effect on the next new shell — no `install.sh` re-run needed. The repo is public, so pulling needs no credentials (only `git push` does):
+
+```bash
+# one VM
+ssh <vm> 'cd ~/dotfiles && git pull --ff-only'
+
+# fan out over the tailnet (parallel-safe — not rate-limited like *.exe.xyz)
+for vm in <vm1> <vm2> ...; do ssh "$vm" 'cd ~/dotfiles && git pull --ff-only'; done
+```
+
+Re-run `install.sh` on a VM only when a pull *adds or removes* files (new skills, new stow packages) so stow can reconcile the symlinks. Use `./install.sh --skip-agents` for just the stow step — it skips the slower agent/MCP setup (which needs a local browser for some OAuth flows and is best run from the Mac).
+
 ---
 
 ## Troubleshooting

@@ -853,10 +853,12 @@ setup_agents() {
         done
 
         # OAuth servers — mirror of Claude Code's set. Add only if missing.
-        # codex mcp add eagerly opens a browser OAuth flow, so skip on
-        # non-interactive sessions (e.g. curl|bash on a headless VM) where
-        # there's no browser to complete the callback.
-        if [[ "$IS_INTERACTIVE" == true ]]; then
+        # codex mcp add eagerly opens a browser OAuth flow and blocks on the
+        # callback, so only run where there's a local browser to complete it.
+        # A remote VM has a TTY (IS_INTERACTIVE=true) but no browser — running
+        # this over SSH hangs forever — so gate on macOS, not just a TTY.
+        # Linux VMs defer Codex MCP (like the Codex GitHub servers below).
+        if [[ "$IS_INTERACTIVE" == true && "$OS" == "macos" ]]; then
             for srv in "motherduck https://api.motherduck.com/mcp" \
                        "tigris https://mcp.storage.dev/mcp" \
                        "readwise https://mcp2.readwise.io/mcp"; do
@@ -870,7 +872,7 @@ setup_agents() {
                 fi
             done
         else
-            echo "  Skipping Codex MCP servers (non-interactive)"
+            echo "  Skipping Codex MCP servers (OAuth needs a local browser)"
         fi
 
         # GitHub MCP servers deferred. Codex disallows inline bearer tokens
