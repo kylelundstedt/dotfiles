@@ -484,7 +484,10 @@ Host exe.dev *.exe.xyz
 
 Host *.exe.xyz
   User exedev
-  LocalForward 8765 localhost:8765
+# Tigris/Readwise MCP OAuth: tunnel on demand with
+#   ssh -L 8765:localhost:8765 <vm>.exe.xyz
+# An always-on LocalForward here collides across multiplexed *.exe.xyz
+# masters (2nd host: "port 8765 already in use" -> broken control master).
 
 # exe.dev VMs reached by Tailscale name: detected dynamically by tag,
 # so new VMs Just Work without re-running install.sh.
@@ -813,12 +816,13 @@ setup_agents() {
 
         # On exe.dev VMs, use HTTP proxy integrations for servers that
         # support static tokens (no secrets on VM disk). OAuth-only servers
-        # (Tigris, Readwise) still need the LocalForward 8765 browser dance.
+        # (Tigris, Readwise) need a one-time browser dance over an explicit
+        # `ssh -L 8765:localhost:8765 <vm>.exe.xyz` tunnel (not always-on).
         if [[ "$OS" == "linux" ]]; then
             claude mcp add --transport http --scope user motherduck https://motherduck-mcp.int.exe.xyz/mcp >/dev/null 2>&1 || true
             claude mcp add --transport http --scope user github-home https://github-mcp-home.int.exe.xyz/mcp/ >/dev/null 2>&1 || true
             claude mcp add --transport http --scope user github-work https://github-mcp-work.int.exe.xyz/mcp/ >/dev/null 2>&1 || true
-            # OAuth-only servers (browser auth on first use via LocalForward 8765)
+            # OAuth-only servers (first-use browser auth via an explicit -L 8765 tunnel)
             claude mcp add --transport http --scope user tigris https://mcp.storage.dev/mcp >/dev/null 2>&1 || true
             claude mcp add --transport http --scope user readwise https://mcp2.readwise.io/mcp >/dev/null 2>&1 || true
             echo "  [+] MCP servers (3 via exe.dev proxy, 2 OAuth)"
