@@ -92,7 +92,57 @@ if [[ -z "${GITHUB_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
     [[ -n "$GITHUB_TOKEN" ]] && export GITHUB_TOKEN
 fi
 
-# Fetch latest GitHub release asset, extract, and place binary in ~/.local/bin.
+# Download an asset URL, extract it, and place the binary in ~/.local/bin.
+# Shared by install_github_binary (API path) and install_release_asset (direct path).
+# Usage: _fetch_and_place <asset_url> <binary_name> <path_inside_archive>
+_fetch_and_place() {
+    local asset_url="$1" bin_name="$2" inner_path="$3"
+    local tmp asset_name
+    asset_name="${asset_url##*/}"
+    tmp=$(mktemp -d)
+
+    local -a dl_opts=(-fsSL)
+    [[ -n "${GITHUB_TOKEN:-}" ]] && dl_opts+=(-H "Authorization: token $GITHUB_TOKEN")
+    if ! curl "${dl_opts[@]}" "$asset_url" -o "$tmp/$asset_name"; then
+        echo "  [!] $bin_name: download failed"; rm -rf "$tmp"; return 1
+    fi
+    case "$asset_name" in
+        *.tar.gz|*.tgz) tar -xzf "$tmp/$asset_name" -C "$tmp" ;;
+        *.zip)          unzip -qo "$tmp/$asset_name" -d "$tmp" ;;
+        *)              chmod +x "$tmp/$asset_name"; if [[ "$asset_name" != "$inner_path" ]]; then mv "$tmp/$asset_name" "$tmp/$inner_path"; fi ;;
+    esac
+    # Find the binary — check inner_path first, then search
+    if [[ -f "$tmp/$inner_path" ]]; then
+        mv "$tmp/$inner_path" "$LOCAL_BIN/$bin_name"
+    else
+        local found
+        found=$(find "$tmp" -name "$bin_name" -type f | head -1)
+        if [[ -n "$found" ]]; then
+            mv "$found" "$LOCAL_BIN/$bin_name"
+        else
+            echo "  [!] $bin_name: binary not found in archive"; rm -rf "$tmp"; return 1
+        fi
+    fi
+    chmod +x "$LOCAL_BIN/$bin_name"
+    rm -rf "$tmp"
+    echo "  [+] $bin_name"
+}
+
+# Download a known release asset directly from github.com (NOT api.github.com),
+# so it doesn't consume the unauthenticated 60/hr/IP API rate limit. Use this for
+# tools whose asset filename is version-less (the /latest/download/ redirect needs
+# the literal name). For version-stamped assets, use install_github_binary instead.
+# Usage: install_release_asset <owner/repo> <asset_name> <binary_name> [<path_inside_archive>]
+install_release_asset() {
+    local repo="$1" asset_name="$2" bin_name="$3"
+    local inner_path="${4:-$bin_name}"
+    _fetch_and_place "https://github.com/${repo}/releases/latest/download/${asset_name}" "$bin_name" "$inner_path"
+}
+
+# Fetch latest GitHub release asset via the API (resolves version-stamped asset
+# names), extract, and place binary in ~/.local/bin. The API is rate-limited to
+# 60/hr per IP when unauthenticated (no GITHUB_TOKEN), so prefer install_release_asset
+# for version-less assets. Returns non-zero on failure so callers don't cascade silently.
 # Usage: install_github_binary <owner/repo> <asset_pattern> <binary_name> [<path_inside_archive>]
 #   asset_pattern: grep -E pattern to match the asset filename (use ARCH/OS placeholders before calling)
 #   binary_name: final name in ~/.local/bin
@@ -100,7 +150,7 @@ fi
 install_github_binary() {
     local repo="$1" pattern="$2" bin_name="$3"
     local inner_path="${4:-$bin_name}"
-    local tmp asset_url asset_name api_response
+    local asset_url api_response
     # Resolve latest release asset URL (retry once on 403 rate-limit)
     local gh_api_url="https://api.github.com/repos/${repo}/releases/latest"
     local attempt
@@ -118,37 +168,15 @@ install_github_binary() {
         | head -1 \
         | sed 's/"browser_download_url": "//;s/"//')
     if [[ -z "$asset_url" ]]; then
-        echo "  [!] $bin_name: no matching release asset"; return 1
-    fi
-    asset_name="${asset_url##*/}"
-    tmp=$(mktemp -d)
-
-    local -a dl_opts=(-fsSL)
-    [[ -n "${GITHUB_TOKEN:-}" ]] && dl_opts+=(-H "Authorization: token $GITHUB_TOKEN")
-    if curl "${dl_opts[@]}" "$asset_url" -o "$tmp/$asset_name"; then
-        case "$asset_name" in
-            *.tar.gz|*.tgz) tar -xzf "$tmp/$asset_name" -C "$tmp" ;;
-            *.zip)          unzip -qo "$tmp/$asset_name" -d "$tmp" ;;
-            *)              chmod +x "$tmp/$asset_name"; if [[ "$asset_name" != "$inner_path" ]]; then mv "$tmp/$asset_name" "$tmp/$inner_path"; fi ;;
-        esac
-        # Find the binary — check inner_path first, then search
-        if [[ -f "$tmp/$inner_path" ]]; then
-            mv "$tmp/$inner_path" "$LOCAL_BIN/$bin_name"
+        # Distinguish rate-limit from a genuine missing asset so it's not a silent skip.
+        if echo "$api_response" | grep -q "API rate limit exceeded"; then
+            echo "  [!] $bin_name: GitHub API rate limit hit (unauthenticated) — not installed"
         else
-            local found
-            found=$(find "$tmp" -name "$bin_name" -type f | head -1)
-            if [[ -n "$found" ]]; then
-                mv "$found" "$LOCAL_BIN/$bin_name"
-            else
-                echo "  [!] $bin_name: binary not found in archive"; rm -rf "$tmp"; return 1
-            fi
+            echo "  [!] $bin_name: no matching release asset"
         fi
-        chmod +x "$LOCAL_BIN/$bin_name"
-        echo "  [+] $bin_name"
-    else
-        echo "  [!] $bin_name: download failed"
+        return 1
     fi
-    rm -rf "$tmp"
+    _fetch_and_place "$asset_url" "$bin_name" "$inner_path"
 }
 
 # Quarto: install tarball to ~/.local/share/quarto, symlink binary to ~/.local/bin.
@@ -271,7 +299,7 @@ install_cli_tools() {
     else echo "  [=] atuin"; fi
     local direnv_os; case "$OS" in macos) direnv_os="darwin" ;; linux) direnv_os="linux" ;; esac
     if need direnv; then
-        (install_github_binary "direnv/direnv" "direnv\\.${direnv_os}-${gh_arch}\"$" "direnv" "direnv.${direnv_os}-${gh_arch}") &
+        (install_release_asset "direnv/direnv" "direnv.${direnv_os}-${gh_arch}" "direnv" "direnv.${direnv_os}-${gh_arch}") &
         pids+=($!)
     else echo "  [=] direnv"; fi
     if need zoxide; then
@@ -280,7 +308,7 @@ install_cli_tools() {
     else echo "  [=] zoxide"; fi
     local tigris_arch; case "$arch" in arm64|aarch64) tigris_arch="arm64" ;; x86_64) tigris_arch="x64" ;; esac
     if need tigris; then
-        (install_github_binary "tigrisdata/cli" "tigris-${direnv_os}-${tigris_arch}\\.tar\\.gz" "tigris" "tigris-${direnv_os}-${tigris_arch}") &
+        (install_release_asset "tigrisdata/cli" "tigris-${direnv_os}-${tigris_arch}.tar.gz" "tigris" "tigris-${direnv_os}-${tigris_arch}") &
         pids+=($!)
     else echo "  [=] tigris"; fi
     # archil: CLI on Linux, macOS app installed separately (interactive prompt)
@@ -289,7 +317,7 @@ install_cli_tools() {
         pids+=($!)
     fi
     if need fnm; then
-        (install_github_binary "Schniz/fnm" "${fnm_asset}\\.zip" "fnm" "fnm") &
+        (install_release_asset "Schniz/fnm" "${fnm_asset}.zip" "fnm" "fnm") &
         pids+=($!)
     else echo "  [=] fnm"; fi
 
@@ -365,7 +393,8 @@ setup_node() {
     echo ""
     echo "=== Node (via fnm) ==="
     if need fnm; then
-        echo "  [!] fnm not available, skipping node setup"
+        echo "  [!] fnm not installed (see CLI tools section above) — skipping node setup"
+        echo "      Consequence: no node/npx, so agent skills will be skipped too. Re-run install.sh once fnm is present."
         return 0
     fi
     eval "$(fnm env --shell bash)"
