@@ -38,6 +38,10 @@ cd ~/dotfiles
 
 **Flags:** `--apps`, `--dry-run`, `--skip-stow`, `--skip-agents`, `--tailscale-ssh`
 
+**Hosts:** `klundstedt-mini` is the always-on Mac mini SSH target — install it with `--tailscale-ssh` on the **first** run so it runs open-source `tailscaled` (system daemon via `sudo brew services`) for incoming Tailscale SSH. After that, the brew formula is auto-detected and every subsequent `./install.sh` maintains it without the flag. Other macOS machines use the standard Tailscale app and don't need the flag.
+
+`install.sh` never upgrades the tailscale formula — version bumps are manual. Since `tailscaled` runs as a root system daemon, the upgrade ritual on this host is: `brew upgrade tailscale` → `sudo brew services restart tailscale` (clears CLI/daemon version skew) → `sudo rm -rf /opt/homebrew/Cellar/tailscale/<old-versions>` (`brew cleanup` can't remove the root-owned old kegs on its own).
+
 That's it — your shell, git, agent tooling, and dev tools are all configured. Start using them:
 
 ```bash
@@ -143,7 +147,7 @@ brew bundle --file=~/dotfiles/homebrew/Brewfile    # Homebrew packages (macOS)
 atuin sync                                        # Shell history
 ```
 
-**Update already-running VMs** — Configs are symlinks into `~/dotfiles`, so a plain `git pull` makes edits to *existing* files take effect on the next new shell — no `install.sh` re-run needed. The repo is public, so pulling needs no credentials (only `git push` does):
+**Update already-running VMs** — Configs are symlinks into `~/dotfiles`, so a plain `git pull` makes edits to _existing_ files take effect on the next new shell — no `install.sh` re-run needed. The repo is public, so pulling needs no credentials (only `git push` does):
 
 ```bash
 # one VM
@@ -153,7 +157,7 @@ ssh <vm> 'cd ~/dotfiles && git pull --ff-only'
 for vm in <vm1> <vm2> ...; do ssh "$vm" 'cd ~/dotfiles && git pull --ff-only'; done
 ```
 
-Re-run `install.sh` on a VM only when a pull *adds or removes* files (new skills, new stow packages) so stow can reconcile the symlinks. Use `./install.sh --skip-agents` for just the stow step — it skips the slower agent/MCP setup (which needs a local browser for some OAuth flows and is best run from the Mac).
+Re-run `install.sh` on a VM only when a pull _adds or removes_ files (new skills, new stow packages) so stow can reconcile the symlinks. Use `./install.sh --skip-agents` for just the stow step — it skips the slower agent/MCP setup (which needs a local browser for some OAuth flows and is best run from the Mac).
 
 ---
 
