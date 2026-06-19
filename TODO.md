@@ -78,6 +78,10 @@ Cross-AI / multi-machine persistent memory via Basic Memory (basicmachines-co). 
 
 - [ ] Replace swallowed errors in `setup_agents` (`>/dev/null 2>&1 || true` → explicit `echo "[!] X failed"` on non-zero)
 
+## Done (2026-06-19)
+
+- [x] **Documented klundstedt-mini tailscale upgrade ritual** (README + AGENTS.md). `setup_tailscale` is install-if-missing + restart-on-skew — it never `brew upgrade`s, so formula bumps are manual. Because `tailscaled` runs as a root system daemon, `sudo brew services` taints each keg with root-owned binaries and `brew cleanup` can't remove old kegs: ritual is `brew upgrade tailscale` → `sudo brew services restart tailscale` (clears CLI/daemon skew) → `sudo rm -rf /opt/homebrew/Cellar/tailscale/<old-versions>`. Upgraded this host 1.96.4 → 1.98.5 and verified a fresh `install.sh` run leaves it skew-free.
+
 ## Done (2026-06-11)
 
 - [x] **iv-image 2.1.0: baked team agent config.** New `agent/` directory: team AGENTS.md, Claude Code settings.json (SSH guard hook), MCP pre-registration (motherduck + github-work via proxy), skills pre-installed at build time. Needed fnm + node install in Dockerfile (exeuntu base doesn't ship node — installed at runtime by exe.dev init). Personal dotfiles layer on top.
