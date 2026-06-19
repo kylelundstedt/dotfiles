@@ -1172,6 +1172,24 @@ install_apps() {
         echo "  Apps layer is macOS only, skipping."
         return 0
     fi
+
+    # Several casks are pkg-based installers (Microsoft suite, Zoom, ...) and the
+    # Apple Container pkg below also needs root. Prime sudo once and keep the
+    # timestamp warm in the background so you enter your password a single time
+    # instead of once per installer. Interactive only — never relax sudo headless.
+    local sudo_keepalive_pid=""
+    if [[ "$IS_INTERACTIVE" == true ]] && sudo -v 2>/dev/null; then
+        ( while kill -0 "$$" 2>/dev/null; do sudo -n true 2>/dev/null || true; sleep 50; done ) &
+        sudo_keepalive_pid=$!
+        echo "  [+] sudo primed (one prompt covers all pkg installers)"
+    fi
+
+    # Trust the non-official taps referenced in the Brewfile so `brew bundle` can
+    # load their casks when HOMEBREW_REQUIRE_TAP_TRUST is set. Idempotent — writes
+    # ~/.homebrew/trust.json. Without this, dbc/flux-markdown are refused.
+    brew trust columnar-tech/tap >/dev/null 2>&1 || true   # dbc
+    brew trust xykong/tap >/dev/null 2>&1 || true          # flux-markdown
+
     brew bundle --file="$DOTFILES_DIR/homebrew/Brewfile" || echo "  Note: some casks/mas apps may have failed (normal)."
 
     # LM Studio ships the `lms` CLI inside the app bundle. Its own `lms bootstrap`
@@ -1270,6 +1288,9 @@ install_apps() {
             [[ -f "$plist" ]] && launchctl load -w "$plist" 2>/dev/null || true
         done
     fi
+
+    # Stop the sudo keepalive started for the pkg-based installers above.
+    [[ -n "${sudo_keepalive_pid:-}" ]] && kill "$sudo_keepalive_pid" 2>/dev/null || true
 }
 
 # --- Main ---
