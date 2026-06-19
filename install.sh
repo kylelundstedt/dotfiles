@@ -1174,6 +1174,18 @@ install_apps() {
     fi
     brew bundle --file="$DOTFILES_DIR/homebrew/Brewfile" || echo "  Note: some casks/mas apps may have failed (normal)."
 
+    # LM Studio ships the `lms` CLI inside the app bundle. Its own `lms bootstrap`
+    # edits shell rc files (which this repo manages via stow), so instead symlink
+    # the shim into ~/.local/bin — same pattern as node/quarto above. The shim at
+    # ~/.lmstudio/bin/lms is created the first time LM Studio launches, so this is
+    # a no-op (with a hint) until then; re-running install.sh wires it up.
+    if [[ -x "$HOME/.lmstudio/bin/lms" ]]; then
+        ln -sf "$HOME/.lmstudio/bin/lms" "$LOCAL_BIN/lms"
+        echo "  [+] lms CLI (symlinked from ~/.lmstudio/bin)"
+    elif ls -d "/Applications/LM Studio.app" &>/dev/null; then
+        echo "  [=] lms CLI: launch LM Studio once to create ~/.lmstudio/bin/lms, then re-run install.sh"
+    fi
+
     # Sprite CLI
     if need sprite; then
         curl -fsSL https://sprites.dev/install.sh | sh >/dev/null 2>&1 && echo "  [+] Sprite CLI" || echo "  [!] Sprite CLI failed"

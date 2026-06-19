@@ -35,6 +35,7 @@ cask "ghostty"
 cask "google-chrome", args: { appdir: "/Applications" }
 cask "jetbrains-toolbox", args: { appdir: "/Applications" }
 # cask "linear-linear", args: { appdir: "/Applications" }
+cask "lm-studio"  # local LLM/embeddings server (OpenAI-compatible :1234); `lms` CLI symlinked by install.sh
 # cask "macwhisper"
 cask "microsoft-auto-update"
 cask "microsoft-office", args: { appdir: "/Applications" }
