@@ -1,5 +1,11 @@
 # TODO
 
+## klundstedt-mini archive backup
+
+Local archives at `~/archives/` on klundstedt-mini (msgvault email ~40 GB, calendar DuckDB, `speaking-engagements.md`) live only on that machine — not in git, no backup yet.
+
+- [ ] Back up `~/archives/` to Tigris (S3-compatible): create bucket + scheduled `rclone`/`aws s3 sync`; consider excluding regenerable caches (msgvault `analytics/`, calendar DuckDB is rebuildable from `sources/`).
+
 ## Zed remote folder in existing window (CLI)
 
 - [ ] Track [zed-industries/zed#56282](https://github.com/zed-industries/zed/issues/56282) — `zed ssh://` always opens a new window; `--add` and `--existing` flags don't work with SSH URLs. Workaround: "projects: open remote" in command palette.
