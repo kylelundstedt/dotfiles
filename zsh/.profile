@@ -12,6 +12,10 @@ export IS_SANDBOX=1
 
 command -v fnm >/dev/null && eval "$(fnm env)"
 
+# msgvault email archive lives under ~/archives/email (consolidated layout) rather
+# than the default ~/.msgvault. Only set where that archive exists (klundstedt-mini).
+[ -d "$HOME/archives/email" ] && export MSGVAULT_HOME="$HOME/archives/email"
+
 # Export gh's stored token so tools that don't read ~/.config/gh/hosts.yml
 # (Ruff LSP, npm, curl) get the 5000/hr authenticated rate limit.
 # Side effect: `gh auth status` shows GITHUB_TOKEN as the active account
