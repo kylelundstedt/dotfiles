@@ -8,6 +8,7 @@ GNU Stow–managed dotfiles and AI agent platform for macOS and Linux. Each top-
 - Install with macOS apps (casks, Mac App Store): `./install.sh --apps`
 - Install open-source tailscaled for incoming SSH (macOS): `./install.sh --tailscale-ssh`
 - Skip agent setup: `./install.sh --skip-agents`
+- Upgrade all CLIs to latest (reinstall even if present): `./install.sh --upgrade`
 - Test on Linux: `./test-install.sh` (Apple Container, Sprite, exe.dev)
 - Stow a single package: `stow --no-folding -R -t "$HOME" <package>`
 - Dry-run stow: `stow --no-folding -R -n -t "$HOME" <package>`
@@ -57,10 +58,10 @@ The install script sets up a machine from scratch. It self-bootstraps — when p
 10. **Agents** — Claude Code CLI, Codex CLI, 1Password CLI (Linux), MCP server registration (remote HTTP), agent skills
 11. **Apps** (only with `--apps`) — `brew bundle` for casks/MAS apps, Sprite CLI, Apple Container CLI, LaunchAgents
 
-**Flags:** `--apps`, `--dry-run`, `--skip-stow`, `--skip-agents`, `--tailscale-ssh`
+**Flags:** `--apps`, `--dry-run`, `--skip-stow`, `--skip-agents`, `--tailscale-ssh`, `--upgrade`
 
 Key properties:
 
-- Idempotent — safe to re-run (each tool checks `need <cmd>` before installing)
+- Idempotent — safe to re-run. By default each tool checks `need <cmd>` and skips if already present (fast re-runs); present tools are never upgraded. Pass `--upgrade` to force a reinstall-at-latest of every CLI (`want <cmd>` = missing OR `--upgrade`). Since the installers always fetch the latest GitHub release / run the vendor install script, forcing a reinstall is the upgrade — no per-tool version parsing.
 - Works on macOS and Linux (apt-based)
 - Non-interactive mode auto-enabled when not attached to a TTY

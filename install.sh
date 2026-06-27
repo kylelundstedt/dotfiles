@@ -7,6 +7,7 @@ DRY_RUN=false
 SKIP_STOW=false
 SKIP_AGENTS=false
 TAILSCALE_SSH=false
+UPGRADE=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -16,8 +17,9 @@ while [[ $# -gt 0 ]]; do
         --skip-stow)      SKIP_STOW=true; shift ;;
         --skip-agents)    SKIP_AGENTS=true; shift ;;
         --tailscale-ssh)  TAILSCALE_SSH=true; shift ;;
+        --upgrade)        UPGRADE=true; shift ;;
         *)
-            echo "Usage: $0 [--apps] [--dry-run] [--no-prompt] [--skip-stow] [--skip-agents] [--tailscale-ssh]"
+            echo "Usage: $0 [--apps] [--dry-run] [--no-prompt] [--skip-stow] [--skip-agents] [--tailscale-ssh] [--upgrade]"
             exit 1
             ;;
     esac
@@ -85,6 +87,14 @@ export PATH="$LOCAL_BIN:$PATH"
 
 # --- Helpers ---
 need() { ! command -v "$1" >/dev/null 2>&1; }
+
+# want <cmd>: true if the tool should be (re)installed — either it's missing, or
+# --upgrade was passed. The CLI installers always fetch the latest GitHub release
+# (or run the vendor install script), so forcing a reinstall is what "upgrade"
+# means here; there's no per-tool version parsing to drift. Without --upgrade,
+# present tools are skipped so re-runs stay fast. Replaces bare `need` in the CLI
+# tool / agent guards, which otherwise skip anything already on PATH forever.
+want() { need "$1" || [[ "$UPGRADE" == true ]]; }
 
 # Set GITHUB_TOKEN from gh CLI if available (raises rate limit from 60 to 5000/hr)
 if [[ -z "${GITHUB_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
@@ -276,6 +286,8 @@ install_cli_tools() {
 
     # Install tools to ~/.local/bin. Skip tools already present (at any path)
     # to avoid redundant downloads — exeuntu ships with several of these.
+    # With --upgrade, reinstall every tool at latest regardless of presence
+    # (and shadow any system copy via ~/.local/bin's PATH precedence).
     local pids=()
     local fnm_asset
     case "$OS-$arch" in
@@ -285,81 +297,85 @@ install_cli_tools() {
     esac
 
     # Curl install scripts
-    if need starship; then
+    if want starship; then
         (curl -fsSL https://starship.rs/install.sh | sh -s -- --yes --bin-dir="$LOCAL_BIN" >/dev/null 2>&1 && echo "  [+] starship" || echo "  [!] starship failed") &
         pids+=($!)
     else echo "  [=] starship"; fi
-    if need uv; then
+    if want uv; then
         (curl -fsSL https://astral.sh/uv/install.sh | env CARGO_HOME="$HOME/.local" sh >/dev/null 2>&1 && echo "  [+] uv" || echo "  [!] uv failed") &
         pids+=($!)
     else echo "  [=] uv"; fi
-    if need atuin && [[ ! -x "$HOME/.atuin/bin/atuin" ]]; then
+    # atuin installs to ~/.atuin/bin (not ~/.local/bin), so the presence check
+    # also probes that path; --upgrade forces a reinstall regardless.
+    if { need atuin && [[ ! -x "$HOME/.atuin/bin/atuin" ]]; } || [[ "$UPGRADE" == true ]]; then
         (curl -fsSL https://github.com/atuinsh/atuin/releases/latest/download/atuin-installer.sh | sh -s -- --no-modify-path >/dev/null 2>&1 && echo "  [+] atuin" || echo "  [!] atuin failed") &
         pids+=($!)
     else echo "  [=] atuin"; fi
     local direnv_os; case "$OS" in macos) direnv_os="darwin" ;; linux) direnv_os="linux" ;; esac
-    if need direnv; then
+    if want direnv; then
         (install_release_asset "direnv/direnv" "direnv.${direnv_os}-${gh_arch}" "direnv" "direnv.${direnv_os}-${gh_arch}") &
         pids+=($!)
     else echo "  [=] direnv"; fi
-    if need zoxide; then
+    if want zoxide; then
         (install_github_binary "ajeetdsouza/zoxide" "zoxide-.*-${target_triple}.*\\.tar\\.gz" "zoxide") &
         pids+=($!)
     else echo "  [=] zoxide"; fi
     local tigris_arch; case "$arch" in arm64|aarch64) tigris_arch="arm64" ;; x86_64) tigris_arch="x64" ;; esac
-    if need tigris; then
+    if want tigris; then
         (install_release_asset "tigrisdata/cli" "tigris-${direnv_os}-${tigris_arch}.tar.gz" "tigris" "tigris-${direnv_os}-${tigris_arch}") &
         pids+=($!)
     else echo "  [=] tigris"; fi
     # archil: CLI on Linux, macOS app installed separately (interactive prompt)
-    if [[ "$OS" == "linux" ]] && need archil; then
+    if [[ "$OS" == "linux" ]] && want archil; then
         (curl -fsSL https://archil.com/install | sh >/dev/null 2>&1 && echo "  [+] archil" || echo "  [!] archil failed") &
         pids+=($!)
     fi
-    if need fnm; then
+    if want fnm; then
         (install_release_asset "Schniz/fnm" "${fnm_asset}.zip" "fnm" "fnm") &
         pids+=($!)
     else echo "  [=] fnm"; fi
 
     # GitHub release binaries
-    if need bat; then
+    if want bat; then
         (install_github_binary "sharkdp/bat" "bat-v.*-${target_triple}.*\\.tar\\.gz" "bat") &
         pids+=($!)
     else echo "  [=] bat"; fi
-    if need fzf; then
+    if want fzf; then
         (install_github_binary "junegunn/fzf" "fzf-.*-${gh_os}_${gh_arch}\\.tar\\.gz" "fzf" "fzf") &
         pids+=($!)
     else echo "  [=] fzf"; fi
-    if need rg; then
+    if want rg; then
         (install_github_binary "BurntSushi/ripgrep" "ripgrep-.*-${target_triple}.*\\.tar\\.gz" "rg") &
         pids+=($!)
     else echo "  [=] rg"; fi
     local jq_os; case "$OS" in macos) jq_os="macos" ;; linux) jq_os="linux" ;; esac
-    if need jq; then
+    if want jq; then
         (install_github_binary "jqlang/jq" "jq-${jq_os}-${gh_arch}\"$" "jq" "jq-${jq_os}-${gh_arch}") &
         pids+=($!)
     else echo "  [=] jq"; fi
-    if need yq; then
+    if want yq; then
         (install_github_binary "mikefarah/yq" "yq_${gh_os}_${gh_arch}\"$" "yq" "yq_${gh_os}_${gh_arch}") &
         pids+=($!)
     else echo "  [=] yq"; fi
-    if need gh; then
+    if want gh; then
         (install_github_binary "cli/cli" "gh_.*_${gh_cli_os}_${gh_arch}\\.(tar\\.gz|zip)" "gh") &
         pids+=($!)
     else echo "  [=] gh"; fi
-    if need duckdb; then
+    if want duckdb; then
         (install_github_binary "duckdb/duckdb" "duckdb_cli-${duckdb_os}-${gh_arch}\\.zip" "duckdb" "duckdb") &
         pids+=($!)
     else echo "  [=] duckdb"; fi
-    if need carapace; then
+    if want carapace; then
         (install_github_binary "carapace-sh/carapace-bin" "carapace-bin_.*_${gh_os}_${gh_arch}\\.tar\\.gz" "carapace" "carapace") &
         pids+=($!)
     else echo "  [=] carapace"; fi
-    if need cship; then
+    if want cship; then
         (install_github_binary "stephenleo/cship" "cship-${target_triple}" "cship" "cship-${target_triple}") &
         pids+=($!)
     else echo "  [=] cship"; fi
-    if need quarto; then
+    # quarto compares the installed version dir against latest, so it's already
+    # upgrade-aware; want() just lets --upgrade force the API check even when present.
+    if want quarto; then
         (install_quarto) &
         pids+=($!)
     else echo "  [=] quarto"; fi
@@ -398,7 +414,8 @@ setup_node() {
         return 0
     fi
     eval "$(fnm env --shell bash)"
-    if need node; then
+    # fnm install --lts pulls the newest LTS, so it doubles as the upgrade path.
+    if want node; then
         fnm install --lts >/dev/null 2>&1 && echo "  [+] node $(node --version)" || echo "  [!] node install failed"
     else
         echo "  node $(node --version) already installed"
@@ -414,8 +431,9 @@ setup_node() {
         done
     fi
 
-    # disk: Archil's npm-distributed CLI, complements the native `archil` CLI
-    if command -v npm >/dev/null 2>&1 && need disk; then
+    # disk: Archil's npm-distributed CLI, complements the native `archil` CLI.
+    # npm install -g always resolves latest, so want() makes --upgrade refresh it.
+    if command -v npm >/dev/null 2>&1 && want disk; then
         npm install -g disk >/dev/null 2>&1 && echo "  [+] disk" || echo "  [!] disk install failed"
     fi
 }
@@ -759,8 +777,9 @@ setup_agents() {
     echo ""
     echo "=== Agents ==="
 
-    # Claude Code CLI (native installer, npm fallback for arm64 Linux)
-    if need claude && [[ ! -f "$LOCAL_BIN/claude" ]]; then
+    # Claude Code CLI (native installer, npm fallback for arm64 Linux).
+    # The native installer reinstalls latest, so --upgrade forces a refresh.
+    if { need claude && [[ ! -f "$LOCAL_BIN/claude" ]]; } || [[ "$UPGRADE" == true ]]; then
         echo "  Installing Claude Code CLI..."
         if curl -fsSL https://claude.ai/install.sh | bash >/dev/null 2>&1 && command -v claude >/dev/null 2>&1; then
             echo "  [+] Claude Code"
@@ -776,12 +795,21 @@ setup_agents() {
     # tarball on Linux). The npm wrapper is a last-resort fallback: it ships
     # the same native binary inside an npm package, but partial installs leave
     # an empty vendor dir and a broken `codex` on PATH (we hit this once).
-    if need codex; then
+    if want codex; then
         if [[ "$OS" == "macos" ]] && command -v brew >/dev/null 2>&1; then
-            echo "  Installing Codex CLI (brew cask)..."
-            brew install --cask codex >/dev/null 2>&1 \
-                && echo "  [+] Codex CLI (brew)" \
-                || echo "  [!] Codex brew install failed"
+            # `brew install --cask` is a no-op when present, so --upgrade on an
+            # already-installed codex routes through `brew upgrade` instead.
+            if command -v codex >/dev/null 2>&1 && [[ "$UPGRADE" == true ]]; then
+                echo "  Upgrading Codex CLI (brew cask)..."
+                brew upgrade --cask codex >/dev/null 2>&1 \
+                    && echo "  [+] Codex CLI (brew, upgraded)" \
+                    || echo "  [=] Codex CLI (brew, up to date)"
+            else
+                echo "  Installing Codex CLI (brew cask)..."
+                brew install --cask codex >/dev/null 2>&1 \
+                    && echo "  [+] Codex CLI (brew)" \
+                    || echo "  [!] Codex brew install failed"
+            fi
         elif [[ "$OS" == "linux" ]]; then
             local codex_arch
             case "$(uname -m)" in
@@ -806,8 +834,9 @@ setup_agents() {
         fi
     fi
 
-    # 1Password CLI (Linux only — macOS gets it from Brewfile cask)
-    if need op && [[ "$OS" == "linux" ]]; then
+    # 1Password CLI (Linux only — macOS gets it from Brewfile cask).
+    # The download resolves the latest version, so want() makes --upgrade refresh it.
+    if want op && [[ "$OS" == "linux" ]]; then
         echo "  Installing 1Password CLI..."
         local op_arch
         case "$(uname -m)" in
@@ -1324,7 +1353,7 @@ load_launch_agents() {
 # --- Main ---
 cd "$DOTFILES_DIR" || { echo "Error: $DOTFILES_DIR not found"; exit 1; }
 
-echo "Install: OS=$OS, apps=$INSTALL_APPS, dry-run=$DRY_RUN"
+echo "Install: OS=$OS, apps=$INSTALL_APPS, dry-run=$DRY_RUN, upgrade=$UPGRADE"
 echo ""
 
 install_system_deps
