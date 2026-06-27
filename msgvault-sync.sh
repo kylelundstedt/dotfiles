@@ -40,4 +40,19 @@ done
 echo "==> Rebuilding analytics cache"
 msgvault build-cache || rc=1
 
+# Embed newly-synced messages so they're reachable via semantic/hybrid search.
+# Best-effort: needs LM Studio serving the embedding model. If it's not up, the
+# messages stay pending and the next run drains them (incremental build is
+# idempotent) -- so a missing endpoint warns but does not fail the sync.
+echo "==> Embedding new messages"
+LMS="$HOME/.lmstudio/bin/lms"
+EMBED_MODEL="text-embedding-nomic-embed-text-v1.5@q8_0"
+if [ -x "$LMS" ]; then
+    # Ensure the model is loaded (no-op if already loaded; ignore errors).
+    "$LMS" load "$EMBED_MODEL" --context-length 8192 --gpu max -y >/dev/null 2>&1 || true
+fi
+if ! msgvault embeddings build; then
+    echo "    Embedding step failed (is LM Studio serving $EMBED_MODEL?); leaving messages pending for next run."
+fi
+
 exit "$rc"
