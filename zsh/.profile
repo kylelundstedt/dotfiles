@@ -32,7 +32,7 @@ fi
 [ -f "$HOME/.atuin/bin/env" ] && . "$HOME/.atuin/bin/env"
 
 # Added by LM Studio CLI (lms)
-export PATH="$PATH:/Users/klundstedt/.lmstudio/bin"
+export PATH="$PATH:$HOME/.lmstudio/bin"
 # End of LM Studio CLI section
 
 

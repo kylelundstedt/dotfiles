@@ -86,6 +86,6 @@ zstyle ':completion:*:git:*' group-order 'main commands' 'alias commands' 'exter
 # See: ~/dotfiles/agents/.agents/mcp/bin/
 
 # Added by LM Studio CLI (lms)
-export PATH="$PATH:/Users/klundstedt/.lmstudio/bin"
+export PATH="$PATH:$HOME/.lmstudio/bin"
 # End of LM Studio CLI section
 
