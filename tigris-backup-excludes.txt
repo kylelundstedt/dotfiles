@@ -1,0 +1,26 @@
+# rclone exclude patterns for the home/ backup (relative to ~/)
+# Caches / logs / regenerable state
+Library/Caches/**
+Library/Logs/**
+Library/Saved Application State/**
+Library/Application Support/CrashReporter/**
+.Trash/**
+.cache/**
+.Trash/
+# Dev regenerables
+**/node_modules/**
+**/.venv/**
+**/venv/**
+**/__pycache__/**
+**/.mypy_cache/**
+**/.pytest_cache/**
+**/.next/**
+**/dist/**
+**/build/**
+**/target/**
+# Re-downloadable model weights (symlink target on external; excluded for safety)
+.lmstudio/models/**
+# OS noise
+**/.DS_Store
+**/*.sock
+# (rclone skips symlinks by default, so external-relocated dirs aren't followed)
