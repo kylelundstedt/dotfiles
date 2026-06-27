@@ -4,7 +4,7 @@ One command to set up a fully configured development environment on macOS or Lin
 
 ## What You Get
 
-**AI agent platform** — [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [Codex CLI](https://github.com/openai/codex) with a shared instruction system (`AGENTS.md`), cross-agent skills (`join-tailnet`, `upgrade-vm`, `apple-containers`, `sprites-dev`, `mviz`, `find-skills`), four remote MCP servers (GitHub home/work, MotherDuck, Tigris) via HTTP transport, and a convention for per-project agent context (`agent_docs/`)
+**AI agent platform** — [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [Codex CLI](https://github.com/openai/codex) with a shared instruction system (`AGENTS.md`), cross-agent skills (`join-tailnet`, `upgrade-vm`, `apple-containers`, `sprites-dev`, `mviz`, `find-skills`), four remote MCP servers (GitHub home/work, MotherDuck, Tigris) via HTTP transport plus a personal `hub-mcp` server on `klundstedt-mini`, and a convention for per-project agent context (`agent_docs/`)
 
 **Shell** — Zsh with [Starship](https://starship.rs/) prompt, [Atuin](https://atuin.sh/) history sync, [Zoxide](https://github.com/ajeetdsouza/zoxide) smart `cd`, [Carapace](https://carapace.sh/) completions, and [Direnv](https://direnv.net/)
 
@@ -129,6 +129,8 @@ Invoke a skill by typing `/skill-name` in Claude Code or Codex (e.g. `/join-tail
 | `github-home` | GitHub API (personal account) | PAT   |
 | `github-work` | GitHub API (work account)     | PAT   |
 
+`klundstedt-mini` also runs a personal **`hub-mcp`** server — unified search over email/iMessage, calendar, and saved web/Reader content from `~/archives/hub` (see the `personal-mcp/` package). It binds `127.0.0.1:8765` and is exposed tailnet-only over HTTPS via `tailscale serve`, so it's registered as a local HTTP MCP server rather than provisioned by `install.sh`.
+
 **Per-project context** — Create an `AGENTS.md` at the repo root with project-specific conventions, a `CLAUDE.md` symlink to it, and an `agent_docs/` directory for supplementary context.
 
 ---
@@ -181,6 +183,7 @@ Re-run `install.sh` on a VM only when a pull _adds or removes_ files (new skills
 - [Linux](agent_docs/linux.md) — platform notes, OrbStack, local sprites (Apple Container), Fly.io Sprites, Docker testing, cloud-init
 - [Adding Rules and Skills](agent_docs/agents-advanced.md) — when and how to extend agent configuration beyond `AGENTS.md`
 - [Agent Recommendations](agent_docs/agents-recommendations.md) — dual-agent operating patterns, routing defaults, maintenance checklists
+- [Personal MCP Server](agent_docs/personal-mcp.md) — the `hub-mcp` unified search server on klundstedt-mini, its ingest scripts, and LaunchAgent schedules
 - [Tigris Backup Runbook](agent_docs/tigris-backup-runbook.md) — what's backed up, credentials, and the disaster-recovery restore procedure
 
 ---

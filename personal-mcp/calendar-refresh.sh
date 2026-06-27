@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Rebuild the local calendar archive from the .ics exports in ~/archives/calendar-sources/.
+# Rebuild the local calendar archive from the .ics exports in ~/archives/calendar/sources/.
 #
 # Run by hand after refreshing the recent end: re-export the calendars via Google
-# Takeout and drop the new files into ~/archives/calendar-sources/, overwriting the
+# Takeout and drop the new files into ~/archives/calendar/sources/, overwriting the
 # matching gcal-*.ics, then run this. (No live API pull — see calendar_archive.py.)
 #
 # Capability-guarded: no-ops where uv / the script / ~/archives aren't present, so it
