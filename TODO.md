@@ -4,6 +4,19 @@
 
 - [ ] Verify on installed Zed: [zed-industries/zed#56282](https://github.com/zed-industries/zed/issues/56282) closed COMPLETED upstream 2026-06-26 — `--add`/`--existing` with SSH URLs should now work. Confirm the build in use has the fix; if so, drop the "projects: open remote" palette workaround.
 
+## personal-mcp / archives hub (klundstedt-mini)
+
+The `hub-mcp` unified-search server and its ingest pipeline. Canonical, fuller TODO
+lives in `~/archives/README.md` on klundstedt-mini (not in git); these are the items
+worth tracking where the code lives. See [agent_docs/personal-mcp.md](agent_docs/personal-mcp.md).
+
+- [ ] **Test MCP access from other devices** — connect `klundstedt-mbp` (online) and `klundstedt-iphone` (was offline ~231d, needs Tailscale reconnected) to `https://klundstedt-mini.dojo-sun.ts.net/mcp`.
+- [ ] **Extend semantic search beyond web** — embed calendar event summaries (~42k, cheap) and wire in email semantic by reusing msgvault's `vectors.db` (nomic-768/sqlite-vec; all sources nomic-768/cosine so scores merge cleanly).
+- [ ] **Message-text freshness** — msgvault's `apple_messages` sync lags, so hub `imessage`/`sms` text is only current to its last sync (attachment items are current to the last iPhone backup). Either schedule the Apple Messages sync or source text from the backup's `sms.db`. Note: `messages/messages.duckdb` has no scheduled rebuild (`build_index.py` is manual).
+- [ ] **Stagger backup vs web-archive refresh** — `web-archive-refresh.sh` and `tigris-backup.sh` both fire at 04:00. The backup's `pgrep` guard only checks for a running `rclone`, not the refresh job, so the backup can copy `web-archive.duckdb` / the hub rebuild mid-write. Move the backup to 05:00 or coordinate via lock. (Low impact — both are regenerable from `sources/`.)
+- [ ] **Date-parse artifacts** (cosmetic) — junk rows in bad partitions: email `year=2`/`year=1601`, calendar min `start_date` 1604 (Windows FILETIME epoch). Add a parse-fallback / drop unparseable timestamps in the build scripts.
+- [ ] **Remove Web Clipper browser extension** — vault `Clippings/` is gone; confirm the extension is uninstalled so it stops offering to clip. (Likely already done in the 2026-06-27 session — verify.)
+
 ## Secrets on remote VMs
 
 Strategy: no plaintext secrets on VM disk. Each secret uses the narrowest delivery mechanism available.

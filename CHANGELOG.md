@@ -8,6 +8,7 @@ that commit messages don't always capture. Newest first. Open work lives in
 
 - **klundstedt-mini archive backup → Tigris (done).** `~/archives/` (msgvault email, calendar DuckDB, `speaking-engagements.md`) is inside `$HOME/`, which `backup/tigris-backup.sh` syncs nightly to `tigris:klundstedt-mini-backup` (`bkup:home`) — client-side encrypted via rclone crypt, with nightly Tigris snapshots. No exclude pattern covers `archives/`, so it's fully captured. External-volume archives (aws-s3, box, iphone-backup, messages-store) go to the GLACIER `klundstedt-mini-archive` bucket. Supersedes the original "create bucket + scheduled sync" task.
 - **Added `agent_docs/personal-mcp.md`** documenting the `hub-mcp` unified search server, its ingest scripts, and LaunchAgent schedules. Surfaced `hub-mcp` in the README (intro + MCP table). Fixed the `~/archives/calendar-sources/` → `~/archives/calendar/sources/` path in `calendar-refresh.sh`'s comment.
+- **Hardened `tigris-backup.sh` for live SQLite.** Added a pre-sync `PRAGMA wal_checkpoint(TRUNCATE)` step for `msgvault.db` (25 GB) and `vectors.db` (1 GB) so rclone copies a consistent single-file snapshot instead of a possibly-torn hot WAL (best-effort; never aborts the backup). Excluded the nightly-rebuilt `archives/hub/hub.duckdb` (+ `.tmp`) from the upload. Ported the remaining hub/personal-mcp TODO items from `~/archives/README.md` (not in git) into the dotfiles `TODO.md`.
 
 ## 2026-06-19
 

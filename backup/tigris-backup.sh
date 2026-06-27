@@ -58,7 +58,27 @@ sync_one() { # label src dest [extra...]
     caffeinate -i rclone sync "$src" "$dest" $FLAGS "$@" || echo "WARN $label sync rc=$?"
 }
 
+# Flush WAL into the main file so rclone copies a consistent single-file snapshot
+# (rclone transfers .db / -wal / -shm separately; a hot WAL can be torn or stale).
+# TRUNCATE leaves an empty WAL. Cheap vs VACUUM INTO and safe here: the only writer
+# (msgvault-sync, 03:00) has finished by 04:00 and the personal-mcp server is
+# read-only. Best-effort -- a checkpoint failure never aborts the backup.
+checkpoint_sqlite() { # path
+    local db="$1"; [[ -f "$db" ]] || return 0
+    if sqlite3 "$db" 'PRAGMA busy_timeout=10000; PRAGMA wal_checkpoint(TRUNCATE);' >/dev/null 2>&1; then
+        echo "checkpointed $(basename "$db")"
+    else
+        echo "WARN checkpoint failed: $(basename "$db") (backing up as-is)"
+    fi
+}
+
 echo "=== $(date '+%F %T') tigris-backup START ==="
+if command -v sqlite3 >/dev/null 2>&1; then
+    checkpoint_sqlite "$HOME/archives/email/msgvault.db"
+    checkpoint_sqlite "$HOME/archives/email/vectors.db"
+else
+    echo "WARN sqlite3 not found; skipping pre-sync checkpoint"
+fi
 sync_one home   "$HOME/"                          bkup:home --exclude-from "$EXCLUDES"
 sync_one photos "$EXT/Photos Library.photoslibrary" bkup:photos
 sync_one awss3  "$EXT/aws_s3_backup"              arch:aws-s3

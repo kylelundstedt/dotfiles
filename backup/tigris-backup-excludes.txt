@@ -20,6 +20,9 @@ Library/Application Support/CrashReporter/**
 **/target/**
 # Re-downloadable model weights (symlink target on external; excluded for safety)
 .lmstudio/models/**
+# Derived DuckDB rebuilt nightly from the source DBs (regenerable; ~127 MB)
+/archives/hub/hub.duckdb
+/archives/hub/hub.duckdb.tmp
 # OS noise
 **/.DS_Store
 **/*.sock
