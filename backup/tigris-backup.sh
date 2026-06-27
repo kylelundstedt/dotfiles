@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Nightly encrypted incremental backup of klundstedt-mini -> Tigris.
-#   home + photos  -> klundstedt-mini-backup  (IA, snapshots enabled)
-#   aws-s3 + box   -> klundstedt-mini-archive (GLACIER)
+#   home + photos                              -> klundstedt-mini-backup  (IA, snapshots enabled)
+#   aws-s3 + box + iphone-backup + messages-store -> klundstedt-mini-archive (GLACIER)
 # Client-side encryption via rclone crypt; Tigris holds ciphertext only.
 # Creds come from the macOS login Keychain (service "tigris-backup:*"), so the
 # launchd job runs unattended. Mini-only (guarded by hostname).
@@ -63,6 +63,8 @@ sync_one home   "$HOME/"                          bkup:home --exclude-from "$EXC
 sync_one photos "$EXT/Photos Library.photoslibrary" bkup:photos
 sync_one awss3  "$EXT/aws_s3_backup"              arch:aws-s3
 sync_one box    "$EXT/Box_Download_2025-01-12"    arch:box
+sync_one iphone "$EXT/iPhoneBackup"               arch:iphone-backup
+sync_one msgatt "$EXT/messages-store"             arch:messages-store
 
 # Point-in-time snapshot of the live-data bucket (home/photos).
 tigris snapshots take klundstedt-mini-backup "nightly-$(date +%F)" >/dev/null 2>&1 \
