@@ -15,7 +15,7 @@ fi
 LOCKDIR=/tmp/tigris-backup.lock
 LAST_RUN=/tmp/tigris-backup.lastrun
 MIN_INTERVAL=$((20 * 3600))
-EXCLUDES="$HOME/dotfiles/tigris-backup-excludes.txt"
+EXCLUDES="$HOME/dotfiles/backup/tigris-backup-excludes.txt"
 EXT=/Volumes/OWC8TB
 
 # Skip if a recent run already completed.

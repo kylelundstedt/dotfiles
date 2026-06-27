@@ -9,7 +9,7 @@
         <string>/bin/bash</string>
         <string>-l</string>
         <string>-c</string>
-        <string>$HOME/dotfiles/msgvault-sync.sh</string>
+        <string>$HOME/dotfiles/personal-mcp/msgvault-sync.sh</string>
     </array>
     <key>StartCalendarInterval</key>
     <dict>

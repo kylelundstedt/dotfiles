@@ -10,7 +10,7 @@
 set -uo pipefail
 
 command -v uv >/dev/null 2>&1 || { echo "uv not installed; skipping."; exit 0; }
-SCRIPT="$HOME/dotfiles/calendar-archive/calendar_archive.py"
+SCRIPT="$HOME/dotfiles/personal-mcp/calendar-archive/calendar_archive.py"
 [ -f "$SCRIPT" ] || { echo "calendar_archive.py not found; skipping."; exit 0; }
 [ -d "$HOME/archives" ] || { echo "~/archives not present; skipping."; exit 0; }
 

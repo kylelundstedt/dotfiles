@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.kylelundstedt.tigris-backup</string>
+    <string>com.kylelundstedt.web-archive-refresh</string>
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
         <string>-l</string>
         <string>-c</string>
-        <string>$HOME/dotfiles/backup/tigris-backup.sh</string>
+        <string>$HOME/dotfiles/personal-mcp/web-archive-refresh.sh</string>
     </array>
     <key>StartCalendarInterval</key>
     <dict>
@@ -19,9 +19,9 @@
         <integer>0</integer>
     </dict>
     <key>StandardOutPath</key>
-    <string>/tmp/tigris-backup.log</string>
+    <string>/tmp/web-archive-refresh.log</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/tigris-backup.log</string>
+    <string>/tmp/web-archive-refresh.log</string>
     <key>RunAtLoad</key>
     <false/>
 </dict>

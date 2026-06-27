@@ -3,26 +3,26 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.kylelundstedt.tigris-backup</string>
+    <string>com.kylelundstedt.personal-mcp</string>
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
         <string>-l</string>
         <string>-c</string>
-        <string>$HOME/dotfiles/backup/tigris-backup.sh</string>
+        <string>$HOME/dotfiles/personal-mcp/personal-mcp.sh</string>
     </array>
-    <key>StartCalendarInterval</key>
-    <dict>
-        <key>Hour</key>
-        <integer>4</integer>
-        <key>Minute</key>
-        <integer>0</integer>
-    </dict>
-    <key>StandardOutPath</key>
-    <string>/tmp/tigris-backup.log</string>
-    <key>StandardErrorPath</key>
-    <string>/tmp/tigris-backup.log</string>
     <key>RunAtLoad</key>
-    <false/>
+    <true/>
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+    <key>StandardOutPath</key>
+    <string>/tmp/personal-mcp.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/personal-mcp.log</string>
 </dict>
 </plist>
