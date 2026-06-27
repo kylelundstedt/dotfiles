@@ -66,11 +66,13 @@ Configuration is managed with [GNU Stow](http://www.gnu.org/software/stow/), whi
 | `ghostty/`        | Ghostty terminal configuration                                                                        | `~/.config/ghostty/`                  | macOS    |
 | `git/`            | Git configuration with OS-specific includes                                                           | `~/`                                  | Both     |
 | `homebrew/`       | Brewfile for macOS casks and Mac App Store apps                                                       | `~/`                                  | macOS    |
-| `launchd/`        | LaunchAgents — daily repo sync                                                                        | `~/Library/LaunchAgents/`             | macOS    |
+| `launchd/`        | LaunchAgents — scheduled jobs (repo sync; msgvault 2am; Tigris backup 4am)                            | `~/Library/LaunchAgents/`             | macOS    |
 | `ssh/`            | SSH client configuration                                                                              | `~/.ssh/`                             | Both     |
 | `starship/`       | Starship prompt configuration                                                                         | `~/.config/`                          | Both     |
 | `vscode/`         | VS Code IDE settings & keybindings                                                                    | `~/Library/Application Support/Code/` | macOS    |
 | `sync-repos.sh`   | Clones/fetches all GitHub repos for personal and work accounts                                        | N/A (standalone script)               | Both     |
+| `msgvault-sync.sh`| Nightly Messages/email archive sync — klundstedt-mini only (2am)                                      | N/A (standalone script)               | macOS    |
+| `tigris-backup.sh`| Nightly encrypted backup of home + external data to Tigris — klundstedt-mini only (4am)              | N/A (standalone script)               | macOS    |
 | `test-install.sh` | Tests install.sh across Apple Container, Sprite, and exe.dev                                          | N/A (standalone script)               | macOS    |
 | `zed/`            | Zed editor settings                                                                                   | `~/.config/zed/`                      | macOS    |
 | `zsh/`            | Zsh shell configuration                                                                               | `~/`                                  | Both     |
@@ -179,6 +181,7 @@ Re-run `install.sh` on a VM only when a pull _adds or removes_ files (new skills
 - [Linux](agent_docs/linux.md) — platform notes, OrbStack, local sprites (Apple Container), Fly.io Sprites, Docker testing, cloud-init
 - [Adding Rules and Skills](agent_docs/agents-advanced.md) — when and how to extend agent configuration beyond `AGENTS.md`
 - [Agent Recommendations](agent_docs/agents-recommendations.md) — dual-agent operating patterns, routing defaults, maintenance checklists
+- [Tigris Backup Runbook](agent_docs/tigris-backup-runbook.md) — what's backed up, credentials, and the disaster-recovery restore procedure
 
 ---
 
