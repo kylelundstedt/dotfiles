@@ -38,12 +38,22 @@ sync_repos() {
 
     echo "==> Syncing $owner → $target_dir"
 
-    gh repo list "$owner" \
+    # Capture the listing first so an empty result is visible rather than a
+    # silent no-op. A fine-grained PAT that lacks access to an org returns 0
+    # repos here even though SSH clone access may work — surface that loudly.
+    local listing
+    listing=$(gh repo list "$owner" \
         --limit 1000 \
         --no-archived \
         --source \
         --json name,sshUrl \
-        --jq '.[] | "\(.name) \(.sshUrl)"' |
+        --jq '.[] | "\(.name) \(.sshUrl)"' 2>/dev/null)
+    if [[ -z "$listing" ]]; then
+        echo "  WARN: 0 repos visible for '$owner'. The active GitHub token may not"
+        echo "        have access to this org (check: gh repo list $owner). Skipping."
+        return 0
+    fi
+
     while read -r name url; do
         if [[ " $SKIP_REPOS " == *" $name "* ]]; then
             echo "  skip $name (managed separately)"
@@ -77,7 +87,7 @@ sync_repos() {
                 rm -rf "$repo_dir"
             fi
         fi
-    done
+    done <<< "$listing"
 }
 
 sync_repos kylelundstedt "$GITHUB_DIR/kylelundstedt"

@@ -1282,15 +1282,30 @@ install_apps() {
         echo "  [+] Apple Container $(container --version 2>/dev/null | awk '{print $4}' | tr -d ')')"
     fi
 
-    # Load LaunchAgents
-    if [[ "$DRY_RUN" != true ]]; then
-        for plist in "$HOME/Library/LaunchAgents"/com.kylelundstedt.*.plist; do
-            [[ -f "$plist" ]] && launchctl load -w "$plist" 2>/dev/null || true
-        done
-    fi
-
     # Stop the sudo keepalive started for the pkg-based installers above.
     [[ -n "${sudo_keepalive_pid:-}" ]] && kill "$sudo_keepalive_pid" 2>/dev/null || true
+}
+
+# Load stowed LaunchAgents (macOS). Runs on every macOS install, not just
+# --apps, so scheduled jobs (sync-repos, msgvault-sync, etc.) are active
+# immediately rather than only after the next login.
+load_launch_agents() {
+    [[ "$OS" == "macos" ]] || return 0
+    [[ "$DRY_RUN" == true ]] && return 0
+    echo ""
+    echo "=== LaunchAgents ==="
+    shopt -s nullglob
+    for plist in "$HOME/Library/LaunchAgents"/com.kylelundstedt.*.plist; do
+        # bootout first so an updated plist is reloaded idempotently
+        launchctl bootout "gui/$(id -u)" "$plist" 2>/dev/null || true
+        if launchctl bootstrap "gui/$(id -u)" "$plist" 2>/dev/null; then
+            echo "  loaded $(basename "$plist")"
+        else
+            # fall back to legacy load for older macOS
+            launchctl load -w "$plist" 2>/dev/null && echo "  loaded $(basename "$plist")" || echo "  WARN: failed to load $(basename "$plist")"
+        fi
+    done
+    shopt -u nullglob
 }
 
 # --- Main ---
@@ -1311,6 +1326,7 @@ if [[ "$SKIP_AGENTS" != true ]]; then
     setup_agents
 fi
 install_apps
+load_launch_agents
 
 # Ensure Apple Container kernel is installed and system is running
 if command -v container >/dev/null 2>&1; then
