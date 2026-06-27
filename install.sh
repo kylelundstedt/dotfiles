@@ -868,6 +868,19 @@ setup_agents() {
                     "{\"type\":\"http\",\"url\":\"https://api.githubcopilot.com/mcp/\",\"headers\":{\"Authorization\":\"Bearer $pat_home\"}}" >/dev/null 2>&1 || true
                 [[ -n "$pat_work" ]] && claude mcp add-json --scope user github-work \
                     "{\"type\":\"http\",\"url\":\"https://api.githubcopilot.com/mcp/\",\"headers\":{\"Authorization\":\"Bearer $pat_work\"}}" >/dev/null 2>&1 || true
+
+                # sync-repos.sh reads per-org GitHub PATs from the local login
+                # Keychain (fine-grained PATs are scoped per owner; gh's Home
+                # token can't list IndustryVault/iv-cmg). Provision them from
+                # 1Password so the nightly repo sync works on every Mac. The
+                # Keychain is local per-machine, so this runs on each install.
+                # pat_work is the IV token (reused); -T allows the `security`
+                # tool to read it back non-interactively from the launchd job.
+                local pat_ivcmg kc_added=0
+                pat_ivcmg=$(op read "op://Employee/GitHub PAT IV-CMG/token" --account industryvault.1password.com 2>/dev/null) || true
+                [[ -n "$pat_work" ]]  && security add-generic-password -a "$USER" -s "sync-repos:IndustryVault" -T /usr/bin/security -U -w "$pat_work"  2>/dev/null && kc_added=$((kc_added+1)) || true
+                [[ -n "$pat_ivcmg" ]] && security add-generic-password -a "$USER" -s "sync-repos:iv-cmg"        -T /usr/bin/security -U -w "$pat_ivcmg" 2>/dev/null && kc_added=$((kc_added+1)) || true
+                [[ "$kc_added" -gt 0 ]] && echo "  [+] sync-repos org PATs → Keychain ($kc_added)"
             else
                 echo "  Skipping GitHub MCP servers (1Password not configured)"
             fi
