@@ -12,7 +12,8 @@
 #   launchd/Library/LaunchAgents/com.kylelundstedt.web-archive-refresh.plist
 set -uo pipefail
 
-WEB="$HOME/archives/web"
+WEB="$HOME/archives/web"          # data (this host only)
+SCRIPTS="$HOME/dotfiles/personal-mcp"  # build code (versioned in the repo)
 [ -d "$WEB" ] || { echo "no $WEB; skipping."; exit 0; }
 command -v duckdb >/dev/null 2>&1 || { echo "duckdb not installed; skipping."; exit 0; }
 
@@ -23,21 +24,21 @@ if ! mkdir "$LOCKDIR" 2>/dev/null; then
 fi
 trap 'rmdir "$LOCKDIR" 2>/dev/null' EXIT
 
-cd "$WEB" || exit 1
+cd "$WEB" || exit 1   # stay in the data dir: the *.sql read sources/ relative to cwd
 rc=0
 
 echo "==> Pulling Reader documents"
-python3 pull_reader.py || { echo "pull failed"; exit 1; }
+python3 "$SCRIPTS/web/pull_reader.py" || { echo "pull failed"; exit 1; }
 
 echo "==> Rebuilding documents table + FTS index"
-duckdb web-archive.duckdb < build_documents.sql || rc=1
+duckdb web-archive.duckdb < "$SCRIPTS/web/build_documents.sql" || rc=1
 
 # Semantic search is best-effort: only if the local embedding endpoint is up.
 if curl -s -m 5 http://localhost:1234/v1/models >/dev/null 2>&1; then
     echo "==> Embedding documents"
-    if python3 embed_reader.py; then
+    if python3 "$SCRIPTS/web/embed_reader.py"; then
         echo "==> Building embeddings table"
-        duckdb web-archive.duckdb < build_embeddings.sql || rc=1
+        duckdb web-archive.duckdb < "$SCRIPTS/web/build_embeddings.sql" || rc=1
     else
         echo "    embedding failed; keeping previous vectors."
         rc=1
@@ -50,10 +51,10 @@ fi
 # this job (4am) runs after msgvault (3am), so both are fresh by now.
 # Build to a temp file and swap atomically so the personal-mcp server (read-only,
 # one connection per request) never collides with the rebuild.
-if [ -f "$HOME/archives/hub/build_hub.sql" ]; then
+if [ -f "$SCRIPTS/hub/build_hub.sql" ]; then
     echo "==> Rebuilding unified search hub"
     if ( cd "$HOME/archives" && rm -f hub/hub.duckdb.tmp \
-         && duckdb hub/hub.duckdb.tmp < hub/build_hub.sql >/dev/null \
+         && duckdb hub/hub.duckdb.tmp < "$SCRIPTS/hub/build_hub.sql" >/dev/null \
          && mv -f hub/hub.duckdb.tmp hub/hub.duckdb ); then :; else rc=1; fi
 fi
 
