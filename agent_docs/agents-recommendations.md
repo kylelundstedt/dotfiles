@@ -50,6 +50,17 @@ Use dual models when:
 - Design quality and blind-spot detection matter most.
 - Problem framing is uncertain.
 
+## Worktree per Agent Thread
+
+In Zed's agent panel, the `+` "New Thread In…" button defaults to the **current** worktree; "Create New Worktree…" is a separate, explicit choice (Zed 1.8.2+). New threads do not auto-create a worktree.
+
+Rule of thumb: **parallel → worktree+branch; serial → just commit.**
+
+- **Sequential / single / read-only threads:** stay in the current checkout and commit between threads. The commit is the isolation — there's no concurrent thread to collide with.
+- **Concurrent threads that might edit overlapping files:** give each its own worktree + a named branch (better than Zed's default detached HEAD), then merge branches back one at a time.
+
+Worktrees solve *concurrency only* — branch-per-thread alone doesn't help, since all threads share one working directory. Don't make it unconditional: a fresh worktree starts cold (no `node_modules`/`.venv`/build artifacts to reuse, no gitignored local config such as `git/.gitconfig_local`), and parallel branches trade edit-time collisions for merge-time conflicts.
+
 ## Anti-Patterns
 
 - Adding tool-specific workarounds instead of fixing canonical `AGENTS.md`
