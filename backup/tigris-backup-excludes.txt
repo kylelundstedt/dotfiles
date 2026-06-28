@@ -7,6 +7,15 @@ Library/Application Support/CrashReporter/**
 .Trash/**
 .cache/**
 .Trash/
+# macOS-protected / app-internal state — needs Full Disk Access (denied otherwise),
+# and the valuable data is redundant elsewhere, so excluded rather than granting FDA:
+#   Messages -> archived by msgvault (~/archives/email); Mail -> IMAP server cache;
+#   Contacts/Calendars/Notes/Safari -> iCloud; the com.apple.* containers are app state.
+Library/Messages/**
+Library/Mail/**
+Library/Containers/**
+Library/Group Containers/**
+Library/Application Support/com.apple.*/**
 # Dev regenerables
 **/node_modules/**
 **/.venv/**
