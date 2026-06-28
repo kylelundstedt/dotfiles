@@ -145,3 +145,13 @@ def test_semantic_merge_sorted_by_cosine_desc():
 def test_semantic_rejects_bad_source():
     with pytest.raises(ValueError):
         server.do_semantic("x", source="bogus")
+
+
+def test_semantic_clean_error_when_embeddings_offline(monkeypatch):
+    # Point the embed endpoint at a closed port: both semantic tools must raise a
+    # clear RuntimeError, not a raw traceback. (No LM Studio needed for this test.)
+    monkeypatch.setattr(server, "EMBED_ENDPOINT", "http://127.0.0.1:1/v1/embeddings")
+    with pytest.raises(RuntimeError, match="Embedding endpoint unreachable"):
+        server.do_semantic_email("anything", limit=1)
+    with pytest.raises(RuntimeError, match="Embedding endpoint unreachable"):
+        server.do_semantic("anything", limit=1)
