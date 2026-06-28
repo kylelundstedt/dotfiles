@@ -30,6 +30,7 @@ rebuild (which swaps the db file atomically) never collides with a live query.
 import json
 import os
 import sqlite3
+import urllib.error
 import urllib.request
 
 import duckdb
@@ -108,8 +109,17 @@ def _embed_query(text):
     body = json.dumps({"model": EMBED_MODEL, "input": "search_query: " + text}).encode()
     req = urllib.request.Request(EMBED_ENDPOINT, data=body,
                                  headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        return json.load(r)["data"][0]["embedding"]
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return json.load(r)["data"][0]["embedding"]
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        # Semantic tools need the local embedding endpoint; surface a clear,
+        # actionable message instead of a raw traceback to the MCP client.
+        raise RuntimeError(
+            f"Embedding endpoint unreachable ({EMBED_ENDPOINT}): {e}. "
+            f"Semantic search needs LM Studio serving '{EMBED_MODEL}'. "
+            f"Keyword tools (search, query_messages) work without it."
+        ) from None
 
 
 def do_search(query, limit=20, source=None):
