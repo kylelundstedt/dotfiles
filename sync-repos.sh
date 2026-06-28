@@ -42,7 +42,14 @@ fi
 ASKPASS="$(mktemp -t sync-repos-askpass)"
 printf '#!/bin/sh\nprintf "%%s" "$SYNC_REPOS_TOKEN"\n' > "$ASKPASS"
 chmod +x "$ASKPASS"
-trap 'rmdir "$LOCKFILE" 2>/dev/null; rm -f "$ASKPASS"' EXIT
+# Dead-man's-switch heartbeat (healthchecks.io). Ping URL in the login Keychain
+# (sync-repos:healthcheck-url) — provisioned only on klundstedt-mini, so other
+# machines (and Linux, where `security` doesn't exist) run unmonitored. No-op if
+# the URL is absent. /start at begin, success on clean exit, /fail otherwise.
+hc() { local u; u=$(security find-generic-password -s "sync-repos:healthcheck-url" -w 2>/dev/null); [ -n "$u" ] && curl -fsS -m 10 --retry 3 "${u}${1:-}" >/dev/null 2>&1 || true; }
+finish() { local rc=$?; set +e; rmdir "$LOCKFILE" 2>/dev/null; rm -f "$ASKPASS"; if [ "$rc" -eq 0 ]; then hc; else hc /fail; fi; }
+trap finish EXIT
+hc /start
 
 # Resolve the GitHub token for an owner.
 token_for() {
