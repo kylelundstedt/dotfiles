@@ -9,5 +9,8 @@ dependencies = [
     "sqlite-vec>=0.1.9",
 ]
 
+[dependency-groups]
+dev = ["pytest>=8"]
+
 [tool.uv]
 package = false
