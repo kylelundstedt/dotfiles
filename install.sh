@@ -864,11 +864,24 @@ setup_agents() {
         op_configured=true
     fi
 
+    # personal-mcp local hub (hub-mcp): unlike the remote servers above, it runs on
+    # klundstedt-mini and is reached locally there or over the tailnet elsewhere. Probe
+    # reachability so it's only registered where it actually works (skips exe.dev VMs and
+    # off-tailnet machines). Empty hub_url => not registered on this machine.
+    local hub_url=""
+    if [[ "$OS" == "macos" ]]; then
+        if [[ "$(scutil --get LocalHostName 2>/dev/null)" == "klundstedt-mini" ]]; then
+            hub_url="http://127.0.0.1:8765/mcp"
+        elif curl -s -m 3 -o /dev/null https://klundstedt-mini.dojo-sun.ts.net/mcp 2>/dev/null; then
+            hub_url="https://klundstedt-mini.dojo-sun.ts.net/mcp"
+        fi
+    fi
+
     # --- Claude Code ---
     if command -v claude >/dev/null 2>&1; then
         # Remove stale or migrated servers before re-adding with correct URLs.
         # On Linux, motherduck migrates from OAuth to exe.dev proxy.
-        for srv in dlt motherduck github-home github-work tigris readwise; do
+        for srv in dlt motherduck github-home github-work tigris readwise hub-mcp; do
             claude mcp remove --scope user "$srv" >/dev/null 2>&1 || true
         done
 
@@ -889,6 +902,10 @@ setup_agents() {
             claude mcp add --transport http --scope user motherduck https://api.motherduck.com/mcp >/dev/null 2>&1 || true
             claude mcp add --transport http --scope user tigris https://mcp.storage.dev/mcp >/dev/null 2>&1 || true
             claude mcp add --transport http --scope user readwise https://mcp2.readwise.io/mcp >/dev/null 2>&1 || true
+            if [[ -n "$hub_url" ]]; then
+                claude mcp add --transport http --scope user hub-mcp "$hub_url" >/dev/null 2>&1 \
+                    && echo "  [+] hub-mcp ($hub_url)" || true
+            fi
             if [[ "$op_configured" == true ]]; then
                 local pat_home pat_work
                 pat_home=$(op read "op://Private/GitHub PAT Home/token" --account lundstedts.1password.com 2>/dev/null) || true
@@ -930,6 +947,11 @@ setup_agents() {
                     [[ -n "$tb_csalt"  ]] && security add-generic-password -a "$USER" -s "tigris-backup:crypt-salt"     -T /usr/bin/security -U -w "$tb_csalt"  2>/dev/null && tb_n=$((tb_n+1)) || true
                     [[ -n "$tb_hc"     ]] && security add-generic-password -a "$USER" -s "tigris-backup:healthcheck-url" -T /usr/bin/security -U -w "$tb_hc"    2>/dev/null && tb_n=$((tb_n+1)) || true
                     [[ "$tb_n" -gt 0 ]] && echo "  [+] tigris-backup creds → Keychain ($tb_n/5)"
+                    # sync-repos dead-man's-switch ping URL (mini-only heartbeat)
+                    local sr_hc
+                    sr_hc=$(op read "op://Personal/sync-repos-healthcheck/password" --account "$tb_acc" 2>/dev/null) || true
+                    [[ -n "$sr_hc" ]] && security add-generic-password -a "$USER" -s "sync-repos:healthcheck-url" -T /usr/bin/security -U -w "$sr_hc" 2>/dev/null \
+                        && echo "  [+] sync-repos healthcheck → Keychain" || true
                 fi
             else
                 echo "  Skipping GitHub MCP servers (1Password not configured)"
@@ -969,6 +991,12 @@ setup_agents() {
             done
         else
             echo "  Skipping Codex MCP servers (OAuth needs a local browser)"
+        fi
+
+        # personal-mcp local hub — no OAuth, so no browser needed (add even headless).
+        if [[ -n "$hub_url" ]] && ! codex mcp get hub-mcp >/dev/null 2>&1; then
+            codex mcp add hub-mcp --url "$hub_url" >/dev/null 2>&1 \
+                && echo "  [+] codex mcp: hub-mcp" || true
         fi
 
         # GitHub MCP servers deferred. Codex disallows inline bearer tokens
