@@ -27,7 +27,7 @@ backup is worthless if you can't decrypt it. Keep the credentials below in
 | Purpose | 1Password item (vault) | Fields |
 | --- | --- | --- |
 | Crypt password (decrypts everything — **critical**) | `Tigris mini-backup rclone crypt` (Personal) | `password`, `salt` |
-| Dedicated rclone key (Editor on both buckets) | `Tigris - mini-backup key (rclone)` (Personal) | `access_key_id`, `password` (=secret) |
+| Dedicated rclone key (Editor on both buckets) | `Tigris mini-backup rclone key` (Personal) | `access_key_id`, `password` (=secret) |
 | Tigris admin (create buckets/keys) | `Tigris - klundstedt Work` (Personal) | `access_key_id`, `secret_access_key`, `endpoint_url` |
 
 On the mini these are mirrored into the **login Keychain** for the unattended
@@ -45,7 +45,7 @@ pulling secrets from 1Password:
 
 ```bash
 ACC=industryvault.1password.com
-KEY="Tigris - mini-backup key (rclone)"; CRYPT="Tigris mini-backup rclone crypt"
+KEY="Tigris mini-backup rclone key"; CRYPT="Tigris mini-backup rclone crypt"
 tid=$(op item get "$KEY"   --account "$ACC" --reveal --fields label=access_key_id)
 tsec=$(op item get "$KEY"  --account "$ACC" --reveal --fields label=password)
 cpw=$(op item get "$CRYPT" --account "$ACC" --reveal --fields label=password)
@@ -108,7 +108,7 @@ rclone cryptcheck ~/Documents bkup:home/Documents --one-way --fast-list
   success ping doesn't arrive — so it catches **both** failures **and the job not
   running at all** (crash, mac off, launchd skip).
 - Ping URL is in the **login Keychain** (`tigris-backup:healthcheck-url`) and in
-  1Password (`Tigris - mini-backup key (rclone)` → `healthcheck_url`). If unset,
+  1Password (`Tigris mini-backup rclone key` → `healthcheck_url`). If unset,
   pings are silently skipped (backup still runs).
 - Check config: cron `0 4 * * *`, grace **8h**. Re-provision the Keychain item
   from 1Password on a rebuild (along with the `tigris-backup:*` cred items).
