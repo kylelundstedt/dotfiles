@@ -218,6 +218,9 @@ Runtime:
   `pyproject.toml`, `uv.lock` — `.venv/` is gitignored, `uv` recreates it) +
   `launchd/Library/LaunchAgents/com.kylelundstedt.personal-mcp.plist`. The server reads the archives
   in `~/archives/` via absolute paths; `tailscale serve` config persists separately.
+- `personal-mcp/_common.sh` — shared logging + healthcheck helper sourced by the jobs (see Monitoring).
+- `personal-mcp/healthcheck-mcp.sh` + `launchd/Library/LaunchAgents/com.kylelundstedt.personal-mcp-healthcheck.plist`
+  — 15-minute liveness probe for the MCP server.
 
 ## Backup
 
@@ -241,6 +244,29 @@ Code: `~/dotfiles/backup/tigris-backup.sh` + `tigris-backup-excludes.txt`, run b
 - **Restore**: needs the rclone crypt password + salt (and, for the iPhone backup, its own
   encryption password) — all in the macOS login Keychain (`tigris-backup:*`), **not** in this repo.
   Lose the Keychain and the backups are unreadable.
+
+## Monitoring
+
+Each scheduled job logs persistently and pings a [healthchecks.io](https://healthchecks.io)
+dead-man's-switch, so a silent failure (revoked token, dead endpoint, wedged server) gets noticed.
+Shared helper: `personal-mcp/_common.sh`.
+
+- **Persistent logs** — `~/Library/Logs/personal-mcp/<job>-<date>.log`, 30-day retention, via
+  `pm_setup_logging` (the launchd `/tmp/*.log` only keeps the latest run and is wiped on reboot).
+- **Dead-man's-switch** — `pm_hc <job>` pings `/start` at begin, success at end, `/fail` with a
+  summary on failure. Covered jobs: **msgvault-sync**, **web-archive-refresh**, and the **MCP
+  server** (via `healthcheck-mcp.sh`, a 15-min liveness probe — LaunchAgent
+  `com.kylelundstedt.personal-mcp-healthcheck`). **calendar-refresh** logs only (it's manual, so a
+  dead-man's-switch would false-alarm).
+- **Setup** — URLs live in the Keychain (one per job); `pm_hc` is a silent no-op until set, so the
+  jobs ship safe. Create three checks at healthchecks.io, then:
+  ```
+  security add-generic-password -U -a "$USER" -s "personal-mcp:msgvault-healthcheck-url"   -w "https://hc-ping.com/<uuid>"
+  security add-generic-password -U -a "$USER" -s "personal-mcp:web-healthcheck-url"        -w "https://hc-ping.com/<uuid>"
+  security add-generic-password -U -a "$USER" -s "personal-mcp:mcp-server-healthcheck-url" -w "https://hc-ping.com/<uuid>"
+  ```
+  Suggested check periods: msgvault & web ≈ 1 day (grace a few hours, since they run nightly);
+  mcp-server = 15 min (grace ≈ 30 min). Mirrors the `tigris-backup:healthcheck-url` setup.
 
 ## TODO
 
