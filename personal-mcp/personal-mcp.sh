@@ -10,7 +10,11 @@
 #   launchd/Library/LaunchAgents/com.kylelundstedt.personal-mcp.plist
 set -uo pipefail
 
-PROJ="$HOME/archives/hub/mcp"
+# Code is versioned here in the repo; the data it serves lives in ~/archives.
+PROJ="$HOME/dotfiles/personal-mcp/mcp"
+DATA="$HOME/archives/hub"
+# Capability guard keys on the DATA (archive host only) — PROJ now exists everywhere.
+[ -d "$DATA" ] || { echo "no $DATA; not the archive host, skipping."; exit 0; }
 [ -d "$PROJ" ] || { echo "no $PROJ; skipping."; exit 0; }
 command -v uv >/dev/null 2>&1 || { echo "uv not installed; skipping."; exit 0; }
 
