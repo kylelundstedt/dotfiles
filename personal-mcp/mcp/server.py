@@ -40,11 +40,15 @@ from mcp.server.transport_security import TransportSecuritySettings
 HOME = os.path.expanduser("~")
 HUB_DB = os.path.join(HOME, "archives", "hub", "hub.duckdb")
 WEB_DB = os.path.join(HOME, "archives", "web", "web-archive.duckdb")
+CAL_DB = os.path.join(HOME, "archives", "calendar", "calendar-archive.duckdb")
 MSG_DB = os.path.join(HOME, "archives", "email", "msgvault.db")
 VEC_DB = os.path.join(HOME, "archives", "email", "vectors.db")
 EMBED_ENDPOINT = "http://localhost:1234/v1/embeddings"
 EMBED_MODEL = "text-embedding-nomic-embed-text-v1.5@q8_0"
 SOURCES = ("email", "imessage", "sms", "calendar", "web")
+# Semantic sources backed by DuckDB cosine-similarity stores (directly comparable,
+# so results merge into one ranked list). Email semantic is separate (sqlite-vec L2).
+SEMANTIC_SOURCES = ("web", "calendar")
 MSG_SOURCES = ("email", "imessage", "sms")  # the message_type values in msgvault
 MAX_BODY_CHARS = 100_000  # cap full-body responses so MCP transport stays sane
 
@@ -131,9 +135,7 @@ def do_search(query, limit=20, source=None):
     return rows
 
 
-def do_semantic(query, limit=15):
-    """Semantic (vector) search over saved web reading (Readwise Reader)."""
-    vec = _embed_query(query)
+def _semantic_web(vec, limit):
     sql = f"""
         SELECT 'web:' || d.id AS item_id, 'web' AS source, d.saved_at AS ts,
                coalesce(nullif(d.author,''), d.site_name) AS who, d.title,
@@ -143,10 +145,48 @@ def do_semantic(query, limit=15):
         ORDER BY score DESC
         LIMIT {int(limit)}
     """
-    rows = _rows(WEB_DB, sql, [vec])
+    return _rows(WEB_DB, sql, [vec])
+
+
+def _semantic_calendar(vec, limit):
+    # One hit per UID: recurring events repeat their UID, so pick the most recent
+    # occurrence as the representative row (the embedding is per-UID).
+    sql = f"""
+        WITH ev AS (
+            SELECT uid, organizer, summary, location, description, start_iso,
+                   row_number() OVER (PARTITION BY uid ORDER BY start_iso DESC) AS rn
+            FROM events
+        )
+        SELECT 'cal:' || e.uid AS item_id, 'calendar' AS source,
+               TRY_CAST(ev.start_iso AS TIMESTAMP) AS ts,
+               ev.organizer AS who, ev.summary AS title,
+               substr(trim(coalesce(ev.location,'') || ' ' || coalesce(ev.description,'')), 1, 300) AS snippet,
+               NULL AS link,
+               round(array_cosine_similarity(e.vec, ?::FLOAT[768]), 4) AS score
+        FROM embeddings e JOIN ev ON ev.uid = e.uid AND ev.rn = 1
+        ORDER BY score DESC
+        LIMIT {int(limit)}
+    """
+    return _rows(CAL_DB, sql, [vec])
+
+
+def do_semantic(query, limit=15, source=None):
+    """Semantic (vector) search over web reading + calendar (DuckDB cosine stores).
+
+    source None/'all' -> both, merged by cosine score; or restrict to 'web'/'calendar'.
+    """
+    if source and source not in SEMANTIC_SOURCES and source != "all":
+        raise ValueError(f"source must be one of {SEMANTIC_SOURCES} or 'all'")
+    vec = _embed_query(query)
+    rows = []
+    if source in (None, "all", "web"):
+        rows += _semantic_web(vec, limit)
+    if source in (None, "all", "calendar"):
+        rows += _semantic_calendar(vec, limit)
     for r in rows:
         r["ts"] = r["ts"].isoformat() if r.get("ts") else None
-    return rows
+    rows.sort(key=lambda r: r["score"], reverse=True)
+    return rows[:int(limit)]
 
 
 def do_get(item_id):
@@ -303,13 +343,19 @@ def search(query: str, limit: int = 20, source: str | None = None) -> list[dict]
 
 
 @mcp.tool()
-def semantic_search(query: str, limit: int = 15) -> list[dict]:
-    """Meaning-based search over saved web reading (Readwise Reader articles/tweets).
+def semantic_search(query: str, limit: int = 15, source: str | None = None) -> list[dict]:
+    """Meaning-based search over saved web reading + calendar events.
 
     Use for conceptual queries where exact keywords may not match. Covers the web
-    archive only; for email use `search` (or msgvault's own semantic search).
+    archive (Readwise Reader) and calendar events — both nomic-768 cosine stores, so
+    hits merge into one ranked list. For email/iMessage/SMS use `semantic_search_email`.
+
+    Args:
+        query: natural-language query.
+        limit: max results (default 15).
+        source: restrict to 'web' or 'calendar' (default: both, merged by score).
     """
-    return do_semantic(query, limit)
+    return do_semantic(query, limit, source)
 
 
 @mcp.tool()
