@@ -40,8 +40,10 @@ here at `personal-mcp/README.md` and symlinked to `~/archives/README.md` so it s
 ## Update cadence
 
 - **Work email** — nightly (3am), fully automatic (LaunchAgent).
-- **Personal email** — also nightly, _but_ the OAuth token expires ~weekly (Testing-mode app),
-  so it silently goes stale until the manual browser re-auth (see below). Work is unaffected.
+- **Personal email** — also nightly, fully automatic. (Historically re-auth was needed ~weekly when
+  the `msgvault-home` OAuth app was in *Testing* status — Google revokes Testing refresh tokens after
+  7 days. The app is now **In production**, which removes that expiry, so the token renews on its own.
+  See below.)
 - **Calendar** — **does NOT auto-update.** Manual rebuild only, whenever you re-export Takeout.
   Historical data never changes; only recent events drift between exports.
 - **Web (Reader)** — nightly 4am via LaunchAgent (incremental pull + rebuild + embed). Independent
@@ -60,11 +62,21 @@ LaunchAgent pick it up.
   (the `schedule = "0 2 * * *"` in `config.toml` is vestigial — launchd drives the sync, not
   msgvault's internal scheduler)
   (`~/dotfiles/personal-mcp/msgvault-sync.sh`). Log: `/tmp/msgvault-sync.log`.
-- **Personal account = manual re-auth ~weekly** (OAuth app stays in Testing → 7-day token; going
-  to Production needs Google verification, not worth it for one user). `--headless` does **not**
-  work for Gmail (Google's device flow blocks Gmail scopes). To re-auth: run
-  `msgvault add-account kylelundstedt@gmail.com` **on a machine with a browser** (e.g. screen-share
-  into this mini's desktop), consent, and the token lands in `email/tokens/`.
+- **Personal account auth — solved by publishing the OAuth app.** The `msgvault-home` OAuth app
+  (Google Auth Platform → Audience) is **In production**, External, with restricted Gmail scopes.
+  Production status removes the 7-day Testing refresh-token expiry, so msgvault's normal access-token
+  renewal keeps the account synced indefinitely — no weekly re-auth. (Earlier belief that Production
+  "needs verification" was wrong: the 7-day expiry is tied to *Testing* status, not to being
+  unverified.)
+  - The "**Your app requires verification**" banner is **advisory** — verification only removes the
+    "unverified app" consent warning and raises the OAuth user cap (currently 1 / 100). For one
+    personal user it's not needed; don't submit for review (restricted-scope verification is a heavy
+    security assessment). Google *could* tighten this someday, but it's not the weekly-token issue.
+  - **Re-auth is only needed if the token is revoked** (password change, manual revoke, 6+ months
+    idle). `--headless` does **not** work for Gmail (device flow blocks Gmail scopes); authorize on a
+    machine with a browser: `msgvault add-account kylelundstedt@gmail.com --force` (click through the
+    one-time unverified-app screen), then copy the token to `email/tokens/` (or run it on the mini's
+    desktop via screen-share).
 
 ## Calendar
 
