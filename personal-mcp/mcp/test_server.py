@@ -119,10 +119,23 @@ def test_hub_has_no_out_of_range_timestamps():
 def test_semantic_email_sorted_and_deduped():
     hits = server.do_semantic_email("freddie mac dataset license", limit=5)
     assert 0 < len(hits) <= 5
-    dists = [h["distance"] for h in hits]
-    assert dists == sorted(dists)                       # nearest (lowest L2) first
+    assert all(h["source"] in server.MSG_SOURCES for h in hits)  # messages only
+    scores = [h["score"] for h in hits]
+    assert scores == sorted(scores, reverse=True)       # cosine similarity, higher first
     ids = [h["item_id"] for h in hits]
     assert len(ids) == len(set(ids))                    # deduped across sources
+
+
+@pytest.mark.skipif(not _embed_up(), reason="LM Studio embedding endpoint down")
+def test_semantic_unified_merges_sources_on_one_scale():
+    # Default (all sources) must rank by a single cosine `score`, descending, and may
+    # legitimately interleave message + web/calendar hits.
+    hits = server.do_semantic("mortgage data licensing", limit=10)
+    assert hits
+    scores = [h["score"] for h in hits]
+    assert scores == sorted(scores, reverse=True)
+    assert all(h["source"] in server.SEMANTIC_SOURCES for h in hits)
+    assert all(0.0 <= h["score"] <= 1.0001 for h in hits)  # cosine similarity range
 
 
 @pytest.mark.skipif(not (_embed_up() and _has(server.CAL_DB)),
