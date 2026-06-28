@@ -29,11 +29,23 @@ if pgrep -f "rclone (copy|sync)" >/dev/null 2>&1; then echo "rclone already runn
 mkdir "$LOCKDIR" 2>/dev/null || { echo "another tigris-backup running; exit"; exit 0; }
 trap 'rmdir "$LOCKDIR" 2>/dev/null' EXIT
 
+# Persistent, dated logs (launchd's /tmp log is wiped on reboot; keep 30 days).
+LOGDIR="$HOME/Library/Logs/tigris-backup"; mkdir -p "$LOGDIR"
+exec > >(tee -a "$LOGDIR/$(date +%F-%H%M%S).log") 2>&1
+find "$LOGDIR" -name '*.log' -type f -mtime +30 -delete 2>/dev/null || true
+
 kc() { security find-generic-password -s "tigris-backup:$1" -w 2>/dev/null; }
 tid=$(kc s3-key-id); tsec=$(kc s3-secret); cpw=$(kc crypt-password); csalt=$(kc crypt-salt)
 if [[ -z "$tid" || -z "$tsec" || -z "$cpw" || -z "$csalt" ]]; then
     echo "FATAL: tigris-backup creds missing from Keychain"; exit 1
 fi
+
+# Dead-man's-switch monitor (healthchecks.io). URL in Keychain (tigris-backup:healthcheck-url);
+# pings are no-ops if it's unset. /start at begin, bare = success, /fail = failure (with summary).
+HC_URL=$(kc healthcheck-url)
+hc() { [[ -n "$HC_URL" ]] && curl -fsS -m 10 --retry 3 "${HC_URL}${1:-}" "${@:2}" >/dev/null 2>&1 || true; }
+hc /start
+FAILURES=()
 
 export RCLONE_CONFIG_TIGRIS_TYPE=s3 RCLONE_CONFIG_TIGRIS_PROVIDER=Other
 export RCLONE_CONFIG_TIGRIS_ACCESS_KEY_ID="$tid" RCLONE_CONFIG_TIGRIS_SECRET_ACCESS_KEY="$tsec"
@@ -49,13 +61,14 @@ export TIGRIS_STORAGE_ACCESS_KEY_ID="$tid" TIGRIS_STORAGE_SECRET_ACCESS_KEY="$ts
 
 # --max-delete aborts a sync that would remove an abnormal number of files
 # (guards against a missing/empty source wiping the backup).
-FLAGS="--fast-list --transfers 8 --checkers 16 --retries 5 --low-level-retries 10 --max-delete 5000 --stats 0"
+FLAGS="--fast-list --transfers 8 --checkers 16 --retries 5 --low-level-retries 10 --max-delete 5000 --stats 5m"
 
 sync_one() { # label src dest [extra...]
     local label="$1" src="$2" dest="$3"; shift 3
     if [[ ! -d "$src" ]]; then echo "SKIP $label: source missing ($src)"; return 0; fi
     echo "$(date '+%F %T') sync $label: $src -> $dest"
-    caffeinate -i rclone sync "$src" "$dest" $FLAGS "$@" || echo "WARN $label sync rc=$?"
+    caffeinate -i rclone sync "$src" "$dest" $FLAGS "$@"; local rc=$?
+    if [[ $rc -ne 0 ]]; then echo "WARN $label sync rc=$rc"; FAILURES+=("$label(rc=$rc)"); fi
 }
 
 # Flush WAL into the main file so rclone copies a consistent single-file snapshot
@@ -90,5 +103,11 @@ sync_one msgatt "$EXT/messages-store"             arch:messages-store
 tigris snapshots take klundstedt-mini-backup "nightly-$(date +%F)" >/dev/null 2>&1 \
     && echo "snapshot taken" || echo "WARN: snapshot failed"
 
-date +%s > "$LAST_RUN"
-echo "=== $(date '+%F %T') tigris-backup DONE ==="
+if [[ ${#FAILURES[@]} -eq 0 ]]; then
+    date +%s > "$LAST_RUN"   # only mark success when every phase succeeded
+    hc                        # success ping -> resets the dead-man's-switch
+    echo "=== $(date '+%F %T') tigris-backup DONE (all phases OK) ==="
+else
+    echo "=== $(date '+%F %T') tigris-backup DONE WITH FAILURES: ${FAILURES[*]} ==="
+    hc /fail --data-raw "tigris-backup $(scutil --get LocalHostName 2>/dev/null) $(date '+%F %T') failed: ${FAILURES[*]}"
+fi
