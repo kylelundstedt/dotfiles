@@ -89,13 +89,29 @@ rclone cryptcheck ~/Documents bkup:home/Documents --one-way --fast-list
 
 ## The nightly job
 
-- `tigris-backup.sh` (repo root) → launchd `com.kylelundstedt.tigris-backup`,
-  **daily 04:00**. Mini-only (hostname guard).
-- Incremental `rclone sync` of all four sources + a daily snapshot of
-  `klundstedt-mini-backup`. Creds from the login Keychain (runs unattended).
+- `backup/tigris-backup.sh` → launchd `com.kylelundstedt.tigris-backup`,
+  **daily 04:00**. Mini-only (hostname guard). Creds from the login Keychain
+  (runs unattended).
+- SQLite-checkpoints `msgvault.db`/`vectors.db`, then incremental `rclone sync`
+  of: home, photos (→ backup bucket) and aws-s3, box, iphone-backup,
+  messages-store (→ archive bucket), then a snapshot of `klundstedt-mini-backup`.
 - Guards: skip if external drive unmounted, skip if another rclone is running,
-  `--max-delete 5000` backstop, lock + 20h staleness.
-- Logs: `/tmp/tigris-backup.log`.
+  `--max-delete 5000` backstop, lock + 20h staleness. `lastrun` is written **only
+  on full success** (a failed phase does not mark the run successful).
+- Logs: `~/Library/Logs/tigris-backup/<date>.log` (30-day retention; the launchd
+  `/tmp/tigris-backup.log` is just the latest and is wiped on reboot).
+
+## Monitoring (dead-man's-switch)
+
+- healthchecks.io check pings `/start` at begin, **success only when every phase
+  passed**, and `/fail` (with a summary) on any failure. It alerts if the daily
+  success ping doesn't arrive — so it catches **both** failures **and the job not
+  running at all** (crash, mac off, launchd skip).
+- Ping URL is in the **login Keychain** (`tigris-backup:healthcheck-url`) and in
+  1Password (`Tigris - mini-backup key (rclone)` → `healthcheck_url`). If unset,
+  pings are silently skipped (backup still runs).
+- Check config: cron `0 4 * * *`, grace **8h**. Re-provision the Keychain item
+  from 1Password on a rebuild (along with the `tigris-backup:*` cred items).
 
 ## CLI gotcha (tigris 3.x)
 
