@@ -298,8 +298,10 @@ Shared helper: `personal-mcp/_common.sh`.
 
 ## TODO
 
-- **Test MCP access from other devices** — `klundstedt-mbp` (online) and `klundstedt-iphone`
-  (currently **offline, last seen ~231d ago** — needs the Tailscale app reconnected first).
-  Connect each to `https://klundstedt-mini.dojo-sun.ts.net/mcp`.
+- **Connect MCP clients on other devices** — server side is verified (`tailscale serve` proxies
+  HTTPS → `:8765`; the tailnet URL answers). Remaining is client-side only:
+  `claude mcp add --transport http hub-mcp https://klundstedt-mini.dojo-sun.ts.net/mcp` on
+  `klundstedt-mbp` (online); `klundstedt-iphone` needs the Tailscale app reconnected first
+  (offline ~231d as of 2026-06).
 - **Remove Web Clipper browser extension** — the vault `Clippings/` folder is gone; uninstall the
   extension from the browser so it stops offering to clip.
