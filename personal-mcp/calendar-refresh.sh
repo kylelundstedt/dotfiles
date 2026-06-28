@@ -8,6 +8,7 @@
 # Capability-guarded: no-ops where uv / the script / ~/archives aren't present, so it
 # is safe to deploy everywhere but only does work on the archive host (klundstedt-mini).
 set -uo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 
 command -v uv >/dev/null 2>&1 || { echo "uv not installed; skipping."; exit 0; }
 SCRIPT="$HOME/dotfiles/personal-mcp/calendar-archive/calendar_archive.py"
@@ -17,6 +18,10 @@ SCRIPT="$HOME/dotfiles/personal-mcp/calendar-archive/calendar_archive.py"
 LOCKDIR="/tmp/calendar-refresh.lock"
 if ! mkdir "$LOCKDIR" 2>/dev/null; then echo "Another refresh is running; skipping."; exit 0; fi
 trap 'rmdir "$LOCKDIR" 2>/dev/null' EXIT
+
+# Persistent logging only — calendar is a manual job (no fixed cadence), so a
+# dead-man's-switch would false-alarm; no pm_hc here.
+pm_setup_logging calendar
 
 DIR="$HOME/dotfiles/personal-mcp/calendar-archive"
 

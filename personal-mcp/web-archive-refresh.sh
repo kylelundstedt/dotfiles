@@ -11,6 +11,7 @@
 # Scheduled by a LaunchAgent (StartCalendarInterval, daily). See
 #   launchd/Library/LaunchAgents/com.kylelundstedt.web-archive-refresh.plist
 set -uo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 
 WEB="$HOME/archives/web"          # data (this host only)
 SCRIPTS="$HOME/dotfiles/personal-mcp"  # build code (versioned in the repo)
@@ -24,11 +25,17 @@ if ! mkdir "$LOCKDIR" 2>/dev/null; then
 fi
 trap 'rmdir "$LOCKDIR" 2>/dev/null' EXIT
 
+pm_setup_logging web
+pm_hc web /start
+echo "=== $(date '+%F %T') web-archive-refresh START ==="
+
 cd "$WEB" || exit 1   # stay in the data dir: the *.sql read sources/ relative to cwd
 rc=0
 
 echo "==> Pulling Reader documents"
-python3 "$SCRIPTS/web/pull_reader.py" || { echo "pull failed"; exit 1; }
+python3 "$SCRIPTS/web/pull_reader.py" || {
+    echo "pull failed"; pm_hc web /fail --data-raw "web-archive pull failed (Reader API/token?)"; exit 1
+}
 
 echo "==> Rebuilding documents table + FTS index"
 duckdb web-archive.duckdb < "$SCRIPTS/web/build_documents.sql" || rc=1
@@ -58,5 +65,11 @@ if [ -f "$SCRIPTS/hub/build_hub.sql" ]; then
          && mv -f hub/hub.duckdb.tmp hub/hub.duckdb ); then :; else rc=1; fi
 fi
 
-echo "==> Done (rc=$rc)"
+if [ "$rc" -eq 0 ]; then
+    pm_hc web
+    echo "=== $(date '+%F %T') web-archive-refresh DONE (ok) ==="
+else
+    pm_hc web /fail --data-raw "web-archive-refresh failed (rc=$rc); see $PM_LOGDIR"
+    echo "=== $(date '+%F %T') web-archive-refresh DONE (rc=$rc) ==="
+fi
 exit "$rc"

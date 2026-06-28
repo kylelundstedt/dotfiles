@@ -8,6 +8,7 @@
 # Scheduled by a LaunchAgent (StartCalendarInterval, daily). See
 #   launchd/Library/LaunchAgents/com.kylelundstedt.msgvault-sync.plist
 set -uo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 
 # Only run where msgvault lives.
 command -v msgvault >/dev/null 2>&1 || { echo "msgvault not installed; skipping."; exit 0; }
@@ -24,6 +25,10 @@ if ! mkdir "$LOCKDIR" 2>/dev/null; then
     exit 0
 fi
 trap 'rmdir "$LOCKDIR" 2>/dev/null' EXIT
+
+pm_setup_logging msgvault
+pm_hc msgvault /start
+echo "=== $(date '+%F %T') msgvault-sync START ==="
 
 rc=0
 for acct in "${ACCOUNTS[@]}"; do
@@ -55,4 +60,11 @@ if ! msgvault embeddings build; then
     echo "    Embedding step failed (is LM Studio serving $EMBED_MODEL?); leaving messages pending for next run."
 fi
 
+if [ "$rc" -eq 0 ]; then
+    pm_hc msgvault
+    echo "=== $(date '+%F %T') msgvault-sync DONE (ok) ==="
+else
+    pm_hc msgvault /fail --data-raw "msgvault-sync failed (rc=$rc); see $PM_LOGDIR"
+    echo "=== $(date '+%F %T') msgvault-sync DONE (rc=$rc) ==="
+fi
 exit "$rc"
