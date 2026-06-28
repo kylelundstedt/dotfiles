@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Nightly encrypted incremental backup of klundstedt-mini -> Tigris.
-#   home + photos                              -> klundstedt-mini-backup  (IA, snapshots enabled)
-#   aws-s3 + box + iphone-backup + messages-store -> klundstedt-mini-archive (GLACIER)
-# Client-side encryption via rclone crypt; Tigris holds ciphertext only.
+#   home + photos                              -> klundstedt-mini-backup  (IA)
+#   aws-s3 + box + iphone-backup + messages-store -> klundstedt-mini-archive (GLACIER_IR)
+# Both buckets: client-side rclone crypt (Tigris holds ciphertext only) +
+# soft-delete (30-day retention) for recoverable deletes/overwrites.
 # Creds come from the macOS login Keychain (service "tigris-backup:*"), so the
 # launchd job runs unattended. Mini-only (guarded by hostname).
 set -uo pipefail
@@ -101,9 +102,12 @@ sync_one box    "$EXT/Box_Download_2025-01-12"    arch:box            --s3-stora
 sync_one iphone "$EXT/iPhoneBackup"               arch:iphone-backup  --s3-storage-class GLACIER_IR
 sync_one msgatt "$EXT/messages-store"             arch:messages-store --s3-storage-class GLACIER_IR
 
-# Point-in-time snapshot of the live-data bucket (home/photos).
-tigris snapshots take klundstedt-mini-backup "nightly-$(date +%F)" >/dev/null 2>&1 \
-    && echo "snapshot taken" || echo "WARN: snapshot failed"
+# Versioning/recovery is handled by bucket soft-delete (30-day retention) on both
+# buckets — bounded and auto-expiring, so deleted/overwritten objects are
+# recoverable for 30 days (ransomware / bad-sync / accidental-delete protection).
+# We deliberately do NOT take daily snapshots: the CLI has no per-snapshot delete,
+# so they'd accumulate unbounded. (Take a manual `tigris snapshots take` if ever
+# you want a full point-in-time copy.)
 
 if [[ ${#FAILURES[@]} -eq 0 ]]; then
     date +%s > "$LAST_RUN"   # only mark success when every phase succeeded

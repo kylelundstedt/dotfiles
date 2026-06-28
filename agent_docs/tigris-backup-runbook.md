@@ -11,12 +11,17 @@ backup is worthless if you can't decrypt it. Keep the credentials below in
 | --- | --- | --- | --- |
 | `~/` (minus excludes) | `klundstedt-mini-backup` | `home/` | IA |
 | External Photos library (`/Volumes/OWC8TB/Photos Library.photoslibrary`) | `klundstedt-mini-backup` | `photos/` | IA |
-| `/Volumes/OWC8TB/aws_s3_backup` | `klundstedt-mini-archive` | `aws-s3/` | GLACIER |
-| `/Volumes/OWC8TB/Box_Download_2025-01-12` | `klundstedt-mini-archive` | `box/` | GLACIER |
+| `/Volumes/OWC8TB/aws_s3_backup` | `klundstedt-mini-archive` | `aws-s3/` | GLACIER_IR |
+| `/Volumes/OWC8TB/Box_Download_2025-01-12` | `klundstedt-mini-archive` | `box/` | GLACIER_IR |
+| `/Volumes/OWC8TB/iPhoneBackup` | `klundstedt-mini-archive` | `iphone-backup/` | GLACIER_IR |
+| `/Volumes/OWC8TB/messages-store` | `klundstedt-mini-archive` | `messages-store/` | GLACIER_IR |
 
-- Both buckets: **private, multi-region USA**. `klundstedt-mini-backup` has
-  **snapshots enabled** (point-in-time recovery); `klundstedt-mini-archive` does not
-  (GLACIER and snapshots are mutually exclusive).
+- Both buckets: **private, multi-region USA**, with **soft-delete (30-day
+  retention)** — deleted/overwritten objects are recoverable for 30 days
+  (ransomware / bad-sync / accidental-delete protection). Bounded and
+  auto-expiring, so it replaces unbounded daily snapshots (the CLI has no
+  per-snapshot delete). Archive tier is **GLACIER_IR** (instant retrieval),
+  not plain GLACIER (which is frozen — see below).
 - Excludes: `tigris-backup-excludes.txt` (caches, logs, `node_modules`/`.venv`,
   `.lmstudio/models`, `.Trash`, `.DS_Store`, sockets).
 - **Client-side encryption** via rclone `crypt` (standard filename + directory
@@ -72,19 +77,16 @@ rclone copy arch:aws-s3 ~/restore/aws-s3 --progress
 rclone copy arch:box    ~/restore/box    --progress
 ```
 
-- **GLACIER restore caveat (CONFIRMED, action needed)**: `arch:*` objects are
-  Archive tier and **are NOT directly retrievable** — a restore drill confirmed a
-  direct `rclone copy` fails (the GET returns an error body, not the object) and
-  `aws s3api restore-object` returned `AccessDenied` with the scoped key. So
-  **archive recovery (aws-s3, box, iphone-backup, messages-store) is currently
-  UNVERIFIED**: the Tigris Archive thaw/restore path + required permissions must
-  be worked out before relying on it. Until then, treat the archive bucket as
-  cold storage of last resort. (See open item: consider IA/GLACIER_IR for the
-  iPhone backup, which may need fast restore.)
-- **Point-in-time (snapshots)**: list with `tigris snapshots list klundstedt-mini-backup`;
-  recover a prior state via a fork from the snapshot
-  (`tigris buckets create restore-fork --fork-of klundstedt-mini-backup --source-snapshot <version>`),
-  then point a crypt remote at the fork and `copy` out.
+- **Archive tier = GLACIER_IR (instant retrieval)**: `arch:*` objects download
+  directly, same as `bkup:` — no thaw step. (History: they were briefly plain
+  GLACIER, which is *frozen* — a restore drill caught it failing to GET — so they
+  were re-tiered to GLACIER_IR via `--s3-storage-class GLACIER_IR`. Same $0.004/GB
+  storage; a small $0.03/GB fee applies only when you actually restore.)
+- **Recover a deleted/overwritten object (soft-delete, 30-day window)**: both
+  buckets have soft-delete, so a bad sync (ransomware, accidental delete) is
+  reversible for 30 days. List/restore prior versions via the Tigris dashboard or
+  the S3 versioning API; the `--max-delete 5000` guard in the nightly also caps
+  any single run's deletions.
 
 ## Verify integrity / restore drill
 
@@ -99,8 +101,9 @@ GLACIER fetch, then cleans up:
 ```bash
 backup/restore-drill.sh
 ```
-Last run: IA restore + decrypt + cryptcheck **PASS**; GLACIER fetch returns
-"not directly retrievable" (Archive thaw needed — see caveat above).
+Last run: IA restore + decrypt + cryptcheck **PASS**. Archive was re-tiered to
+GLACIER_IR (directly retrievable) — re-run the drill after the re-tier completes
+to confirm the archive fetch now PASSes too.
 
 ## The nightly job
 
@@ -109,7 +112,8 @@ Last run: IA restore + decrypt + cryptcheck **PASS**; GLACIER fetch returns
   (runs unattended).
 - SQLite-checkpoints `msgvault.db`/`vectors.db`, then incremental `rclone sync`
   of: home, photos (→ backup bucket) and aws-s3, box, iphone-backup,
-  messages-store (→ archive bucket), then a snapshot of `klundstedt-mini-backup`.
+  messages-store (→ archive bucket). Recovery is via bucket soft-delete (30 days),
+  not snapshots.
 - Guards: skip if external drive unmounted, skip if another rclone is running,
   `--max-delete 5000` backstop, lock + 20h staleness. `lastrun` is written **only
   on full success** (a failed phase does not mark the run successful).
