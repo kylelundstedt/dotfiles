@@ -44,6 +44,10 @@ here at `personal-mcp/README.md` and symlinked to `~/archives/README.md` so it s
   the `msgvault-home` OAuth app was in *Testing* status — Google revokes Testing refresh tokens after
   7 days. The app is now **In production**, which removes that expiry, so the token renews on its own.
   See below.)
+- **iMessage/SMS text** — nightly (folded into the 3am msgvault-sync), imported from the live Mac
+  `chat.db` (30-day window, idempotent). Requires Full Disk Access for the launchd agent — see
+  Messages below. (Attachments are separate and manual; semantic embedding of new texts also lags —
+  see Messages.)
 - **Calendar** — **does NOT auto-update.** Manual rebuild only, whenever you re-export Takeout.
   Historical data never changes; only recent events drift between exports.
 - **Web (Reader)** — nightly 4am via LaunchAgent (incremental pull + rebuild + embed). Independent
@@ -120,12 +124,32 @@ duckdb web-archive.duckdb < $S/build_embeddings.sql`.
 - **Token:** Reader API token at `~/.config/readwise/token` (chmod 600, outside this dir so it
   stays out of the backup surface). Override with `READWISE_TOKEN`.
 
-## Messages (iMessage/SMS attachments)
+## Messages (iMessage/SMS)
 
-Message **text** (iMessage + SMS) is already in msgvault and the hub. What msgvault does _not_
-import is text-message **attachments** — and on the Mac, Messages-in-iCloud keeps ~96% of them
-offloaded (only on-demand per-image download exists; there is no bulk download). The fix is to go
-through the **iPhone**, which keeps the bytes local:
+### Text — nightly, automatic (needs Full Disk Access)
+
+Message **text** is imported from the live Mac `chat.db` (`~/Library/Messages/chat.db`) by
+`msgvault import-imessage`, folded into the **3am msgvault-sync** (30-day window, idempotent upsert
+by source id). Text is *not* offloaded by Messages-in-iCloud — only attachment bytes are — so the
+local DB is current, which keeps hub/keyword/structured search fresh to ~24h.
+
+- **Full Disk Access is required** for the launchd agent to read `chat.db`. Grant it in **System
+  Settings → Privacy & Security → Full Disk Access** to the process that runs the job (`/bin/bash`,
+  or better, the `msgvault` binary at `~/.local/bin/msgvault`). Without it the import fails with a
+  permission error and text silently stops advancing (the job logs a clear warning but does not
+  fail the whole sync). Verify with: `msgvault import-imessage --after $(date -v-2d +%F) --limit 5`.
+- **Manual catch-up:** `msgvault import-imessage` (no `--after` re-scans all of `chat.db`).
+- **Semantic lag (caveat):** `import-imessage` does **not** enqueue embeddings, and incremental
+  `embeddings build` only drains the pending queue — so newly imported iMessage/SMS appear in
+  keyword/structured search immediately but **not** in `semantic_search_email` until a
+  `msgvault embeddings build --full-rebuild` (re-embeds the whole corpus; heavy). Run it
+  periodically if iMessage semantic recall matters.
+
+### Attachments — manual / point-in-time (via iPhone backup)
+
+What msgvault does _not_ import is text-message **attachments** — and on the Mac, Messages-in-iCloud
+keeps ~96% of them offloaded (only on-demand per-image download exists; there is no bulk download).
+The fix is to go through the **iPhone**, which keeps the bytes local:
 
 1. **Encrypted iPhone backup** (first-party): iPhone → USB-C → Finder → _Encrypt local backup_ →
    Back Up Now. Backups are redirected to the external drive via a symlink:
@@ -159,8 +183,8 @@ counts reflect distinct messages, not ingest copies.
 - **What it indexes:** email/iMessage/SMS = subject + snippet + sender (full bodies stay in
   `msgvault.db`); calendar = summary + location + description + organizer; web = title + author +
   full text; message attachments = filename + caption + sender (`link` = the stored file, openable).
-  Note: msgvault's message _text_ currently lags (~last sync) while attachment items are current to
-  the last iPhone backup.
+  Note: message _text_ is now refreshed nightly (import-imessage, see Messages); attachment items
+  are current to the last (manual) iPhone backup.
 - **Remote (tailnet):** the mini is `klundstedt-mini.dojo-sun.ts.net`. From any tailnet device:
   `ssh klundstedt-mini.dojo-sun.ts.net '~/dotfiles/personal-mcp/hub/search.sh "query" 10'` — or use the MCP
   server below.
@@ -273,9 +297,9 @@ Shared helper: `personal-mcp/_common.sh`.
 - **Test MCP access from other devices** — `klundstedt-mbp` (online) and `klundstedt-iphone`
   (currently **offline, last seen ~231d ago** — needs the Tailscale app reconnected first).
   Connect each to `https://klundstedt-mini.dojo-sun.ts.net/mcp`.
-- **Message text freshness** — msgvault's `apple_messages` sync lags (hub `imessage`/`sms` text is
-  current only to its last sync), while attachment items are current to the last iPhone backup.
-  Either re-run the msgvault Apple Messages sync regularly, or source message text from the backup's
-  `sms.db` too (which already has it, with attachment links).
+- **iMessage/SMS semantic lag** — text is now nightly (import-imessage), but those messages aren't
+  embedded until a `msgvault embeddings build --full-rebuild` (import doesn't enqueue; incremental
+  only drains the pending queue). Decide on a cadence (periodic full-rebuild) or leave it manual —
+  keyword/structured search over recent texts is unaffected.
 - **Remove Web Clipper browser extension** — the vault `Clippings/` folder is gone; uninstall the
   extension from the browser so it stops offering to clip.

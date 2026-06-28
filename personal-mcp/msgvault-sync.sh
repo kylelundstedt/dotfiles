@@ -42,6 +42,21 @@ for acct in "${ACCOUNTS[@]}"; do
     fi
 done
 
+# Refresh iMessage/SMS *text* from the live Mac Messages DB (chat.db). Text is not
+# offloaded by Messages-in-iCloud (only attachment bytes are), so the local DB is
+# current; this keeps hub/keyword/structured search fresh to ~24h. Idempotent
+# (upsert by source id); a 30-day window keeps it fast while tolerating missed runs.
+# Needs Full Disk Access for THIS launchd agent (System Settings > Privacy &
+# Security > Full Disk Access) — see README "Messages (iMessage/SMS)". Best-effort:
+# a read failure (usually missing FDA) warns but does not fail the run, so it won't
+# spam the healthcheck over a one-time permission gap. NOTE: import does not enqueue
+# embeddings, so iMessage/SMS *semantic* lags until `embeddings build --full-rebuild`.
+echo "==> Importing iMessage/SMS text (last 30 days)"
+if ! msgvault import-imessage --after "$(date -v-30d +%F)"; then
+    echo "    import-imessage failed — likely Full Disk Access not granted to this launchd"
+    echo "    agent (see README). iMessage/SMS text stays at its last good import until fixed."
+fi
+
 echo "==> Rebuilding analytics cache"
 msgvault build-cache || rc=1
 
