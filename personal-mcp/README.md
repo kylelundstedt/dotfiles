@@ -223,8 +223,10 @@ Runtime:
 - **Tailnet exposure:** `tailscale serve --bg 8765` → tailnet-only HTTPS at
   `https://klundstedt-mini.dojo-sun.ts.net/mcp` (config persists; turn off with
   `tailscale serve --https=443 off`).
-- **Connect a client** (device must be on the tailnet), e.g. Claude Code:
-  `claude mcp add --transport http hub-mcp https://klundstedt-mini.dojo-sun.ts.net/mcp`
+- **Connect a client** — `install.sh` registers `hub-mcp` automatically on personal Macs
+  (mini → `http://127.0.0.1:8765/mcp`; other Macs that can reach the tailnet URL →
+  `https://klundstedt-mini.dojo-sun.ts.net/mcp`; skipped on exe.dev/off-tailnet machines). To add
+  it by hand: `claude mcp add --transport http hub-mcp <that URL>`.
 - **Reads are read-only, one connection per request**, so the nightly rebuild never collides.
 - **Semantic coverage:** all sources (web, calendar, email, iMessage, SMS) are ranked together on one
   cosine-similarity scale via `semantic_search` (messages' sqlite-vec L2 is converted to true cosine
@@ -298,10 +300,7 @@ Shared helper: `personal-mcp/_common.sh`.
 
 ## TODO
 
-- **Connect MCP clients on other devices** — server side is verified (`tailscale serve` proxies
-  HTTPS → `:8765`; the tailnet URL answers). Remaining is client-side only:
-  `claude mcp add --transport http hub-mcp https://klundstedt-mini.dojo-sun.ts.net/mcp` on
-  `klundstedt-mbp` (online); `klundstedt-iphone` needs the Tailscale app reconnected first
-  (offline ~231d as of 2026-06).
-- **Remove Web Clipper browser extension** — the vault `Clippings/` folder is gone; uninstall the
-  extension from the browser so it stops offering to clip.
+- **Connect MCP clients on other devices** — `install.sh` now registers `hub-mcp` automatically on
+  personal Macs (localhost on the mini, tailnet URL elsewhere if reachable). So a fresh `klundstedt-mbp`
+  install picks it up; `klundstedt-iphone` needs the Tailscale app reconnected first (offline ~231d as
+  of 2026-06), then point its MCP client at `https://klundstedt-mini.dojo-sun.ts.net/mcp`.
