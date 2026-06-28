@@ -1,3 +1,5 @@
 # Skills are deployed by `npx -y skills add` (not stowed) to avoid
 # multi-level symlinks that Codex can't resolve.
 \.agents/skills
+# The package README documents the package itself — don't deploy it as ~/README.md.
+README\.md

@@ -35,4 +35,8 @@ Library/Application Support/com.apple.*/**
 # OS noise
 **/.DS_Store
 **/*.sock
+# Ad-hoc rclone run logs that land in ~ (manual seeding/retier). The right home is
+# ~/Library/Logs/tigris-backup/ (already excluded via Library/Logs/**); this is a
+# safety net for runs that log to the home root instead.
+tigris-*.log
 # (rclone skips symlinks by default, so external-relocated dirs aren't followed)
