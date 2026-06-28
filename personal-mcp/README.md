@@ -198,8 +198,12 @@ via absolute `~/archives/...` paths. Tools:
 
 - `search(query, limit, source?)` — keyword/BM25 across **all** archives (optional
   `source` = email|imessage|sms|calendar|web).
-- `semantic_search(query, limit, source?)` — vector search over **web + calendar** (both nomic-768
-  cosine stores; results merge into one ranked list). `source` restricts to `web` or `calendar`.
+- `semantic_search(query, limit, source?)` — vector search over **all archives**, ranked together by
+  cosine similarity (every hit's `score`). `source` = `web` | `calendar` | `email` | `imessage` |
+  `sms` | `messages` (= email+imessage+sms) | `all` (default). Web/calendar come from DuckDB cosine;
+  messages from sqlite-vec converted via `vec_distance_cosine`, so all sit on one scale. Caveat:
+  absolute cosine ranges differ by content type (short text scores higher than long articles), so a
+  global ranking can favor messages — use `source` to scope.
 - `get_item(item_id)` — full record for one hub hit (web/calendar = full content; email/iMessage/SMS =
   snippet; message attachments = the openable file path in `link`).
 - `query_messages(sender?, recipient?, since?, until?, source?, subject_contains?, is_from_me?, limit)`
@@ -208,9 +212,9 @@ via absolute `~/archives/...` paths. Tools:
   Returns `{count, returned, results}`.
 - `get_message(item_id)` — **full body** + headers + to/cc/bcc for one message (where `get_item`
   returns only a snippet). email/iMessage/SMS only; bodies >100k chars are truncated.
-- `semantic_search_email(query, limit)` — vector search over **email + iMessage/SMS** using
-  msgvault's own nomic-768 vectors (`vectors.db`, sqlite-vec). Each hit has `distance` (lower =
-  closer); results de-duplicated across ingest sources. Needs LM Studio up to embed the query.
+- `semantic_search_email(query, limit)` — convenience alias for
+  `semantic_search(query, limit, source='messages')` (email + iMessage/SMS only). Each hit has
+  `score` = cosine similarity; results de-duplicated across ingest sources. Needs LM Studio up.
 
 Runtime:
 
@@ -222,10 +226,9 @@ Runtime:
 - **Connect a client** (device must be on the tailnet), e.g. Claude Code:
   `claude mcp add --transport http hub-mcp https://klundstedt-mini.dojo-sun.ts.net/mcp`
 - **Reads are read-only, one connection per request**, so the nightly rebuild never collides.
-- **Semantic coverage:** web + calendar (DuckDB cosine, merged via `semantic_search`) and
-  email/iMessage/SMS (`semantic_search_email`, sqlite-vec L2). Every source now has meaning search.
-- **Next (optional):** merge web/calendar + email into one ranked list. The stores use different
-  distance metrics (cosine-similarity vs sqlite-vec L2), so it needs a normalization step first.
+- **Semantic coverage:** all sources (web, calendar, email, iMessage, SMS) are ranked together on one
+  cosine-similarity scale via `semantic_search` (messages' sqlite-vec L2 is converted to true cosine
+  with `vec_distance_cosine`). `source` scopes to any one type or `messages`.
 
 ## Tooling (versioned in ~/dotfiles)
 

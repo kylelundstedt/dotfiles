@@ -6,20 +6,21 @@ Wraps the hub (~/archives/hub/hub.duckdb), the web vector store
 vectors.db). Exposes:
 
   Cross-archive (DuckDB hub):
-  - search(query, limit, source)        keyword/BM25 across all archives
-  - get_item(item_id)                   full record for one hub hit
+  - search(query, limit, source)          keyword/BM25 across all archives
+  - get_item(item_id)                     full record for one hub hit
 
-  Web semantic (DuckDB web store):
-  - semantic_search(query, limit)       vector search over saved web reading (Reader)
+  Semantic — all sources on one cosine scale:
+  - semantic_search(query, limit, source) web + calendar + email/iMessage/SMS, merged
+  - semantic_search_email(query, limit)   alias for semantic_search(..., source='messages')
 
-  Messages — structured + full-text + semantic (sqlite msgvault):
-  - query_messages(...)                 structured filter: sender/recipient/date/source
-  - get_message(item_id)                full body + headers + recipients for one message
-  - semantic_search_email(query, limit) vector search over email/iMessage/SMS
+  Messages — structured + full bodies (sqlite msgvault):
+  - query_messages(...)                   structured filter: sender/recipient/date/source
+  - get_message(item_id)                  full body + headers + recipients for one message
 
-Keyword `search` spans email + calendar + web on snippets only. For exact sender/
-recipient/date filtering and full bodies, use the message tools (they hit msgvault
-directly). Email semantic reuses msgvault's own nomic-768 vectors (sqlite-vec).
+Keyword `search` spans all sources on snippets only. For exact sender/recipient/date
+filtering and full bodies, use the message tools (they hit msgvault directly).
+`semantic_search` ranks every source together by cosine similarity: web/calendar via
+DuckDB array_cosine_similarity, messages via sqlite-vec vec_distance_cosine.
 
 Transport: streamable-HTTP. Bind host/port via HUB_MCP_HOST / HUB_MCP_PORT.
 Default binds 127.0.0.1; expose on the tailnet with `tailscale serve` (see README).
@@ -47,10 +48,11 @@ VEC_DB = os.path.join(HOME, "archives", "email", "vectors.db")
 EMBED_ENDPOINT = "http://localhost:1234/v1/embeddings"
 EMBED_MODEL = "text-embedding-nomic-embed-text-v1.5@q8_0"
 SOURCES = ("email", "imessage", "sms", "calendar", "web")
-# Semantic sources backed by DuckDB cosine-similarity stores (directly comparable,
-# so results merge into one ranked list). Email semantic is separate (sqlite-vec L2).
-SEMANTIC_SOURCES = ("web", "calendar")
 MSG_SOURCES = ("email", "imessage", "sms")  # the message_type values in msgvault
+# All semantic sources, ranked together on ONE metric: cosine similarity. Web/calendar
+# come from DuckDB array_cosine_similarity; messages come from sqlite-vec, converted via
+# vec_distance_cosine (1 - cosine_distance) so every hit's `score` is comparable.
+SEMANTIC_SOURCES = ("web", "calendar", "email", "imessage", "sms")
 MAX_BODY_CHARS = 100_000  # cap full-body responses so MCP transport stays sane
 
 # Served over the tailnet via `tailscale serve` (TLS-terminated, tailnet-only),
@@ -180,21 +182,81 @@ def _semantic_calendar(vec, limit):
     return _rows(CAL_DB, sql, [vec])
 
 
-def do_semantic(query, limit=15, source=None):
-    """Semantic (vector) search over web reading + calendar (DuckDB cosine stores).
+def _semantic_messages(vec, limit, allowed):
+    """Cosine-ranked email/iMessage/SMS hits (allowed = subset of MSG_SOURCES)."""
+    qser = sqlite_vec.serialize_float32(vec)
+    # Over-fetch (more when filtering to a subset, since the KNN can't pre-filter by
+    # message_type): candidates come back by L2, then we re-score by TRUE cosine.
+    over = max(int(limit) * (8 if len(allowed) < len(MSG_SOURCES) else 4), 60)
+    knn = _sqlite_rows(VEC_DB, """
+        SELECT e.message_id AS mid, (1.0 - vec_distance_cosine(v.embedding, ?)) AS score
+        FROM vectors_vec_d768 v JOIN embeddings e ON e.embedding_id = v.embedding_id
+        WHERE v.embedding MATCH ?
+          AND v.generation_id = (SELECT id FROM index_generations WHERE state = 'active' ORDER BY id DESC LIMIT 1)
+          AND k = ?
+        ORDER BY v.distance
+    """, [qser, qser, over], load_vec=True)
+    if not knn:
+        return []
+    best = {}  # best (max) cosine per message — a message may have several chunk vectors
+    for row in knn:
+        if row["mid"] not in best or row["score"] > best[row["mid"]]:
+            best[row["mid"]] = row["score"]
+    ids = list(best)
+    ph = ",".join("?" * len(ids))
+    meta = _sqlite_rows(MSG_DB, f"""
+        SELECT m.id AS _id, m.message_type AS source, m.sent_at AS ts, m.subject AS title,
+               coalesce(nullif(sp.display_name, ''), sp.email_address, sp.phone_number) AS who,
+               m.snippet, m.sent_at AS _k_sent, m.subject AS _k_subj, m.sender_id AS _k_sender
+        FROM messages m LEFT JOIN participants sp ON m.sender_id = sp.id WHERE m.id IN ({ph})""", ids)
+    by_id = {row["_id"]: row for row in meta}
+    seen, out = set(), []
+    for mid in sorted(best, key=best.get, reverse=True):  # most similar first
+        row = by_id.get(mid)
+        if not row or row["source"] not in allowed:
+            continue
+        key = (row["_k_sent"], row["_k_subj"], row["_k_sender"])  # collapse cross-source dupes
+        if key in seen:
+            continue
+        seen.add(key)
+        row["item_id"] = _item_id(row["source"], row.pop("_id"))
+        row["link"] = None
+        row["score"] = round(best[mid], 4)
+        for k in ("_k_sent", "_k_subj", "_k_sender"):
+            row.pop(k, None)
+        out.append(row)
+        if len(out) >= int(limit):
+            break
+    return out
 
-    source None/'all' -> both, merged by cosine score; or restrict to 'web'/'calendar'.
+
+def do_semantic(query, limit=15, source=None):
+    """Unified semantic search across all archives, ranked together by cosine similarity.
+
+    source None/'all' -> every source; 'messages' -> email+imessage+sms; or a single
+    source from SEMANTIC_SOURCES. All hits carry `score` = cosine similarity (higher =
+    closer), so they merge into one ranked list.
     """
-    if source and source not in SEMANTIC_SOURCES and source != "all":
-        raise ValueError(f"source must be one of {SEMANTIC_SOURCES} or 'all'")
+    if source in (None, "all"):
+        want = set(SEMANTIC_SOURCES)
+    elif source == "messages":
+        want = set(MSG_SOURCES)
+    elif source in SEMANTIC_SOURCES:
+        want = {source}
+    else:
+        raise ValueError(f"source must be one of {SEMANTIC_SOURCES}, 'messages', or 'all'")
     vec = _embed_query(query)
     rows = []
-    if source in (None, "all", "web"):
+    if "web" in want:
         rows += _semantic_web(vec, limit)
-    if source in (None, "all", "calendar"):
+    if "calendar" in want:
         rows += _semantic_calendar(vec, limit)
-    for r in rows:
-        r["ts"] = r["ts"].isoformat() if r.get("ts") else None
+    msg_want = want & set(MSG_SOURCES)
+    if msg_want:
+        rows += _semantic_messages(vec, limit, msg_want)
+    for r in rows:  # web/calendar ts are timestamps; message ts are already strings
+        if hasattr(r.get("ts"), "isoformat"):
+            r["ts"] = r["ts"].isoformat()
     rows.sort(key=lambda r: r["score"], reverse=True)
     return rows[:int(limit)]
 
@@ -296,48 +358,8 @@ def do_get_message(item_id):
 
 
 def do_semantic_email(query, limit=15):
-    """Vector KNN over msgvault's nomic-768 embeddings (email + iMessage/SMS)."""
-    vec = sqlite_vec.serialize_float32(_embed_query(query))
-    over = max(int(limit) * 4, 40)  # over-fetch: chunks + cross-source dupes get collapsed below
-    knn = _sqlite_rows(VEC_DB, """
-        SELECT e.message_id AS mid, v.distance AS dist
-        FROM vectors_vec_d768 v JOIN embeddings e ON e.embedding_id = v.embedding_id
-        WHERE v.embedding MATCH ?
-          AND v.generation_id = (SELECT id FROM index_generations WHERE state = 'active' ORDER BY id DESC LIMIT 1)
-          AND k = ?
-        ORDER BY v.distance
-    """, [vec, over], load_vec=True)
-    if not knn:
-        return []
-    best = {}  # min distance per message (a message can have several chunk vectors)
-    for row in knn:
-        if row["mid"] not in best or row["dist"] < best[row["mid"]]:
-            best[row["mid"]] = row["dist"]
-    ids = list(best)
-    ph = ",".join("?" * len(ids))
-    meta = _sqlite_rows(MSG_DB, f"""
-        SELECT m.id AS _id, m.message_type AS source, m.sent_at AS ts, m.subject AS title,
-               coalesce(nullif(sp.display_name, ''), sp.email_address, sp.phone_number) AS who,
-               m.snippet, m.sent_at AS _k_sent, m.subject AS _k_subj, m.sender_id AS _k_sender
-        FROM messages m LEFT JOIN participants sp ON m.sender_id = sp.id WHERE m.id IN ({ph})""", ids)
-    by_id = {row["_id"]: row for row in meta}
-    seen, out = set(), []
-    for mid in sorted(best, key=best.get):  # nearest first
-        row = by_id.get(mid)
-        if not row:
-            continue
-        key = (row["_k_sent"], row["_k_subj"], row["_k_sender"])  # collapse cross-source dupes
-        if key in seen:
-            continue
-        seen.add(key)
-        row["item_id"] = _item_id(row["source"], row.pop("_id"))
-        row["distance"] = round(best[mid], 4)  # lower = more similar (L2 over nomic vectors)
-        for k in ("_k_sent", "_k_subj", "_k_sender"):
-            row.pop(k, None)
-        out.append(row)
-        if len(out) >= int(limit):
-            break
-    return out
+    """Semantic search over email + iMessage/SMS only (delegates to the unified path)."""
+    return do_semantic(query, limit, source="messages")
 
 
 @mcp.tool()
@@ -354,16 +376,21 @@ def search(query: str, limit: int = 20, source: str | None = None) -> list[dict]
 
 @mcp.tool()
 def semantic_search(query: str, limit: int = 15, source: str | None = None) -> list[dict]:
-    """Meaning-based search over saved web reading + calendar events.
+    """Meaning-based search across ALL archives, ranked together by cosine similarity.
 
-    Use for conceptual queries where exact keywords may not match. Covers the web
-    archive (Readwise Reader) and calendar events — both nomic-768 cosine stores, so
-    hits merge into one ranked list. For email/iMessage/SMS use `semantic_search_email`.
+    Use for conceptual queries where exact keywords may not match. Covers web reading,
+    calendar events, and email/iMessage/SMS — every hit carries `score` = cosine
+    similarity (higher = closer), so they merge into one ranked list.
+
+    Caveat: absolute cosine ranges differ by content type (short text like iMessage
+    tends to score higher than long articles), so a global ranking can favor messages.
+    Pass `source` to scope when you want a specific type.
 
     Args:
         query: natural-language query.
         limit: max results (default 15).
-        source: restrict to 'web' or 'calendar' (default: both, merged by score).
+        source: 'web' | 'calendar' | 'email' | 'imessage' | 'sms' | 'messages'
+                (= email+imessage+sms) | 'all' (default: all, merged by score).
     """
     return do_semantic(query, limit, source)
 
@@ -421,12 +448,11 @@ def get_message(item_id: str) -> dict:
 
 @mcp.tool()
 def semantic_search_email(query: str, limit: int = 15) -> list[dict]:
-    """Meaning-based search over email + iMessage/SMS (msgvault's nomic-768 vectors).
+    """Meaning-based search over email + iMessage/SMS only (msgvault's nomic-768 vectors).
 
-    Use for conceptual queries where keywords may not match. Complements `search`
-    (keyword) and `semantic_search` (web only). Results are de-duplicated across
-    ingest sources. Each hit has `distance` (lower = more similar); fetch the full
-    body with `get_message`.
+    Convenience alias for `semantic_search(query, limit, source='messages')`. Results
+    are de-duplicated across ingest sources; each hit has `score` = cosine similarity
+    (higher = closer). Fetch the full body with `get_message`.
     """
     return do_semantic_email(query, limit)
 
