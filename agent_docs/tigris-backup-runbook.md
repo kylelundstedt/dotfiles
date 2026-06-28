@@ -72,20 +72,35 @@ rclone copy arch:aws-s3 ~/restore/aws-s3 --progress
 rclone copy arch:box    ~/restore/box    --progress
 ```
 
-- **GLACIER restore caveat**: `arch:*` objects are Archive tier. If a direct
-  `copy` errors with an InvalidObjectState / not-retrievable condition, the
-  objects must be restored (thawed) first — check current Tigris Archive
-  retrieval docs at restore time.
+- **GLACIER restore caveat (CONFIRMED, action needed)**: `arch:*` objects are
+  Archive tier and **are NOT directly retrievable** — a restore drill confirmed a
+  direct `rclone copy` fails (the GET returns an error body, not the object) and
+  `aws s3api restore-object` returned `AccessDenied` with the scoped key. So
+  **archive recovery (aws-s3, box, iphone-backup, messages-store) is currently
+  UNVERIFIED**: the Tigris Archive thaw/restore path + required permissions must
+  be worked out before relying on it. Until then, treat the archive bucket as
+  cold storage of last resort. (See open item: consider IA/GLACIER_IR for the
+  iPhone backup, which may need fast restore.)
 - **Point-in-time (snapshots)**: list with `tigris snapshots list klundstedt-mini-backup`;
   recover a prior state via a fork from the snapshot
   (`tigris buckets create restore-fork --fork-of klundstedt-mini-backup --source-snapshot <version>`),
   then point a crypt remote at the fork and `copy` out.
 
-## Verify integrity
+## Verify integrity / restore drill
 
+Spot-check one prefix:
 ```bash
-rclone cryptcheck ~/Documents bkup:home/Documents --one-way --fast-list
+rclone cryptcheck ~/Documents bkup:home/Documents --one-way --fast-list --exclude ".DS_Store"
 ```
+
+Periodically (e.g. quarterly) run the full **restore drill** — it restores a
+sample to a temp dir, verifies it decrypts and matches the source, and probes a
+GLACIER fetch, then cleans up:
+```bash
+backup/restore-drill.sh
+```
+Last run: IA restore + decrypt + cryptcheck **PASS**; GLACIER fetch returns
+"not directly retrievable" (Archive thaw needed — see caveat above).
 
 ## The nightly job
 
