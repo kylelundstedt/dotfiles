@@ -60,6 +60,29 @@ fi
 echo "==> Rebuilding analytics cache"
 msgvault build-cache || rc=1
 
+# Enqueue recent iMessage/SMS for embedding so they follow the SAME incremental
+# path as Gmail. `msgvault sync` enqueues new Gmail messages into the pending queue,
+# but `import-imessage` does not -- so apple_messages would never reach semantic
+# search via the incremental build. Insert recent unembedded iMessage/SMS text into
+# the active generation's pending queue; `embeddings build` below then drains them
+# along with the synced Gmail. Bounded to 35 days (new imports are always recent).
+# Best-effort: reaches into msgvault's internal vectors.db, so guard on its presence
+# and the sqlite3 tool, and never fail the run.
+VEC="$MSGVAULT_HOME/vectors.db"
+if command -v sqlite3 >/dev/null 2>&1 && [ -f "$VEC" ]; then
+    echo "==> Enqueuing recent iMessage/SMS for embedding"
+    sqlite3 "$VEC" "ATTACH '$MSGVAULT_HOME/msgvault.db' AS mv;
+        INSERT OR IGNORE INTO pending_embeddings (generation_id, message_id, enqueued_at)
+        SELECT g.id, m.id, strftime('%s','now')
+        FROM mv.messages m JOIN mv.sources s ON m.source_id=s.id
+        JOIN mv.message_bodies b ON b.message_id=m.id
+        CROSS JOIN (SELECT id FROM index_generations WHERE state='active' LIMIT 1) g
+        WHERE s.source_type='apple_messages' AND coalesce(b.body_text,'')<>''
+          AND m.sent_at >= datetime('now','-35 days')
+          AND NOT EXISTS (SELECT 1 FROM embeddings e WHERE e.message_id=m.id);" 2>/dev/null \
+        || echo "    enqueue skipped (msgvault embedding schema not as expected)"
+fi
+
 # Embed newly-synced messages so they're reachable via semantic/hybrid search.
 # Best-effort: needs LM Studio serving the embedding model. If it's not up, the
 # messages stay pending and the next run drains them (incremental build is

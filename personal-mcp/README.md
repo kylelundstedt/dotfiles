@@ -46,8 +46,7 @@ here at `personal-mcp/README.md` and symlinked to `~/archives/README.md` so it s
   See below.)
 - **iMessage/SMS text** — nightly (folded into the 3am msgvault-sync), imported from the live Mac
   `chat.db` (30-day window, idempotent). Requires Full Disk Access for the launchd agent — see
-  Messages below. (Attachments are separate and manual; semantic embedding of new texts also lags —
-  see Messages.)
+  Messages below. (Attachments are separate and manual.)
 - **Calendar** — **does NOT auto-update.** Manual rebuild only, whenever you re-export Takeout.
   Historical data never changes; only recent events drift between exports.
 - **Web (Reader)** — nightly 4am via LaunchAgent (incremental pull + rebuild + embed). Independent
@@ -139,11 +138,13 @@ local DB is current, which keeps hub/keyword/structured search fresh to ~24h.
   permission error and text silently stops advancing (the job logs a clear warning but does not
   fail the whole sync). Verify with: `msgvault import-imessage --after $(date -v-2d +%F) --limit 5`.
 - **Manual catch-up:** `msgvault import-imessage` (no `--after` re-scans all of `chat.db`).
-- **Semantic lag (caveat):** `import-imessage` does **not** enqueue embeddings, and incremental
-  `embeddings build` only drains the pending queue — so newly imported iMessage/SMS appear in
-  keyword/structured search immediately but **not** in `semantic_search_email` until a
-  `msgvault embeddings build --full-rebuild` (re-embeds the whole corpus; heavy). Run it
-  periodically if iMessage semantic recall matters.
+- **Semantic embedding follows the same incremental path as email.** `msgvault sync` enqueues new
+  Gmail into the embedding pending queue, but `import-imessage` does **not** — so msgvault-sync adds
+  an enqueue step (recent unembedded apple_messages text → `pending_embeddings` for the active
+  generation) right before `embeddings build`, which then drains it. Result: new iMessage/SMS reach
+  `semantic_search_email` within ~24h, no full-rebuild needed. (The enqueue touches msgvault's
+  internal `vectors.db` directly — it's guarded and best-effort, so a schema change just skips it.)
+  A `msgvault embeddings build --full-rebuild` is only needed for a from-scratch re-embed.
 
 ### Attachments — manual / point-in-time (via iPhone backup)
 
@@ -297,9 +298,5 @@ Shared helper: `personal-mcp/_common.sh`.
 - **Test MCP access from other devices** — `klundstedt-mbp` (online) and `klundstedt-iphone`
   (currently **offline, last seen ~231d ago** — needs the Tailscale app reconnected first).
   Connect each to `https://klundstedt-mini.dojo-sun.ts.net/mcp`.
-- **iMessage/SMS semantic lag** — text is now nightly (import-imessage), but those messages aren't
-  embedded until a `msgvault embeddings build --full-rebuild` (import doesn't enqueue; incremental
-  only drains the pending queue). Decide on a cadence (periodic full-rebuild) or leave it manual —
-  keyword/structured search over recent texts is unaffected.
 - **Remove Web Clipper browser extension** — the vault `Clippings/` folder is gone; uninstall the
   extension from the browser so it stops offering to clip.
