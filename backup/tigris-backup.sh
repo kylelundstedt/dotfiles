@@ -18,6 +18,10 @@ LAST_RUN=/tmp/tigris-backup.lastrun
 MIN_INTERVAL=$((20 * 3600))
 EXCLUDES="$HOME/dotfiles/backup/tigris-backup-excludes.txt"
 EXT=/Volumes/OWC8TB
+# Max personal Photos originals allowed missing-from-disk before we refuse to
+# sync the library (see photos_originals_complete). 0 = strict; bump a little if
+# a freshly-shot photo still mid-download from iCloud flaps the gate at 04:00.
+PHOTOS_MISSING_MAX=0
 
 # Skip if a recent run already completed.
 if [[ -f "$LAST_RUN" ]]; then
@@ -86,6 +90,31 @@ checkpoint_sqlite() { # path
     fi
 }
 
+# Photos completeness gate. rclone sync MIRRORS source->dest, so syncing a Photos
+# library whose originals have been evicted (iCloud "Optimize Mac Storage", or a
+# stalled "Download Originals" backfill) would DELETE those originals' ciphertext
+# from the backup -- destroying the only complete copy. --max-delete 5000 won't
+# catch a sub-threshold eviction, so verify completeness here first.
+# Count ONLY our own library originals: shared-album photos and "Shared with You"
+# syndication items are never stored as local originals by Apple, so they're
+# legitimately absent and must be excluded (a raw Photos.sqlite query misclassifies
+# them -- use osxphotos, which is schema-aware). Fail-safe: if osxphotos can't run
+# we fall back to the existing --max-delete guard and proceed with a WARN rather
+# than block the photo backup indefinitely.
+photos_originals_complete() {
+    local uvx; uvx=$(command -v uvx || echo "$HOME/.local/bin/uvx")
+    [[ -x "$uvx" ]] || { echo "WARN photos-gate: uvx not found; skipping completeness check"; return 0; }
+    local missing
+    missing=$("$uvx" osxphotos query --missing --not-syndicated --not-shared --count 2>/dev/null)
+    if ! [[ "$missing" =~ ^[0-9]+$ ]]; then
+        echo "WARN photos-gate: osxphotos check failed; backing up library as-is"; return 0
+    fi
+    if (( missing > PHOTOS_MISSING_MAX )); then
+        echo "photos-gate: $missing personal originals NOT on disk (> $PHOTOS_MISSING_MAX)"; return 1
+    fi
+    echo "photos-gate: all personal originals present ($missing missing, threshold $PHOTOS_MISSING_MAX)"; return 0
+}
+
 echo "=== $(date '+%F %T') tigris-backup START ==="
 if command -v sqlite3 >/dev/null 2>&1; then
     checkpoint_sqlite "$HOME/archives/email/msgvault.db"
@@ -94,7 +123,12 @@ else
     echo "WARN sqlite3 not found; skipping pre-sync checkpoint"
 fi
 sync_one home   "$HOME/"                          bkup:home --exclude-from "$EXCLUDES"
-sync_one photos "$EXT/Photos Library.photoslibrary" bkup:photos
+if photos_originals_complete; then
+    sync_one photos "$EXT/Photos Library.photoslibrary" bkup:photos
+else
+    echo "SKIP photos: library incomplete; not syncing (would delete originals from backup)"
+    FAILURES+=("photos(incomplete-library)")
+fi
 # Archive bucket: GLACIER_IR (Archive Instant Retrieval) — same $/GB as GLACIER
 # but directly retrievable (plain GLACIER objects are frozen and need a thaw).
 sync_one awss3  "$EXT/aws_s3_backup"              arch:aws-s3         --s3-storage-class GLACIER_IR
