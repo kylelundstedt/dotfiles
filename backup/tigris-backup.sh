@@ -94,10 +94,12 @@ else
 fi
 sync_one home   "$HOME/"                          bkup:home --exclude-from "$EXCLUDES"
 sync_one photos "$EXT/Photos Library.photoslibrary" bkup:photos
-sync_one awss3  "$EXT/aws_s3_backup"              arch:aws-s3
-sync_one box    "$EXT/Box_Download_2025-01-12"    arch:box
-sync_one iphone "$EXT/iPhoneBackup"               arch:iphone-backup
-sync_one msgatt "$EXT/messages-store"             arch:messages-store
+# Archive bucket: GLACIER_IR (Archive Instant Retrieval) — same $/GB as GLACIER
+# but directly retrievable (plain GLACIER objects are frozen and need a thaw).
+sync_one awss3  "$EXT/aws_s3_backup"              arch:aws-s3         --s3-storage-class GLACIER_IR
+sync_one box    "$EXT/Box_Download_2025-01-12"    arch:box            --s3-storage-class GLACIER_IR
+sync_one iphone "$EXT/iPhoneBackup"               arch:iphone-backup  --s3-storage-class GLACIER_IR
+sync_one msgatt "$EXT/messages-store"             arch:messages-store --s3-storage-class GLACIER_IR
 
 # Point-in-time snapshot of the live-data bucket (home/photos).
 tigris snapshots take klundstedt-mini-backup "nightly-$(date +%F)" >/dev/null 2>&1 \
