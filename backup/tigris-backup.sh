@@ -16,7 +16,7 @@ fi
 LOCKDIR=/tmp/tigris-backup.lock
 LAST_RUN=/tmp/tigris-backup.lastrun
 MIN_INTERVAL=$((20 * 3600))
-EXCLUDES="$HOME/dotfiles/backup/tigris-backup-excludes.txt"
+FILTER="$HOME/dotfiles/backup/tigris-backup-filter.txt"
 EXT=/Volumes/OWC8TB
 # Max personal Photos originals allowed missing-from-disk before we refuse to
 # sync the library (see photos_originals_complete). 0 = strict; bump a little if
@@ -122,7 +122,7 @@ if command -v sqlite3 >/dev/null 2>&1; then
 else
     echo "WARN sqlite3 not found; skipping pre-sync checkpoint"
 fi
-sync_one home   "$HOME/"                          bkup:home --exclude-from "$EXCLUDES"
+sync_one home   "$HOME/"                          bkup:home --filter-from "$FILTER"
 if photos_originals_complete; then
     sync_one photos "$EXT/Photos Library.photoslibrary" bkup:photos
 else

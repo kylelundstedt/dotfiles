@@ -42,7 +42,7 @@ fi
 # 2) Integrity: restored content matches the live local source.
 echo "[2] cryptcheck bkup:home/Desktop vs ~/Desktop"
 if rclone cryptcheck "$HOME/Desktop" bkup:home/Desktop --one-way \
-       --exclude ".DS_Store" --exclude-from "$HOME/dotfiles/backup/tigris-backup-excludes.txt" 2>&1 | grep -q "0 differences found"; then
+       --filter-from "$HOME/dotfiles/backup/tigris-backup-filter.txt" 2>&1 | grep -q "0 differences found"; then
     ok "cryptcheck clean (encrypted backup matches source)"
 else
     bad "cryptcheck reported differences (investigate)"

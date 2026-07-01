@@ -1,0 +1,29 @@
+# rclone filter for the home/ backup (paths relative to ~). First match wins.
+# Junk + dev regenerables (excluded everywhere, incl. under Mobile Documents)
+- **/.DS_Store
+- **/*.sock
+- **/node_modules/**
+- **/.venv/**
+- **/venv/**
+- **/__pycache__/**
+- **/.mypy_cache/**
+- **/.pytest_cache/**
+- **/.next/**
+- **/dist/**
+- **/build/**
+- **/target/**
+# Keep iCloud Drive (it lives under ~/Library/Mobile Documents) — real user data
++ /Library/Mobile Documents/**
+# Exclude the rest of ~/Library: app state/caches + the macOS TCC-protected dirs
+# (Accounts, Biome, Cookies, HomeKit, Application Support/*, Safari, etc.) that
+# the unattended job can't read. Blanket rule so new protected dirs (added by
+# macOS updates) never re-break the nightly with 'operation not permitted' (rc=1).
+- /Library/**
+# Re-downloadable model weights (symlink target on external)
+- /.lmstudio/models/**
+# Derived DuckDB rebuilt nightly from the source DBs (regenerable)
+- /archives/hub/hub.duckdb
+- /archives/hub/hub.duckdb.tmp
+# Junk
+- /.Trash/**
+- /.cache/**
