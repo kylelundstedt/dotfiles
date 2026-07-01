@@ -1,7 +1,9 @@
 # rclone filter for the home/ backup (paths relative to ~). First match wins.
-# Junk + dev regenerables (excluded everywhere, incl. under Mobile Documents)
-- **/.DS_Store
-- **/*.sock
+# Junk + dev regenerables (excluded everywhere, incl. under Mobile Documents).
+# Bare names (no leading /) match at every level, incl. the root (unlike **/x,
+# which misses root-level files).
+- .DS_Store
+- *.sock
 - **/node_modules/**
 - **/.venv/**
 - **/venv/**
