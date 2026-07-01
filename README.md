@@ -163,6 +163,8 @@ for vm in <vm1> <vm2> ...; do ssh "$vm" 'cd ~/dotfiles && git pull --ff-only'; d
 
 Re-run `install.sh` on a VM only when a pull _adds or removes_ files (new skills, new stow packages) so stow can reconcile the symlinks. Use `./install.sh --skip-agents` for just the stow step — it skips the slower agent/MCP setup (which needs a local browser for some OAuth flows and is best run from the Mac).
 
+**Session-start auto-refresh (VMs)** — so the manual fan-out above is rarely needed, each agent harness runs `agents/.agents/refresh-env.sh` at session start via its own hook: Claude Code (`SessionStart` in `agents/.claude/settings.json`), Codex (`SessionStart` in `agents/.codex/hooks.json`), and Shelley (`new-conversation` in `agents/.config/shelley/hooks/`). The script does the same `git pull --ff-only` on `~/dotfiles` (so global agent instructions stay fresh) plus a **guarded** ff-only pull of the working repo — only when its tree is clean and fast-forwardable, never disturbing local work. It is a no-op off exe.dev VMs (guarded on `/exe.dev`) and always exits 0 (Shelley aborts a conversation on non-zero hook exit). Hook files are stow-managed, so they deploy with the `agents` package; only structural changes still need `install.sh`. Codex requires a one-time `/hooks` trust approval per VM (interactive), after which it runs automatically.
+
 ---
 
 ## Troubleshooting

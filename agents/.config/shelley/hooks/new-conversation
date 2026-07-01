@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Shelley new-conversation hook — runs once when a conversation is created,
+# before the first LLM turn. Delegates to the shared refresh script so the
+# dotfiles clone (and, safely, the working repo) are current.
+#
+# CRITICAL: must always exit 0 — Shelley aborts conversation creation on a
+# non-zero exit. We also emit nothing on stdout, so the prompt/model/cwd are
+# left unchanged.
+#
+# Shelley passes a JSON payload on stdin including the conversation `cwd`; we
+# extract it (best-effort) so the working-repo fast-forward targets the right
+# checkout. If jq is unavailable or parsing fails, the working-repo step is
+# skipped and only the dotfiles refresh runs.
+
+input="$(cat 2>/dev/null || true)"
+
+cwd=""
+jq_bin=""
+if command -v jq >/dev/null 2>&1; then
+    jq_bin="jq"
+elif [ -x "$HOME/.local/bin/jq" ]; then
+    jq_bin="$HOME/.local/bin/jq"
+fi
+if [ -n "$jq_bin" ] && [ -n "$input" ]; then
+    cwd="$(printf '%s' "$input" | "$jq_bin" -r '.cwd // .readonly.cwd // empty' 2>/dev/null)"
+fi
+
+"$HOME/.agents/refresh-env.sh" "$cwd" >/dev/null 2>&1
+
+exit 0
