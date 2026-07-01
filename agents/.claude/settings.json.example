@@ -7,5 +7,18 @@
   "theme": "dark-daltonized",
   "env": {
     "DISABLE_NON_ESSENTIAL_MODEL_CALLS": "1"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$HOME/.agents/refresh-env.sh\"",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
   }
 }
