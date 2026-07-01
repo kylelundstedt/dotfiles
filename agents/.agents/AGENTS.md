@@ -34,6 +34,13 @@
 - When completing a task from `TODO.md`, mark it done. When new work is identified, add it.
 - Keep entries short — one line per item, grouped by topic if needed.
 
+## Memory
+
+- Durable agent memory lives in the **project repo** as committed files — not in a harness's native store (`~/.claude/…`, Codex/Shelley stores). Native stores aren't shared across harnesses and don't survive machine/VM rebuilds; only committed-and-pushed content is durable.
+- Taxonomy: architectural decisions → `decisions/` (ADRs, where the repo uses them); open work → `TODO.md`; other durable agent notes (env/tooling gotchas, cross-harness findings, rationale, handoff notes) → `agent_docs/memory/`, one topic per file, indexed by `agent_docs/memory/README.md`.
+- Restate this convention in each repo's root `AGENTS.md` so harnesses that don't read this global file (e.g. Shelley) still get it, and tailor the taxonomy to the repo's existing stores.
+- Personal / cross-project memory with no repo home is out of scope here (deferred to a separate network store).
+
 ## Git
 
 - Do not add "Co-Authored-By" lines to commit messages.
