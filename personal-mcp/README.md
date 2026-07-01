@@ -256,7 +256,7 @@ Runtime:
 
 `~/` (this whole `~/archives` dir included) plus the bulky external-drive data are backed up
 nightly to Tigris, **client-side encrypted** (rclone `crypt` — Tigris holds ciphertext only).
-Code: `~/dotfiles/backup/tigris-backup.sh` + `tigris-backup-excludes.txt`, run by LaunchAgent
+Code: `~/dotfiles/backup/tigris-backup.sh` + `tigris-backup-filter.txt`, run by LaunchAgent
 `com.kylelundstedt.tigris-backup`. Mini-only (hostname-guarded), min 20h between runs.
 
 - **`klundstedt-mini-backup`** — STANDARD_IA, **multi-region (usa)**, versioned, daily snapshots.

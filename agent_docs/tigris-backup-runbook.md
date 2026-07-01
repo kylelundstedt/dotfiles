@@ -22,8 +22,11 @@ backup is worthless if you can't decrypt it. Keep the credentials below in
   auto-expiring, so it replaces unbounded daily snapshots (the CLI has no
   per-snapshot delete). Archive tier is **GLACIER_IR** (instant retrieval),
   not plain GLACIER (which is frozen — see below).
-- Excludes: `tigris-backup-excludes.txt` (caches, logs, `node_modules`/`.venv`,
-  `.lmstudio/models`, `.Trash`, `.DS_Store`, sockets).
+- Filter: `tigris-backup-filter.txt` (rclone `--filter-from`) — keeps
+  `~/Library/Mobile Documents` (iCloud Drive) but **excludes the rest of
+  `~/Library`** (app state + all TCC-protected dirs — the unattended job has no
+  Full Disk Access), plus `node_modules`/`.venv`, `.lmstudio/models`, `.Trash`,
+  `.cache`, `.DS_Store`, sockets, and the regenerable `archives/hub` DuckDB.
 - **Client-side encryption** via rclone `crypt` (standard filename + directory
   name encryption). Tigris stores ciphertext only.
 
