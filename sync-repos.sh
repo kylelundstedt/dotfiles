@@ -20,6 +20,7 @@ LOCKFILE="/tmp/sync-repos.lock"
 MIN_INTERVAL=$((20 * 3600))  # 20 hours
 GITHUB_DIR="$HOME/github"
 SKIP_REPOS="dotfiles"  # managed separately at ~/dotfiles
+FAILED=0; FAILED_REPOS=()  # hard failures — used to fail the healthcheck honestly
 
 # Skip if last successful run was recent
 if [[ -f "$LAST_RUN_FILE" ]]; then
@@ -46,8 +47,18 @@ chmod +x "$ASKPASS"
 # (sync-repos:healthcheck-url) — provisioned only on klundstedt-mini, so other
 # machines (and Linux, where `security` doesn't exist) run unmonitored. No-op if
 # the URL is absent. /start at begin, success on clean exit, /fail otherwise.
-hc() { local u; u=$(security find-generic-password -s "sync-repos:healthcheck-url" -w 2>/dev/null); [ -n "$u" ] && curl -fsS -m 10 --retry 3 "${u}${1:-}" >/dev/null 2>&1 || true; }
-finish() { local rc=$?; set +e; rmdir "$LOCKFILE" 2>/dev/null; rm -f "$ASKPASS"; if [ "$rc" -eq 0 ]; then hc; else hc /fail; fi; }
+hc() { local u; u=$(security find-generic-password -s "sync-repos:healthcheck-url" -w 2>/dev/null); [ -n "$u" ] && curl -fsS -m 10 --retry 3 "${u}${1:-}" "${@:2}" >/dev/null 2>&1 || true; }
+# Success ONLY on a clean exit with zero failed repos — a partial failure (or a
+# mid-run set -e abort) pings /fail with a summary so the check goes red honestly.
+finish() {
+    local rc=$?; set +e
+    rmdir "$LOCKFILE" 2>/dev/null; rm -f "$ASKPASS"
+    if [ "$rc" -eq 0 ] && [ "$FAILED" -eq 0 ]; then
+        hc
+    else
+        hc /fail --data-raw "sync-repos $(scutil --get LocalHostName 2>/dev/null) $(date '+%F %T') rc=$rc failed=$FAILED: ${FAILED_REPOS[*]:-aborted-early}"
+    fi
+}
 trap finish EXIT
 hc /start
 
@@ -58,6 +69,25 @@ token_for() {
         iv-cmg)        security find-generic-password -s "sync-repos:iv-cmg" -w 2>/dev/null ;;
         *)             gh auth token 2>/dev/null ;;  # kylelundstedt, USAA -> Home
     esac
+}
+
+# Run git over HTTPS with a per-owner token — NO SSH. The scheduled job runs in a
+# launchd context where the 1Password SSH agent is unavailable/locked, so any
+# git@github.com SSH op fails ("communication with agent failed"). insteadOf
+# rewrites SSH (and bare-HTTPS) remotes to a tokened HTTPS URL at transport time,
+# so existing repos (SSH origin) and USAA (SSH key not SSO-authorized) all work.
+# The username is embedded (x-access-token@) so git only prompts for the password,
+# which GIT_ASKPASS supplies from $SYNC_REPOS_TOKEN.
+git_https() { # tok git-args...
+    local tok="$1"; shift
+    # credential.helper= (empty) resets the helper list so git does NOT consult
+    # the osxkeychain helper (which pops a GUI keychain-unlock prompt that would
+    # hang the unattended job) — the token comes straight from GIT_ASKPASS.
+    SYNC_REPOS_TOKEN="$tok" GIT_ASKPASS="$ASKPASS" GIT_TERMINAL_PROMPT=0 \
+        git -c "credential.helper=" \
+            -c "url.https://x-access-token@github.com/.insteadOf=git@github.com:" \
+            -c "url.https://x-access-token@github.com/.insteadOf=https://github.com/" \
+            "$@"
 }
 
 sync_repos() {
@@ -81,7 +111,7 @@ sync_repos() {
         --no-archived \
         --source \
         --json name \
-        --jq '.[].name' 2>/dev/null)
+        --jq '.[].name' 2>/dev/null) || listing=""
     if [[ -z "$listing" ]]; then
         echo "  WARN: 0 repos visible for '$owner' with its token. Skipping."
         return 0
@@ -95,44 +125,42 @@ sync_repos() {
         fi
         sleep 1
         local repo_dir="$target_dir/$name"
-        local ssh_url="git@github.com:$owner/$name.git"
-        local https_url="https://x-access-token@github.com/$owner/$name.git"
         if [ -d "$repo_dir/.git" ]; then
             if git -C "$repo_dir" rev-parse HEAD >/dev/null 2>&1; then
                 echo "  fetch $name"
-                SYNC_REPOS_TOKEN="$tok" GIT_ASKPASS="$ASKPASS" GIT_TERMINAL_PROMPT=0 \
-                    git -C "$repo_dir" fetch --all --quiet 2>&1 || echo "  WARN: fetch failed for $name"
-                # Fast-forward default branch so local HEAD stays current
-                local default_branch current_branch
-                default_branch=$(git -C "$repo_dir" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||')
-                if [[ -n "$default_branch" ]]; then
-                    current_branch=$(git -C "$repo_dir" symbolic-ref --short HEAD 2>/dev/null || true)
-                    if [[ "$current_branch" == "$default_branch" ]]; then
-                        git -C "$repo_dir" merge --ff-only "origin/$default_branch" --quiet 2>/dev/null || true
+                if git_https "$tok" -C "$repo_dir" fetch --all --quiet; then
+                    # Fast-forward default branch so local HEAD stays current.
+                    local default_branch current_branch
+                    default_branch=$(git -C "$repo_dir" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||') || default_branch=""
+                    if [[ -n "$default_branch" ]]; then
+                        current_branch=$(git -C "$repo_dir" symbolic-ref --short HEAD 2>/dev/null) || current_branch=""
+                        if [[ "$current_branch" == "$default_branch" ]]; then
+                            git -C "$repo_dir" merge --ff-only "origin/$default_branch" --quiet 2>/dev/null || true
+                        fi
                     fi
+                else
+                    echo "  WARN: fetch failed for $name"; FAILED=$((FAILED+1)); FAILED_REPOS+=("$owner/$name")
                 fi
             else
                 echo "  WARN: $name has corrupt .git, removing and re-cloning"
-                rm -rf "$repo_dir"
-                clone_repo "$ssh_url" "$https_url" "$repo_dir" "$tok" || echo "  WARN: re-clone failed for $name"
+                clone_repo "$owner" "$name" "$repo_dir" "$tok"
             fi
         else
             echo "  clone $name"
-            clone_repo "$ssh_url" "$https_url" "$repo_dir" "$tok" || echo "  WARN: clone failed for $name"
+            clone_repo "$owner" "$name" "$repo_dir" "$tok"
         fi
     done <<< "$listing"
 }
 
-# Clone via SSH; if that fails (e.g. SSH key not SSO-authorized for the org),
-# retry over HTTPS using the per-org token via GIT_ASKPASS.
+# Clone over HTTPS+token (git_https rewrites the SSH URL). SSH is never attempted:
+# it can't work in the unattended launchd context (no 1Password agent).
 clone_repo() {
-    local ssh_url="$1" https_url="$2" dir="$3" tok="$4"
-    if git clone --quiet "$ssh_url" "$dir" 2>/dev/null; then
-        return 0
-    fi
+    local owner="$1" name="$2" dir="$3" tok="$4"
     rm -rf "$dir"
-    SYNC_REPOS_TOKEN="$tok" GIT_ASKPASS="$ASKPASS" GIT_TERMINAL_PROMPT=0 \
-        git clone --quiet "$https_url" "$dir" 2>&1
+    if ! git_https "$tok" clone --quiet "git@github.com:$owner/$name.git" "$dir"; then
+        echo "  WARN: clone failed for $owner/$name"; rm -rf "$dir"
+        FAILED=$((FAILED+1)); FAILED_REPOS+=("$owner/$name")
+    fi
 }
 
 sync_repos kylelundstedt "$GITHUB_DIR/kylelundstedt"
@@ -141,4 +169,8 @@ sync_repos iv-cmg "$GITHUB_DIR/iv-cmg"
 sync_repos USAA "$GITHUB_DIR/USAA"
 
 date +%s > "$LAST_RUN_FILE"
-echo "==> Done $(date)"
+if [[ "$FAILED" -gt 0 ]]; then
+    echo "==> Done $(date) — $FAILED repo(s) FAILED: ${FAILED_REPOS[*]}"
+else
+    echo "==> Done $(date) — all repos synced"
+fi
