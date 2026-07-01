@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Sync all non-archived, non-fork repos from personal and work GitHub accounts.
+# Sync all source (non-fork) repos, INCLUDING archived, from personal and work
+# GitHub accounts. Archived repos are kept because this is a backup/DR mirror:
+# they're frozen and are exactly the ones you might later delete from GitHub.
 # Fine-grained PATs are per-resource-owner, so each owner needs its own token:
 #   - kylelundstedt, USAA  -> gh's Home token (gh auth token)
 #   - IndustryVault, iv-cmg -> per-org PATs in the macOS login Keychain
@@ -108,7 +110,6 @@ sync_repos() {
     local listing
     listing=$(GH_TOKEN="$tok" gh repo list "$owner" \
         --limit 1000 \
-        --no-archived \
         --source \
         --json name \
         --jq '.[].name' 2>/dev/null) || listing=""
