@@ -1066,6 +1066,17 @@ setup_agents() {
         echo ""
         echo "  Note: 1Password CLI is required at runtime for secret-backed MCP servers."
     fi
+
+    # Session-start auto-refresh reminder (exe.dev VMs only). Each harness runs
+    # ~/.agents/refresh-env.sh at session start to keep ~/dotfiles current (see
+    # README "Session-start auto-refresh"). Codex gates hooks behind a one-time
+    # interactive trust; Claude Code and Shelley need no approval.
+    if [ -d /exe.dev ]; then
+        echo ""
+        echo "  Note: agents auto-refresh ~/dotfiles at session start via hooks."
+        echo "        Codex needs a one-time trust per VM: run 'codex', then '/hooks'"
+        echo "        and trust the SessionStart hook. (Claude Code + Shelley: no action.)"
+    fi
 }
 
 # --- setup_tailscale ---
