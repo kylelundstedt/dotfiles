@@ -52,6 +52,19 @@ hc() { [[ -n "$HC_URL" ]] && curl -fsS -m 10 --retry 3 "${HC_URL}${1:-}" "${@:2}
 hc /start
 FAILURES=()
 
+# The archive sources + Photos live on the encrypted external drive, which comes
+# up LOCKED after a reboot. Unlock/mount it from the keychain before syncing.
+# If it still isn't mounted, register a FAILURE so the healthcheck goes red —
+# otherwise the per-source SKIPs below would silently "succeed" with no backup.
+if ! mount | grep -qF "on $EXT ("; then
+    echo "external $EXT not mounted; attempting keychain unlock"
+    bash "$HOME/dotfiles/backup/owc8tb-unlock.sh" || true
+fi
+if ! mount | grep -qF "on $EXT ("; then
+    echo "external $EXT STILL not mounted after unlock attempt — archive sources unavailable"
+    FAILURES+=("external-drive-unmounted")
+fi
+
 export RCLONE_CONFIG_TIGRIS_TYPE=s3 RCLONE_CONFIG_TIGRIS_PROVIDER=Other
 export RCLONE_CONFIG_TIGRIS_ACCESS_KEY_ID="$tid" RCLONE_CONFIG_TIGRIS_SECRET_ACCESS_KEY="$tsec"
 export RCLONE_CONFIG_TIGRIS_ENDPOINT=https://t3.storage.dev RCLONE_CONFIG_TIGRIS_REGION=auto RCLONE_CONFIG_TIGRIS_ACL=private

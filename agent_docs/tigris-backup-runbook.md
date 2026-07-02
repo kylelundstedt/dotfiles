@@ -7,14 +7,14 @@ backup is worthless if you can't decrypt it. Keep the credentials below in
 
 ## What's backed up
 
-| Source | Tigris bucket | Prefix | Tier |
-| --- | --- | --- | --- |
-| `~/` (minus excludes) | `klundstedt-mini-backup` | `home/` | IA |
-| External Photos library (`/Volumes/OWC8TB/Photos Library.photoslibrary`) | `klundstedt-mini-backup` | `photos/` | IA |
-| `/Volumes/OWC8TB/aws_s3_backup` | `klundstedt-mini-archive` | `aws-s3/` | GLACIER_IR |
-| `/Volumes/OWC8TB/Box_Download_2025-01-12` | `klundstedt-mini-archive` | `box/` | GLACIER_IR |
-| `/Volumes/OWC8TB/iPhoneBackup` | `klundstedt-mini-archive` | `iphone-backup/` | GLACIER_IR |
-| `/Volumes/OWC8TB/messages-store` | `klundstedt-mini-archive` | `messages-store/` | GLACIER_IR |
+| Source                                                                   | Tigris bucket             | Prefix            | Tier       |
+| ------------------------------------------------------------------------ | ------------------------- | ----------------- | ---------- |
+| `~/` (minus excludes)                                                    | `klundstedt-mini-backup`  | `home/`           | IA         |
+| External Photos library (`/Volumes/OWC8TB/Photos Library.photoslibrary`) | `klundstedt-mini-backup`  | `photos/`         | IA         |
+| `/Volumes/OWC8TB/aws_s3_backup`                                          | `klundstedt-mini-archive` | `aws-s3/`         | GLACIER_IR |
+| `/Volumes/OWC8TB/Box_Download_2025-01-12`                                | `klundstedt-mini-archive` | `box/`            | GLACIER_IR |
+| `/Volumes/OWC8TB/iPhoneBackup`                                           | `klundstedt-mini-archive` | `iphone-backup/`  | GLACIER_IR |
+| `/Volumes/OWC8TB/messages-store`                                         | `klundstedt-mini-archive` | `messages-store/` | GLACIER_IR |
 
 - Both buckets: **private, multi-region USA**, with **soft-delete (30-day
   retention)** — deleted/overwritten objects are recoverable for 30 days
@@ -32,11 +32,11 @@ backup is worthless if you can't decrypt it. Keep the credentials below in
 
 ## Credentials (all in 1Password, `industryvault` account)
 
-| Purpose | 1Password item (vault) | Fields |
-| --- | --- | --- |
-| Crypt password (decrypts everything — **critical**) | `Tigris mini-backup rclone crypt` (Personal) | `password`, `salt` |
-| Dedicated rclone key (Editor on both buckets) | `Tigris mini-backup rclone key` (Personal) | `access_key_id`, `password` (=secret) |
-| Tigris admin (create buckets/keys) | `Tigris - klundstedt Work` (Personal) | `access_key_id`, `secret_access_key`, `endpoint_url` |
+| Purpose                                             | 1Password item (vault)                       | Fields                                               |
+| --------------------------------------------------- | -------------------------------------------- | ---------------------------------------------------- |
+| Crypt password (decrypts everything — **critical**) | `Tigris mini-backup rclone crypt` (Personal) | `password`, `salt`                                   |
+| Dedicated rclone key (Editor on both buckets)       | `Tigris mini-backup rclone key` (Personal)   | `access_key_id`, `password` (=secret)                |
+| Tigris admin (create buckets/keys)                  | `Tigris - klundstedt Work` (Personal)        | `access_key_id`, `secret_access_key`, `endpoint_url` |
 
 On the mini these are mirrored into the **login Keychain** for the unattended
 job: `tigris-backup:crypt-password`, `tigris-backup:crypt-salt`,
@@ -82,7 +82,7 @@ rclone copy arch:box    ~/restore/box    --progress
 
 - **Archive tier = GLACIER_IR (instant retrieval)**: `arch:*` objects download
   directly, same as `bkup:` — no thaw step. (History: they were briefly plain
-  GLACIER, which is *frozen* — a restore drill caught it failing to GET — so they
+  GLACIER, which is _frozen_ — a restore drill caught it failing to GET — so they
   were re-tiered to GLACIER_IR via `--s3-storage-class GLACIER_IR`. Same $0.004/GB
   storage; a small $0.03/GB fee applies only when you actually restore.)
 - **Recover a deleted/overwritten object (soft-delete, 30-day window)**: both
@@ -94,6 +94,7 @@ rclone copy arch:box    ~/restore/box    --progress
 ## Verify integrity / restore drill
 
 Spot-check one prefix:
+
 ```bash
 rclone cryptcheck ~/Documents bkup:home/Documents --one-way --fast-list --exclude ".DS_Store"
 ```
@@ -101,9 +102,11 @@ rclone cryptcheck ~/Documents bkup:home/Documents --one-way --fast-list --exclud
 Periodically (e.g. quarterly) run the full **restore drill** — it restores a
 sample to a temp dir, verifies it decrypts and matches the source, and probes a
 GLACIER fetch, then cleans up:
+
 ```bash
 backup/restore-drill.sh
 ```
+
 Last run: IA restore + decrypt + cryptcheck **PASS**. Archive was re-tiered to
 GLACIER_IR (directly retrievable) — re-run the drill after the re-tier completes
 to confirm the archive fetch now PASSes too.
@@ -122,6 +125,32 @@ to confirm the archive fetch now PASSes too.
   on full success** (a failed phase does not mark the run successful).
 - Logs: `~/Library/Logs/tigris-backup/<date>.log` (30-day retention; the launchd
   `/tmp/tigris-backup.log` is just the latest and is wiped on reboot).
+
+## Encrypted external drive (OWC8TB)
+
+The external drive (`/Volumes/OWC8TB`) holds the archive sources (`aws_s3_backup`,
+`iPhoneBackup`, `messages-store`, `Box_Download`) and the Photos library. It is
+**encrypted in place with APFS** (FileVault-style), so a stolen/lost/RMA'd drive
+is unreadable. The mini's internal disk is FileVault-encrypted, so keeping the
+passphrase there preserves "stolen external drive alone = undecryptable."
+
+- **Passphrase:** 1Password `OWC8TB disk encryption` (Personal, `password` field) —
+  the authoritative recovery copy. Mirrored to the login Keychain
+  (`security add-generic-password -s owc8tb-encryption`) for unattended unlock.
+  Volume UUID `704B89D9-5896-4368-B518-D8CBD7EB4A15`.
+- **Auto-unlock:** launchd agent `com.kylelundstedt.owc8tb-unlock` (RunAtLoad +
+  hourly) runs `backup/owc8tb-unlock.sh`, which unlocks/mounts the drive from the
+  Keychain after a reboot. The nightly also self-heals (calls the unlock script)
+  and, if the drive still isn't mounted, registers a **failure** so the
+  healthcheck goes red — an unmounted drive never silently "succeeds" with no
+  archive backup.
+- **Recovery (internal disk dead / another Mac):** get the passphrase from
+  1Password, then `printf %s '<pass>' | diskutil apfs unlockVolume
+704B89D9-5896-4368-B518-D8CBD7EB4A15 -stdinpassphrase`. Losing the passphrase
+  does **not** lose the data — it's also in Tigris under a _different_ crypt key
+  (`Tigris mini-backup rclone crypt`); restore from there.
+- `install.sh` re-provisions the `owc8tb-encryption` Keychain item from 1Password
+  on the mini (alongside the `tigris-backup:*` items).
 
 ## Monitoring (dead-man's-switch)
 

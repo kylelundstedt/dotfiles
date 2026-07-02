@@ -947,6 +947,13 @@ setup_agents() {
                     [[ -n "$tb_csalt"  ]] && security add-generic-password -a "$USER" -s "tigris-backup:crypt-salt"     -T /usr/bin/security -U -w "$tb_csalt"  2>/dev/null && tb_n=$((tb_n+1)) || true
                     [[ -n "$tb_hc"     ]] && security add-generic-password -a "$USER" -s "tigris-backup:healthcheck-url" -T /usr/bin/security -U -w "$tb_hc"    2>/dev/null && tb_n=$((tb_n+1)) || true
                     [[ "$tb_n" -gt 0 ]] && echo "  [+] tigris-backup creds → Keychain ($tb_n/5)"
+                    # Encrypted external drive (OWC8TB) passphrase — used by
+                    # owc8tb-unlock.sh to auto-mount the drive after a reboot so
+                    # the nightly can read the archive sources + Photos library.
+                    local owc_pw
+                    owc_pw=$(op read "op://Personal/OWC8TB disk encryption/password" --account "$tb_acc" 2>/dev/null) || true
+                    [[ -n "$owc_pw" ]] && security add-generic-password -a "$USER" -s "owc8tb-encryption" -T /usr/bin/security -U -w "$owc_pw" 2>/dev/null \
+                        && echo "  [+] OWC8TB disk passphrase → Keychain" || true
                     # sync-repos dead-man's-switch ping URL (mini-only heartbeat)
                     local sr_hc
                     sr_hc=$(op read "op://Personal/sync-repos-healthcheck/password" --account "$tb_acc" 2>/dev/null) || true
