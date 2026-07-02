@@ -120,9 +120,10 @@ to confirm the archive fetch now PASSes too.
   of: home, photos (→ backup bucket) and aws-s3, box, iphone-backup,
   messages-store (→ archive bucket). Recovery is via bucket soft-delete (30 days),
   not snapshots.
-- Guards: skip if external drive unmounted, skip if another rclone is running,
-  `--max-delete 5000` backstop, lock + 20h staleness. `lastrun` is written **only
-  on full success** (a failed phase does not mark the run successful).
+- Guards: unlock/mount the external drive (fail the run if it can't — see below),
+  skip if another rclone is running, `--max-delete 5000` backstop, lock + 20h
+  staleness. `lastrun` is written **only on full success** (a failed phase does
+  not mark the run successful).
 - Logs: `~/Library/Logs/tigris-backup/<date>.log` (30-day retention; the launchd
   `/tmp/tigris-backup.log` is just the latest and is wiped on reboot).
 
