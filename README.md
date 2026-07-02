@@ -10,7 +10,7 @@ One command to set up a fully configured development environment on macOS or Lin
 
 **Modern CLI replacements** — `cat` → [bat](https://github.com/sharkdp/bat), `grep` → [ripgrep](https://github.com/BurntSushi/ripgrep), `cd` → [zoxide](https://github.com/ajeetdsouza/zoxide)
 
-**Dev tools** — Git with 1Password SSH signing, AWS CLI v2, DuckDB, Python via [uv](https://docs.astral.sh/uv/)
+**Dev tools** — Git with 1Password SSH signing, Tigris CLI for object storage, DuckDB, Python via [uv](https://docs.astral.sh/uv/)
 
 **Remote development** — Primary platform is [exe.dev](https://exe.dev) with a custom image (`iv-image`) that bakes in team agent config, MCP servers, and skills. Personal dotfiles (`install.sh`) layer on top for shell, CLI tools, and personal MCP servers. Zed's [remote development](https://zed.dev/docs/remote-development) connects over SSH. Tailscale provides stable hostnames, and SSH agent forwarding from the Mac's 1Password agent enables git clone/push and commit signing — no tokens needed on the VMs.
 
@@ -62,7 +62,7 @@ Configuration is managed with [GNU Stow](http://www.gnu.org/software/stow/), whi
 | `1Password/`      | 1Password SSH agent config                                                                                                 | `~/.config/1Password/`                | macOS    |
 | `agents/`         | Agent infrastructure — `AGENTS.md`, Claude/Codex symlinks, skills, MCP wrappers, Claude Code settings                      | `~/`                                  | Both     |
 | `agent_docs/`     | Reference docs for this repo — agent setup plans, platform notes, secret management                                        | N/A (not stowed)                      | Both     |
-| `aws/`            | AWS CLI configuration                                                                                                      | `~/.aws/`                             | Linux    |
+| `aws/`            | Optional AWS CLI configuration, only useful if you install/use AWS CLI separately                                          | `~/.aws/`                             | Linux    |
 | `ghostty/`        | Ghostty terminal configuration                                                                                             | `~/.config/ghostty/`                  | macOS    |
 | `git/`            | Git configuration with OS-specific includes                                                                                | `~/`                                  | Both     |
 | `homebrew/`       | Brewfile for macOS casks and Mac App Store apps                                                                            | `~/`                                  | macOS    |
@@ -140,7 +140,7 @@ Invoke a skill by typing `/skill-name` in Claude Code or Codex (e.g. `/join-tail
 **Customize local configs** (gitignored, won't be committed):
 
 - **Git**: edit `~/dotfiles/git/.gitconfig_local` (gitignored personal name/email)
-- **AWS**: `~/dotfiles/aws/.aws/config` — update SSO URLs, account IDs, regions
+- **AWS (optional)**: `~/dotfiles/aws/.aws/config` — update SSO URLs, account IDs, regions if you use AWS CLI separately
 - **SSH**: `~/dotfiles/ssh/.ssh/config` — add your hosts
 
 **Reload after changes:**
