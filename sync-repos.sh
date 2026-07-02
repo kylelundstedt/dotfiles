@@ -24,13 +24,21 @@ GITHUB_DIR="$HOME/github"
 SKIP_REPOS="dotfiles"  # managed separately at ~/dotfiles
 FAILED=0; FAILED_REPOS=()  # hard failures — used to fail the healthcheck honestly
 
-# Skip if last successful run was recent
+# Dead-man's-switch heartbeat (healthchecks.io). Ping URL in the login Keychain
+# (sync-repos:healthcheck-url) — mini-only, no-op if absent. Defined up here so the
+# staleness skip below can ALSO ping success: a skip means "a sync ran recently
+# enough" (fresh data), which is success for the monitor — not a missed run. Two
+# schedules (midnight + 12h wakeup) plus ad-hoc manual runs mean skips are normal;
+# without this ping the grace window expires and the check false-alarms red.
+hc() { local u; u=$(security find-generic-password -s "sync-repos:healthcheck-url" -w 2>/dev/null); [ -n "$u" ] && curl -fsS -m 10 --retry 3 "${u}${1:-}" "${@:2}" >/dev/null 2>&1 || true; }
+
+# Skip if last successful run was recent — still ping success (data is fresh).
 if [[ -f "$LAST_RUN_FILE" ]]; then
     last_run=$(cat "$LAST_RUN_FILE")
     now=$(date +%s)
     if (( now - last_run < MIN_INTERVAL )); then
         echo "Last sync was $(( (now - last_run) / 3600 ))h ago, skipping."
-        exit 0
+        hc; exit 0
     fi
 fi
 
@@ -45,11 +53,8 @@ fi
 ASKPASS="$(mktemp -t sync-repos-askpass)"
 printf '#!/bin/sh\nprintf "%%s" "$SYNC_REPOS_TOKEN"\n' > "$ASKPASS"
 chmod +x "$ASKPASS"
-# Dead-man's-switch heartbeat (healthchecks.io). Ping URL in the login Keychain
-# (sync-repos:healthcheck-url) — provisioned only on klundstedt-mini, so other
-# machines (and Linux, where `security` doesn't exist) run unmonitored. No-op if
-# the URL is absent. /start at begin, success on clean exit, /fail otherwise.
-hc() { local u; u=$(security find-generic-password -s "sync-repos:healthcheck-url" -w 2>/dev/null); [ -n "$u" ] && curl -fsS -m 10 --retry 3 "${u}${1:-}" "${@:2}" >/dev/null 2>&1 || true; }
+# (hc heartbeat helper is defined near the top so the staleness skip can use it.)
+# /start at begin, success on clean exit, /fail otherwise.
 # Success ONLY on a clean exit with zero failed repos — a partial failure (or a
 # mid-run set -e abort) pings /fail with a summary so the check goes red honestly.
 finish() {
