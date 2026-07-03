@@ -45,6 +45,7 @@ Durable agent memory lives in this repo as committed files, not in any harness's
 | `starship/`       | Starship prompt configuration                                                                            |
 | `vscode/`         | VS Code settings and extensions (macOS)                                                                  |
 | `sync-repos.sh`   | Clones/fetches all GitHub repos for personal and work accounts                                           |
+| `provisioning/`   | Declarative manifests (skills, MCP, tools) + drift check vs install.sh and iv-image (not stowed)         |
 | `personal-mcp/`   | Personal MCP server + data ingest (msgvault, calendar, Reader/web → unified hub) — klundstedt-mini only  |
 | `backup/`         | Encrypted Tigris backup of home + external data (`tigris-backup.sh` + excludes) — klundstedt-mini only   |
 | `test-install.sh` | Tests install.sh across Apple Container, Sprite, and exe.dev                                             |
