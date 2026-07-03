@@ -1,0 +1,62 @@
+# CLI tools manifest — declares the intended per-layer tool set. Versions and
+# install mechanisms stay with each installer on purpose (iv-image pins for
+# team reproducibility; dotfiles floats at latest) — this file is only the
+# "what", not the "how".
+#
+# Columns (whitespace-separated):
+#   layer  base | team | personal
+#   tool   command name on PATH
+#
+# Layers:
+#   base      provided by the stock exeuntu image on exe.dev VMs. Informational
+#             — exeuntu is exe.dev-managed and can't be checked from here.
+#             install.sh may still install these (need-guarded) for macOS and
+#             non-exeuntu hosts.
+#   team      pinned and installed by iv-image provision-iv.sh on VMs.
+#             install.sh also installs duckdb/quarto/tigris (floating) so
+#             macOS gets them — a known, intentional overlap.
+#   personal  dotfiles-only: installed by install.sh, absent from iv-image.
+#
+# Consumers: none yet (installers are still imperative); checked by
+# diff-provisioning.sh (team ⊆ provision-iv.sh, personal ⊆ install.sh,
+# personal ∩ provision-iv.sh = ∅).
+
+# exeuntu-provided (asserted in-repo: jq per iv-image setup-mcp.sh; git/curl
+# required by provision-iv.sh before it installs anything)
+base git
+base curl
+base jq
+
+# iv-image layer (provision-iv.sh)
+team duckdb
+team quarto
+team aws
+team tigris
+team rclone
+team render-site
+team provision-docsite
+team gen-llms-txt
+team install-cloud-cli
+
+# personal layer (install.sh)
+personal stow
+personal zsh
+personal starship
+personal uv
+personal atuin
+personal direnv
+personal zoxide
+personal archil
+personal fnm
+personal node
+personal bat
+personal fzf
+personal rg
+personal yq
+personal gh
+personal carapace
+personal cship
+personal snow
+personal claude
+personal codex
+personal op
