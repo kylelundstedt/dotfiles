@@ -15,8 +15,18 @@ set for Linux + macOS claude, codex, and both skills paths);
 `diff-provisioning.sh` install.sh-side checks flipped to "reads the manifest,
 hardcodes nothing". **Caveat:** the plan's real-run verify on klundstedt-mbp
 is still pending — do a `./install.sh` there before trusting a fresh-machine
-path. Next: U5 (needs this pushed, pinned SHA), then U8 → U9 → U10 → U6 →
-U7 → U11.
+path.
+
+**U5 implemented — PR open: kylelundstedt/iv-image#1** (decision at
+execution: MCP servers are baked at _vendor_ time into a generated
+`agent/mcp-servers.json`, like skills — provisioning stays no-network;
+`dotfiles-manifest.pin` = `d8e3c4d`). Re-vendored: identical 35-skill set +
+2 MCP servers. `diff-provisioning.sh` is dual-mode (auto-detects pre/post-U5
+iv-image clones, including a pin-lag check on team rows). **Gotcha fixed
+en route (`3d4cebb`):** manifest read-loops must feed on fd 9 — npx eats
+stdin and silently dropped 34 of 35 rows; install.sh had the same bug in all
+four U3 loops. **Pending:** throwaway-VM provision check (PR checklist),
+then merge → U8 → U9 → U10 → U6 → U7 → U11.
 
 Unplanned fix (2026-07-05): multi-day healthcheck flapping on sync-repos +
 tigris-backup diagnosed and fixed (`ab1d21e`) — gitconfig_macos SSH rewrite
