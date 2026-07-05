@@ -26,8 +26,9 @@ FAILED=0; FAILED_REPOS=()  # hard failures — used to fail the healthcheck hone
 
 # Dead-man's-switch heartbeat (healthchecks.io). Ping URL in the login Keychain
 # (sync-repos:healthcheck-url) — mini-only, no-op if absent. Defined up here so the
-# staleness skip below can ALSO ping success: a skip means "a sync ran recently
-# enough" (fresh data), which is success for the monitor — not a missed run. Two
+# staleness skip below can ALSO ping success: lastrun is only written on a clean
+# run, so a skip means "a sync SUCCEEDED recently enough" (fresh data), which is
+# success for the monitor — not a missed run. Two
 # schedules (midnight + 12h wakeup) plus ad-hoc manual runs mean skips are normal;
 # without this ping the grace window expires and the check false-alarms red.
 hc() { local u; u=$(security find-generic-password -s "sync-repos:healthcheck-url" -w 2>/dev/null); [ -n "$u" ] && curl -fsS -m 10 --retry 3 "${u}${1:-}" "${@:2}" >/dev/null 2>&1 || true; }
@@ -83,10 +84,16 @@ token_for() {
 # git@github.com SSH op fails ("communication with agent failed"). insteadOf
 # rewrites SSH (and bare-HTTPS) remotes to a tokened HTTPS URL at transport time,
 # so existing repos (SSH origin) and USAA (SSH key not SSO-authorized) all work.
+# The owner-qualified rules are load-bearing: the stowed ~/.gitconfig_macos has
+# url.git@github.com:.insteadOf=https://github.com/ (SSH via 1Password for
+# interactive use), and when both rules match an https origin with equal prefix
+# length, the file rule beats -c — silently flipping https-form origins back to
+# SSH (the 2026-07 healthcheck flapping). The owner-qualified base is a strictly
+# longer match, and longest match always wins.
 # The username is embedded (x-access-token@) so git only prompts for the password,
 # which GIT_ASKPASS supplies from $SYNC_REPOS_TOKEN.
-git_https() { # tok git-args...
-    local tok="$1"; shift
+git_https() { # tok owner git-args...
+    local tok="$1" owner="$2"; shift 2
     # credential.helper= (empty) resets the helper list so git does NOT consult
     # the osxkeychain helper (which pops a GUI keychain-unlock prompt that would
     # hang the unattended job) — the token comes straight from GIT_ASKPASS.
@@ -94,6 +101,8 @@ git_https() { # tok git-args...
         git -c "credential.helper=" \
             -c "url.https://x-access-token@github.com/.insteadOf=git@github.com:" \
             -c "url.https://x-access-token@github.com/.insteadOf=https://github.com/" \
+            -c "url.https://x-access-token@github.com/$owner/.insteadOf=git@github.com:$owner/" \
+            -c "url.https://x-access-token@github.com/$owner/.insteadOf=https://github.com/$owner/" \
             "$@"
 }
 
@@ -134,7 +143,7 @@ sync_repos() {
         if [ -d "$repo_dir/.git" ]; then
             if git -C "$repo_dir" rev-parse HEAD >/dev/null 2>&1; then
                 echo "  fetch $name"
-                if git_https "$tok" -C "$repo_dir" fetch --all --quiet; then
+                if git_https "$tok" "$owner" -C "$repo_dir" fetch --all --quiet; then
                     # Fast-forward default branch so local HEAD stays current.
                     local default_branch current_branch
                     default_branch=$(git -C "$repo_dir" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||') || default_branch=""
@@ -163,7 +172,7 @@ sync_repos() {
 clone_repo() {
     local owner="$1" name="$2" dir="$3" tok="$4"
     rm -rf "$dir"
-    if ! git_https "$tok" clone --quiet "git@github.com:$owner/$name.git" "$dir"; then
+    if ! git_https "$tok" "$owner" clone --quiet "git@github.com:$owner/$name.git" "$dir"; then
         echo "  WARN: clone failed for $owner/$name"; rm -rf "$dir"
         FAILED=$((FAILED+1)); FAILED_REPOS+=("$owner/$name")
     fi
@@ -174,9 +183,13 @@ sync_repos IndustryVault "$GITHUB_DIR/IndustryVault"
 sync_repos iv-cmg "$GITHUB_DIR/iv-cmg"
 sync_repos USAA "$GITHUB_DIR/USAA"
 
-date +%s > "$LAST_RUN_FILE"
+# Mark lastrun ONLY on a clean run: a failed run must not arm the staleness
+# skip, or the 12h catch-up run skips + pings success over a red check
+# (the 2026-07 up/down flapping). Leaving lastrun stale makes every scheduled
+# run retry in full until one succeeds.
 if [[ "$FAILED" -gt 0 ]]; then
     echo "==> Done $(date) — $FAILED repo(s) FAILED: ${FAILED_REPOS[*]}"
 else
+    date +%s > "$LAST_RUN_FILE"
     echo "==> Done $(date) — all repos synced"
 fi

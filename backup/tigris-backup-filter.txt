@@ -14,6 +14,9 @@
 - **/dist/**
 - **/build/**
 - **/target/**
+# iCloud Drive trash first (first match wins): evicted files in here fail with
+# 'resource deadlock avoided' on read and rc=1 the whole home sync (2026-07-04).
+- /Library/Mobile Documents/.Trash/**
 # Keep iCloud Drive (it lives under ~/Library/Mobile Documents) — real user data
 + /Library/Mobile Documents/**
 # Exclude the rest of ~/Library: app state/caches + the macOS TCC-protected dirs
