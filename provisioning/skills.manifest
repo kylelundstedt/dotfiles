@@ -1,0 +1,31 @@
+# Agent skills manifest — the single declarative source for which skills get
+# installed where. Consumers apply it per platform; this file is only the list.
+#
+# Columns (whitespace-separated; args = everything after method):
+#   layer   team | personal
+#   method  npx  — `npx -y skills add -g -y <args>`
+#           curl — `<name> <url>`: fetch <url> to ~/.agents/skills/<name>/SKILL.md
+#   args    method-specific (see above)
+#
+# Layers:
+#   team      baked into iv-image (vendor-skills.sh vendors these at a pinned
+#             dotfiles commit); dotfiles installs them on macOS only — Linux VMs
+#             get them from the image.
+#   personal  dotfiles-only, installed on every machine by install.sh.
+#
+# Consumers: install.sh setup_agents (macOS: team+personal, Linux: personal);
+# iv-image vendor-skills.sh (team). Checked by diff-provisioning.sh.
+
+team npx matsonj/mviz
+team npx vercel-labs/skills -s find-skills
+team npx duckdb/duckdb-skills
+team npx motherduckdb/agent-skills
+team npx posit-dev/skills -s quarto-authoring brand-yml
+team npx marimo-team/skills -s marimo-notebook marimo-batch
+# archil-guide has no GitHub repo — fetched directly
+team curl archil-guide https://archil.com/skill.md
+
+personal npx tigrisdata/tigris-agents-plugins
+personal npx marimo-team/marimo-pair
+personal npx kylelundstedt/dotfiles -s sprites-dev
+# apple-containers is private — installed locally on macOS only, not listed here

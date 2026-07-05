@@ -6,6 +6,38 @@ the `kylelundstedt/iv-image` derivative image for exe.dev VMs, the new
 **simplify, remove redundancy with iv-image, improve performance** across
 Ubuntu VMs and the two macOS machines (`klundstedt-mini`, `klundstedt-mbp`).
 
+## Status (2026-07-03, unattended first pass — done)
+
+**U1, U2, U4, U12 complete** on branch `plan/low-risk-subset` (one commit per
+unit, not pushed; working checkout returned to master so launchd runs only
+merged code). All self-checks passed. Executed on the mini by Fable 5 —
+**inline, not delegated to the H/S tiers the table assigns** (deviation
+acknowledged; delegate cheap tiers at the resume).
+
+Needs eyes at the supervised resume:
+
+- **U1 / SSH-guard hook:** not present in the mini's live (gitignored)
+  `settings.json` — presumably on the mbp. Example synced with what was
+  verifiable here (model pin, `tui`); add the hook from the mbp's copy.
+- **U12 / expiry dates:** Tailscale auth keys + 3 GitHub PATs are
+  `expires: unknown` in `keys.manifest` (not recorded anywhere in-repo; `op`
+  off-limits unattended). Fill from GitHub settings / Tailscale console.
+- **U12 / warn window:** set to **35d, not the ~14d below** — a monthly check
+  with a 14d window would have missed the Aug 21 Tailscale deadline (Aug 1 run
+  → 20d left → silent). Deliberate deviation.
+- **U12 / rotation runbook:** exact `ssh exe.dev integrations add` flags for
+  the http-proxy re-add aren't documented locally — verify via
+  `ssh exe.dev help` and backfill `secrets.md`.
+- **U4 / scope addition:** `test-install.sh`'s hard TS_AUTHKEY/1Password
+  requirement is now gated to VM-creating modes so the local `provisioning`
+  and `hook` modes run without `op`.
+- The `com.kylelundstedt.check-key-expiry.plist` is created but **not loaded**;
+  it deploys via the normal stow + login path. Its Keychain healthcheck item
+  (`key-expiry:healthcheck-url`) is not provisioned yet (needs `op`).
+
+Next: review + merge the branch, then the supervised-resume sequence below
+(U3 → U5 → U8 → U9 → U10 → U6 → U7 → U11).
+
 ## Core decision
 
 **On exe.dev VMs, personal dotfiles are a _thin personal overlay_ on top of
@@ -40,11 +72,12 @@ already mirrors the `kylelundstedt` org incl. private, so the mini gets it
 automatically, and the gitconfig `includeIf` gives it the personal identity).
 
 Clean responsibility line — **serving vs consuming the hub:**
+
 - New repo owns (serving, mini-only): `mcp/`, ingest scripts, build SQL,
   `_common.sh`, build/refresh LaunchAgents, its READMEs, and a `bootstrap.sh`
   that symlinks its plists into `~/Library/LaunchAgents` + loads them and seeds
   its own Keychain items (`personal-mcp:*-healthcheck-url`).
-- **dotfiles keeps (consuming, all machines):** the `hub-mcp` MCP *client*
+- **dotfiles keeps (consuming, all machines):** the `hub-mcp` MCP _client_
   registration in `install.sh:867-908,1003-1007` (an env-config concern) and
   `tigris-backup.sh` (backup is a dotfiles concern; `~/archives` is the contract
   between the two repos, not the repo boundary).
@@ -61,23 +94,23 @@ the `$HOME/dotfiles/personal-mcp` path strings (`web-archive-refresh.sh:17`,
 only the plists carry the absolute path.
 
 Caveats (honest): mini setup becomes two commands (`dotfiles/install.sh` +
-`personal-mcp/bootstrap.sh`); the split fixes only *go-forward* exposure — the
+`personal-mcp/bootstrap.sh`); the split fixes only _go-forward_ exposure — the
 public dotfiles history still contains the leaked emails/tailnet (already public;
 rewriting it is a separate, low-value call).
 
 ## Core decision 3 — one declarative source for "what gets provisioned"
 
-Both provisioners today declare the *same* things imperatively, so they drift.
+Both provisioners today declare the _same_ things imperatively, so they drift.
 Concrete proof: `install.sh:1049-1057` and iv-image `vendor-skills.sh:18-26`
 share a **byte-identical 6-line skill block** — edit one, forget the other, and
 they silently diverge.
 
 Principle (same as decisions 1 & 2): **separate the "what" (a declarative list)
 from the "how" (per-platform apply), layered `team baseline` + `personal delta`.**
-Don't unify the *installers* — the tool-install recipe (arch/asset patterns, brew
+Don't unify the _installers_ — the tool-install recipe (arch/asset patterns, brew
 vs apt vs release-binary, `~/.local/bin` vs `/usr/local/bin`) is legitimately
 mechanism-specific, and versions stay divergent on purpose (iv-image pins for team
-reproducibility; dotfiles floats). Unify only the *lists*.
+reproducibility; dotfiles floats). Unify only the _lists_.
 
 **Decision: manifests for skills + MCP, plus a tool drift-check; manifests live in
 dotfiles (public — content is non-secret).** New `provisioning/` dir (not stowed):
@@ -87,11 +120,11 @@ dotfiles (public — content is non-secret).** New `provisioning/` dir (not stow
   `team`+`personal`, Linux installs `personal` only (team comes vendored in the
   image). Kills the duplicated block.
 - `provisioning/mcp.manifest` — columns `name layer vm-url mac`
-  (the VM proxy-URL vs Mac direct-URL/`pat:op://…` difference becomes *data*).
+  (the VM proxy-URL vs Mac direct-URL/`pat:op://…` difference becomes _data_).
   `install.sh` applies the `mac` column; iv-image `setup-mcp.sh` applies the
   `vm-url` for `team` rows. (`hub-mcp` stays special — dynamic reachability probe.)
 - `provisioning/tools.manifest` + `provisioning/diff-provisioning.sh` — declares
-  the intended per-layer tool *set* (`base` = exeuntu-provided, `team` = iv-image,
+  the intended per-layer tool _set_ (`base` = exeuntu-provided, `team` = iv-image,
   `personal` = dotfiles-only); the check asserts each installer covers its layer
   and flags divergence. Run in `test-install.sh` / on demand.
 
@@ -99,7 +132,7 @@ dotfiles (public — content is non-secret).** New `provisioning/` dir (not stow
 the raw manifests from the public dotfiles repo **at a pinned commit** (not
 `master`) — so the team image stays reproducible even though dotfiles owns the
 source of truth. This resolves the pin-vs-float tension: dotfiles is the list;
-iv-image pins *which revision* of the list it baked.
+iv-image pins _which revision_ of the list it baked.
 
 This makes the overlay model uniform across every category: **iv-image = team
 baseline; dotfiles = personal delta + (on macOS) applies both.** AGENTS.md
@@ -114,8 +147,9 @@ login Keychain + the exe.dev integration + the MCP configs; the multi-step ritua
 is what makes rotation get deferred.
 
 Decisions:
+
 - **Tailscale: migrate the API key → an OAuth client** — non-expiring, `tag:dev`-scoped,
-  mints auth keys on demand. Eliminates the **2026-08-21** deadline *and* all future
+  mints auth keys on demand. Eliminates the **2026-08-21** deadline _and_ all future
   Tailscale rotations, and can replace the static `iv-internal-dev`/`iv-internal-test`
   auth keys (mint on demand). **Verify at execution** that the exe.dev `tailscale-api`
   integration accepts an OAuth client (not just an API-key bearer); fall back to
@@ -140,7 +174,7 @@ collides on:
 - **Tools** — `duckdb`/`quarto`/`tigris` installed by both (dotfiles `need`-guards mostly no-op these once iv-image's copies are on PATH; the genuine personal delta is `starship, uv, atuin, zoxide, direnv, fnm, bat, fzf, rg, gh, carapace, cship`).
 - **Agent instructions** — `install.sh` stows the **personal** `~/.agents/AGENTS.md` over iv-image's **team** one. The two share ~5 near-identical sections (Code, Data Work, TODO, Skills, exe.dev SSH) maintained in two repos → drift risk. Last writer wins.
 - **MCP** — `install.sh` re-adds `motherduck`/`github-work` that iv-image already seeded, plus personal-only `github-home`/`tigris`/`readwise`.
-- **SSH config** — `install.sh:565` *overwrites the whole `~/.ssh/config`*, wiping iv-image's appended block. Benign today (install.sh's own `Match host *.ts.net … tag:dev` covers VM-to-VM; VMs verified to carry `tag:dev`), but it's two mechanisms for one job.
+- **SSH config** — `install.sh:565` _overwrites the whole `~/.ssh/config`_, wiping iv-image's appended block. Benign today (install.sh's own `Match host *.ts.net … tag:dev` covers VM-to-VM; VMs verified to carry `tag:dev`), but it's two mechanisms for one job.
 - **Skills** — already gated macOS-only (`install.sh:1047-1061`). This is the clean model to extend to the rest of the VM path.
 
 ### 2. personal-mcp internal duplication
@@ -149,7 +183,7 @@ collides on:
 - `web/embed_reader.py` ≈ `calendar-archive/embed_calendar.py` (~90% identical).
 - Shell search wrappers (`hub/search.sh`, `web/search.sh`, `web/semantic.sh`) duplicate the MCP `search`/`semantic_search` tools — pre-MCP tooling, now superseded.
 - Email dedup key implemented 3× (`hub/build_hub.sql:42`, twice in `server.py`).
-- **Latent bug:** hub rebuild is buried in `web-archive-refresh.sh:61`; a Readwise pull failure `exit 1`s at `:36` *before* the rebuild, so a Reader outage silently staleness-blocks email + calendar hub updates. Hub rebuild should be its own failure-isolated step.
+- **Latent bug:** hub rebuild is buried in `web-archive-refresh.sh:61`; a Readwise pull failure `exit 1`s at `:36` _before_ the rebuild, so a Reader outage silently staleness-blocks email + calendar hub updates. Hub rebuild should be its own failure-isolated step.
 
 ### 3. Automation boilerplate
 
@@ -178,10 +212,10 @@ collides on:
    personal tool delta and personal-only MCP servers (`github-home`, `tigris`,
    `readwise`). Extend the skills-gating pattern already at `install.sh:1047`.
    - Pairs with **Core decision 3**: build `provisioning/{skills,mcp,tools}.manifest`
-     + `diff-provisioning.sh` first, then have both `install.sh` and iv-image
-     (`vendor-skills.sh`, `setup-mcp.sh`) consume them. The overlay's skill/MCP
-     gating *is* the manifest `layer` column, so the manifests underpin item 1.
-     Cross-repo: an iv-image change (curl the pinned manifest) ships alongside.
+     - `diff-provisioning.sh` first, then have both `install.sh` and iv-image
+       (`vendor-skills.sh`, `setup-mcp.sh`) consume them. The overlay's skill/MCP
+       gating _is_ the manifest `layer` column, so the manifests underpin item 1.
+       Cross-repo: an iv-image change (curl the pinned manifest) ships alongside.
    - **AGENTS.md reconciliation — decided: (c).** De-dup the shared ~5 sections
      into the iv-image team `AGENTS.md` (the baseline); the personal dotfiles
      `AGENTS.md` keeps only its true deltas (personal tone/prefs, personal skills,
@@ -190,20 +224,21 @@ collides on:
      delta; on macOS dotfiles supplies both. Same `provisioning/`-owned,
      iv-image-pins-the-ref pattern as decision 3.
 2. **Split `personal-mcp` to its own private repo** (Core decision 2) — do this
-   *before* its de-dup so the file moves are a clean `git mv`, not a rebase over
+   _before_ its de-dup so the file moves are a clean `git mv`, not a rebase over
    refactors.
 3. **De-dup `personal-mcp` (in the new repo):** `lib/embed.py`; hub CLI
    consolidation; hub-rebuild as its own failure-isolated job; reschedule cascade.
 4. **Extract `backup/_lib.sh`** (staleness/lock/healthcheck/Keychain) shared by
    `tigris-backup.sh` + `sync-repos.sh` + `restore-drill.sh`; stagger to 04:30.
    Stays in dotfiles; independent of the split.
-5. **Docs/config cleanup:** delete `snowflake-auth-policy.md` + `agent-shell-eval.md`
-   (and their index/TODO rows); add the Memory restatement to root `AGENTS.md`; sync
-   `settings.json.example`.
-6. **API key management** (Core decision 4): Tailscale API-key → OAuth client;
-   `secrets.md` credential inventory/runbook; monthly expiry-alarm launchd check.
-   Largely independent of the boundary/split work; the OAuth migration retires the
-   time-sensitive 2026-08-21 rotation.
+5. **Docs/config cleanup — ✅ done (U1):** delete `snowflake-auth-policy.md` +
+   `agent-shell-eval.md` (and their index/TODO rows); add the Memory restatement
+   to root `AGENTS.md`; sync `settings.json.example` (SSH-guard hook still
+   pending — see Status).
+6. **API key management** (Core decision 4): runbook + expiry alarm **✅ done
+   (U12)**; Tailscale API-key → OAuth client (U11) still open and retires the
+   time-sensitive 2026-08-21 rotation. Largely independent of the
+   boundary/split work.
 
 ### Sequencing
 
@@ -221,23 +256,24 @@ Cheap units are delegatable only because each has a self-checkable acceptance
 test; without that, a strong-model review erases the savings. Mechanism (Fable-5
 manual subagents vs the Workflow tool) decided at execution time.
 
-| ID | Unit | Key files | Tier | Deps | Verify (done-when) | Risk |
-| --- | --- | --- | --- | --- | --- | --- |
-| U1 | Docs cleanup | `agent_docs/{snowflake-auth-policy,agent-shell-eval}.md` (del), README, `TODO.md`, root `AGENTS.md`, `settings.json.example` | H | — | `prettier --check`; no dangling links; example matches live keys | low |
-| U2 | Manifest data files | `provisioning/{skills,mcp,tools}.manifest` (new) | S | — | awk parse smoke-test; row counts == current install set | low |
-| U4 | Drift-check | `provisioning/diff-provisioning.sh`; hook into `test-install.sh` | S | U2 | flags a deliberately-injected drift | low |
-| U12 | API-key runbook + alarm | `agent_docs/secrets.md`, `provisioning/keys.manifest`, `check-key-expiry.sh` + plist | S | — | `check-key-expiry.sh` dry-run warns <14d | low |
-| U10 | `backup/_lib.sh` | `backup/_lib.sh` (new), `tigris-backup.sh`, `sync-repos.sh`, `restore-drill.sh`, merge 2 sync plists | ★ | — | `restore-drill.sh` + one manual `tigris-backup` run **(mini)**; behavior byte-identical | high |
-| U3 | Manifest consumers (dotfiles) | `install.sh` skills+MCP sections | ★ | U2 | `--dry-run` + real run on mbp: skills/MCP set unchanged; `test-install.sh` | med |
-| U5 | Manifest consumers (iv-image) + PR | iv-image `vendor-skills.sh`, `agent/setup-mcp.sh` | ★ | U2 pushed (pinned SHA) | throwaway VM: team skills/MCP present | med |
-| U8 | personal-mcp split | `git filter-repo` → private `kylelundstedt/personal-mcp`; path fixups; `bootstrap.sh`; move 4 plists (+ rebuild-hub) | ★+H | — | fresh clone + bootstrap **(mini)**; plists load; server reachable | high |
-| U9 | personal-mcp de-dup (new repo) | `lib/embed.py` + 4 consumers, one hub `search.sh --semantic`, `hub/rebuild-hub.sh` + ATTACH guard, `_DEDUP_KEY_SQL`, reschedule | S (python/CLI) / ★ (launchd) | U8 | `test_server.py` + manual cascade **(mini)** | med |
-| U6 | AGENTS.md reconciliation (c) | iv-image `agent/AGENTS.md` (absorb shared), dotfiles `agents/.agents/AGENTS.md` (trim to deltas) | ★ | coordinate both repos | read-through: no rule lost | med |
-| U7 | VM overlay | `install.sh` (gate `/exe.dev`; skip iv-owned agent/MCP/SSH; personal delta only) | ★ | U3, U6 | `test-install.sh` exe path on a VM; team baseline intact | med-hi |
-| U11 | Tailscale → OAuth client | OAuth client (tag:dev); `install.sh:1140`, `test-install.sh`, join-tailnet proxy; retire API key + static auth keys | ★ | verify integration accepts OAuth | `join-tailnet` on a fresh VM | med |
+| ID     | Unit                               | Key files                                                                                                                       | Tier                         | Deps                             | Verify (done-when)                                                                      | Risk   |
+| ------ | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- | -------------------------------- | --------------------------------------------------------------------------------------- | ------ |
+| U1 ✅  | Docs cleanup                       | `agent_docs/{snowflake-auth-policy,agent-shell-eval}.md` (del), README, `TODO.md`, root `AGENTS.md`, `settings.json.example`    | H                            | —                                | `prettier --check`; no dangling links; example matches live keys                        | low    |
+| U2 ✅  | Manifest data files                | `provisioning/{skills,mcp,tools}.manifest` (new)                                                                                | S                            | —                                | awk parse smoke-test; row counts == current install set                                 | low    |
+| U4 ✅  | Drift-check                        | `provisioning/diff-provisioning.sh`; hook into `test-install.sh`                                                                | S                            | U2                               | flags a deliberately-injected drift                                                     | low    |
+| U12 ✅ | API-key runbook + alarm            | `agent_docs/secrets.md`, `provisioning/keys.manifest`, `check-key-expiry.sh` + plist                                            | S                            | —                                | `check-key-expiry.sh` dry-run warns <14d                                                | low    |
+| U10    | `backup/_lib.sh`                   | `backup/_lib.sh` (new), `tigris-backup.sh`, `sync-repos.sh`, `restore-drill.sh`, merge 2 sync plists                            | ★                            | —                                | `restore-drill.sh` + one manual `tigris-backup` run **(mini)**; behavior byte-identical | high   |
+| U3     | Manifest consumers (dotfiles)      | `install.sh` skills+MCP sections                                                                                                | ★                            | U2                               | `--dry-run` + real run on mbp: skills/MCP set unchanged; `test-install.sh`              | med    |
+| U5     | Manifest consumers (iv-image) + PR | iv-image `vendor-skills.sh`, `agent/setup-mcp.sh`                                                                               | ★                            | U2 pushed (pinned SHA)           | throwaway VM: team skills/MCP present                                                   | med    |
+| U8     | personal-mcp split                 | `git filter-repo` → private `kylelundstedt/personal-mcp`; path fixups; `bootstrap.sh`; move 4 plists (+ rebuild-hub)            | ★+H                          | —                                | fresh clone + bootstrap **(mini)**; plists load; server reachable                       | high   |
+| U9     | personal-mcp de-dup (new repo)     | `lib/embed.py` + 4 consumers, one hub `search.sh --semantic`, `hub/rebuild-hub.sh` + ATTACH guard, `_DEDUP_KEY_SQL`, reschedule | S (python/CLI) / ★ (launchd) | U8                               | `test_server.py` + manual cascade **(mini)**                                            | med    |
+| U6     | AGENTS.md reconciliation (c)       | iv-image `agent/AGENTS.md` (absorb shared), dotfiles `agents/.agents/AGENTS.md` (trim to deltas)                                | ★                            | coordinate both repos            | read-through: no rule lost                                                              | med    |
+| U7     | VM overlay                         | `install.sh` (gate `/exe.dev`; skip iv-owned agent/MCP/SSH; personal delta only)                                                | ★                            | U3, U6                           | `test-install.sh` exe path on a VM; team baseline intact                                | med-hi |
+| U11    | Tailscale → OAuth client           | OAuth client (tag:dev); `install.sh:1140`, `test-install.sh`, join-tailnet proxy; retire API key + static auth keys             | ★                            | verify integration accepts OAuth | `join-tailnet` on a fresh VM                                                            | med    |
 
-**Fan-out now (independent):** U1, U2, U10, U12. **Then:** U3/U4 after U2; U5 after
-U2 is pushed. **Serialize:** U8 → U9. **Later phase:** U6 → U7. **Anytime:** U11.
+**Done (branch `plan/low-risk-subset`):** U1, U2, U4, U12 — see Status at top.
+**Next:** U10; U3 (U2 is in); U5 after the branch merges + pushes (pinned SHA).
+**Serialize:** U8 → U9. **Later phase:** U6 → U7. **Anytime:** U11.
 
 **Delegatable to cheap models:** U1, U2, U4, U12, and U9's python/CLI half.
 Everything else is destructive, subtle bash, outward-facing, DR-critical, or
@@ -256,9 +292,10 @@ fire-and-forget: the plan has human-in-loop (U8), outward-facing (U5/U6/U11), an
 VM-gated (U3/U5/U7/U11) units, and `op`/1Password is not unlocked in a headless SSH
 session.
 
-### Unattended first pass (operator away — low-risk subset only)
+### Unattended first pass (operator away — low-risk subset only) — ✅ done
 
-Scope: **U1, U2, U4, U12 only.** Protocol:
+Completed 2026-07-03; results and follow-ups in **Status** at the top. Protocol
+was, for the record — scope **U1, U2, U4, U12 only**:
 
 - Work on a branch `plan/low-risk-subset` off master — do **not** commit to master or push.
 - Per unit: make the edits, run its self-check, commit to the branch with a clear message:
@@ -299,6 +336,7 @@ def doc_input(parts): ...     # "search_document: " + " ".join(parts)[:MAXCHARS]
 ```
 
 Consumers to rewire (drop their local copies):
+
 - `mcp/server.py:48-49,110-124` → import for `ENDPOINT`/`MODEL`/`embed_query`; `DIM` replaces the four hardcoded `768` (incl. `::FLOAT[768]` in `_semantic_web`/`_semantic_calendar`). `sys.path` insert to the sibling `lib/`.
 - `web/embed_reader.py:24-41` and `calendar-archive/embed_calendar.py:33-50` → import for `ENDPOINT`/`MODEL`/`BATCH`/`MAXCHARS`/`embed`/`doc_input`. **Keep the two drivers separate** (their load/write halves differ: jsonl vs DuckDB); only the config/`embed()` dup is removed, so the web path stays stdlib `python3` (no new uv dep).
 - `web/semantic.sh` → folded into the hub CLI below (deleted).
@@ -316,12 +354,12 @@ Consumers to rewire (drop their local copies):
 
 ### 2d. Reschedule cascade (also fixes the 04:00 backup/refresh collision)
 
-| Job | Now | New |
-| --- | --- | --- |
-| msgvault-sync | 03:00 | 03:00 |
+| Job                 | Now   | New   |
+| ------------------- | ----- | ----- |
+| msgvault-sync       | 03:00 | 03:00 |
 | web-archive-refresh | 04:00 | 03:30 |
-| rebuild-hub (new) | — | 04:00 |
-| tigris-backup | 04:00 | 04:30 |
+| rebuild-hub (new)   | —     | 04:00 |
+| tigris-backup       | 04:00 | 04:30 |
 
 ### 2e. Dedup key (minor, low priority)
 

@@ -1,0 +1,25 @@
+# Credential inventory — machine-readable expiry tracking. The prose runbook
+# (per-key fan-out + exact rotation commands) lives in agent_docs/secrets.md;
+# this file is what check-key-expiry.sh parses.
+#
+# Columns (pipe-separated, fields trimmed):
+#   name     stable identifier
+#   type     credential kind
+#   expires  YYYY-MM-DD | none (non-expiring) | unknown (date not yet recorded
+#            — fill in; the checker lists unknowns but does not alarm on them)
+#   op-ref   1Password item (op://<vault>/<item>[/<field>] @ <account>), or
+#            `-` if the secret is not stored in 1Password
+#   fanout   comma-separated deployment targets (where rotation must propagate)
+#
+# Checked monthly by check-key-expiry.sh (launchd:
+# com.kylelundstedt.check-key-expiry). Update `expires` on every rotation.
+
+tailscale-api-key | tailscale-api-token | 2026-08-21 | - | exe.dev:tailscale-api
+tailscale-authkey-iv-internal-dev | tailscale-auth-key | unknown | op://Employee/Tailscale - iv-internal-dev/credential @ industryvault.1password.com | install.sh:setup_tailscale(macOS), apple-containers skill, sprites-dev skill
+tailscale-authkey-iv-internal-test | tailscale-auth-key | unknown | op://Employee/Tailscale - iv-internal-test/credential @ industryvault.1password.com | test-install.sh
+github-pat-home | github-fine-grained-pat | unknown | op://Private/GitHub PAT Home/token @ lundstedts.1password.com | claude-mcp:github-home(macOS), gh-auth(headless fallback), exe.dev:github-mcp-home
+github-pat-iv | github-fine-grained-pat | unknown | op://Employee/GitHub PAT IV/token @ industryvault.1password.com | claude-mcp:github-work(macOS), keychain:sync-repos:IndustryVault, exe.dev:github-mcp-work
+github-pat-iv-cmg | github-fine-grained-pat | unknown | op://Employee/GitHub PAT IV-CMG/token @ industryvault.1password.com | keychain:sync-repos:iv-cmg
+tigris-backup-rclone-key | s3-access-key | none | op://Personal/Tigris mini-backup rclone key @ industryvault.1password.com | keychain:tigris-backup:s3-key-id,keychain:tigris-backup:s3-secret
+tigris-backup-crypt | rclone-crypt-password+salt | none | op://Personal/Tigris mini-backup rclone crypt @ industryvault.1password.com | keychain:tigris-backup:crypt-password,keychain:tigris-backup:crypt-salt
+owc8tb-passphrase | disk-encryption-passphrase | none | op://Personal/OWC8TB disk encryption/password @ industryvault.1password.com | keychain:owc8tb-encryption

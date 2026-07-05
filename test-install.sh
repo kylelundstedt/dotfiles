@@ -2,17 +2,20 @@
 # Test install.sh across VM backends.
 # exe.dev is the primary platform; Apple Container and Sprite paths are
 # back-burnered but kept for occasional validation.
-# Usage: ./test-install.sh [container|sprite|exe|all]
-#   container — Apple Container (back-burnered, kept for validation)
-#   sprite    — Fly.io Sprite (back-burnered, kept for validation)
-#   exe       — exe.dev VM (primary platform)
-#   all       — all backends (default)
+# Usage: ./test-install.sh [container|sprite|exe|hook|provisioning|all]
+#   container    — Apple Container (back-burnered, kept for validation)
+#   sprite       — Fly.io Sprite (back-burnered, kept for validation)
+#   exe          — exe.dev VM (primary platform)
+#   hook         — exe.dev setup-script hook smoke check only
+#   provisioning — manifests vs installers drift check (local, no VM)
+#   all          — all backends + local checks (default)
 
 set -euo pipefail
 
 DOTFILES_DIR="$(cd "$(dirname "$0")" && pwd)"
 PASS=0
 FAIL=0
+mode="${1:-all}"
 
 # Resolve GITHUB_TOKEN from gh CLI if not already set (5000 req/hr vs 60)
 if [ -z "${GITHUB_TOKEN:-}" ] && command -v gh >/dev/null 2>&1; then
@@ -22,15 +25,20 @@ if [ -z "${GITHUB_TOKEN:-}" ]; then
     echo "WARNING: No GITHUB_TOKEN — GitHub downloads will hit 60 req/hr rate limit"
 fi
 
-# Resolve TS_AUTHKEY from 1Password if not already set
-if [ -z "${TS_AUTHKEY:-}" ] && command -v op >/dev/null 2>&1; then
-    TS_AUTHKEY="$(op read "op://Employee/Tailscale - iv-internal-test/credential" --account industryvault.1password.com 2>/dev/null || true)"
-fi
-if [ -z "${TS_AUTHKEY:-}" ]; then
-    echo "ERROR: No TS_AUTHKEY — Tailscale auth will fail. Set TS_AUTHKEY or sign in to 1Password."
-    exit 1
-fi
-export TS_AUTHKEY GITHUB_TOKEN
+# Resolve TS_AUTHKEY from 1Password if not already set. Only the VM-creating
+# modes need it — hook/provisioning are local smoke checks.
+case "$mode" in container|sprite|exe|all)
+    if [ -z "${TS_AUTHKEY:-}" ] && command -v op >/dev/null 2>&1; then
+        TS_AUTHKEY="$(op read "op://Employee/Tailscale - iv-internal-test/credential" --account industryvault.1password.com 2>/dev/null || true)"
+    fi
+    if [ -z "${TS_AUTHKEY:-}" ]; then
+        echo "ERROR: No TS_AUTHKEY — Tailscale auth will fail. Set TS_AUTHKEY or sign in to 1Password."
+        exit 1
+    fi
+    export TS_AUTHKEY
+    ;;
+esac
+export GITHUB_TOKEN
 log_pass() { echo "  PASS: $1"; PASS=$((PASS + 1)); }
 log_fail() { echo "  FAIL: $1"; FAIL=$((FAIL + 1)); }
 
@@ -276,15 +284,29 @@ test_no_hook() {
     fi
 }
 
+# --- Provisioning drift check (local, no VM) ---
+# Manifests in provisioning/ declare the intended skill/MCP/tool sets;
+# diff-provisioning.sh flags divergence from install.sh and the iv-image
+# installers (when the iv-image clone is present).
+test_provisioning() {
+    echo ""
+    echo "=== Provisioning manifests vs installers (local) ==="
+    if "$DOTFILES_DIR/provisioning/diff-provisioning.sh" > /tmp/diff-provisioning.out 2>&1; then
+        log_pass "manifests match installers (diff-provisioning.sh)"
+    else
+        log_fail "provisioning drift found — see /tmp/diff-provisioning.out"
+    fi
+}
+
 # --- Dispatch ---
-mode="${1:-all}"
 case "$mode" in
-    container) test_container ;;
-    sprite)    test_sprite ;;
-    exe)       test_no_hook; test_exe ;;
-    all)       test_no_hook; test_container; test_sprite; test_exe ;;
-    hook)      test_no_hook ;;
-    *)         echo "Usage: $0 [container|sprite|exe|hook|all]"; exit 1 ;;
+    container)    test_container ;;
+    sprite)       test_sprite ;;
+    exe)          test_no_hook; test_exe ;;
+    all)          test_provisioning; test_no_hook; test_container; test_sprite; test_exe ;;
+    hook)         test_no_hook ;;
+    provisioning) test_provisioning ;;
+    *)            echo "Usage: $0 [container|sprite|exe|hook|provisioning|all]"; exit 1 ;;
 esac
 
 TOTAL=$((PASS + FAIL))
