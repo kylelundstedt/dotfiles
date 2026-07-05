@@ -776,6 +776,9 @@ run_stow() {
 # --- provisioning manifest helpers ---
 # The skill/MCP sets are declared in provisioning/*.manifest (single source of
 # truth shared with iv-image — see agent_docs/simplification-plan.md, decision 3).
+# Manifest read-loops feed on fd 9 (read -u 9 ... done 9< <(...)), NOT stdin:
+# child commands (npx/claude/codex/op) read stdin and silently eat the
+# remaining rows otherwise.
 manifest_rows() { grep -vE '^[[:space:]]*#|^[[:space:]]*$' "$1"; }
 # Trim leading/trailing whitespace from a pipe-manifest field.
 mtrim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; printf '%s' "${s%"${s##*[![:space:]]}"}"; }
@@ -905,16 +908,16 @@ setup_agents() {
         if [[ ! -f "$mcp_manifest" ]]; then
             echo "  [!] $mcp_manifest missing — skipping MCP registration"
         elif [[ "$OS" == "linux" ]]; then
-            while IFS='|' read -r m_name m_layer m_vm m_mac; do
+            while IFS='|' read -u 9 -r m_name m_layer m_vm m_mac; do
                 m_name=$(mtrim "$m_name"); m_vm=$(mtrim "$m_vm")
                 [[ -z "$m_name" || -z "$m_vm" || "$m_vm" == "-" ]] && continue
                 claude mcp add --transport http --scope user "$m_name" "$m_vm" >/dev/null 2>&1 || true
                 m_n=$((m_n+1))
-            done < <(manifest_rows "$mcp_manifest")
+            done 9< <(manifest_rows "$mcp_manifest")
             echo "  [+] MCP servers ($m_n registered from mcp.manifest)"
         else
             # macOS: direct/OAuth URLs; pat: rows need 1Password
-            while IFS='|' read -r m_name m_layer m_vm m_mac; do
+            while IFS='|' read -u 9 -r m_name m_layer m_vm m_mac; do
                 m_name=$(mtrim "$m_name"); m_mac=$(mtrim "$m_mac")
                 [[ -z "$m_name" || -z "$m_mac" ]] && continue
                 if [[ "$m_mac" == pat:* ]]; then
@@ -930,7 +933,7 @@ setup_agents() {
                 else
                     claude mcp add --transport http --scope user "$m_name" "$m_mac" >/dev/null 2>&1 || true
                 fi
-            done < <(manifest_rows "$mcp_manifest")
+            done 9< <(manifest_rows "$mcp_manifest")
             if [[ -n "$hub_url" ]]; then
                 claude mcp add --transport http --scope user hub-mcp "$hub_url" >/dev/null 2>&1 \
                     && echo "  [+] hub-mcp ($hub_url)" || true
@@ -1010,7 +1013,7 @@ setup_agents() {
         # just a TTY. Linux VMs defer Codex MCP (like the Codex GitHub servers below).
         if [[ "$IS_INTERACTIVE" == true && "$OS" == "macos" && -f "$mcp_manifest" ]]; then
             local c_name c_layer c_vm c_mac
-            while IFS='|' read -r c_name c_layer c_vm c_mac; do
+            while IFS='|' read -u 9 -r c_name c_layer c_vm c_mac; do
                 c_name=$(mtrim "$c_name"); c_mac=$(mtrim "$c_mac")
                 [[ -z "$c_name" || -z "$c_mac" || "$c_mac" == pat:* ]] && continue
                 if codex mcp get "$c_name" >/dev/null 2>&1; then
@@ -1020,7 +1023,7 @@ setup_agents() {
                         && echo "  [+] codex mcp: $c_name" \
                         || echo "  [!] codex mcp add $c_name failed"
                 fi
-            done < <(manifest_rows "$mcp_manifest")
+            done 9< <(manifest_rows "$mcp_manifest")
         else
             echo "  Skipping Codex MCP servers (OAuth needs a local browser)"
         fi
@@ -1075,7 +1078,7 @@ setup_agents() {
     if command -v npx >/dev/null 2>&1 && [[ -f "$skills_manifest" ]]; then
         echo "  Installing agent skills (skills.manifest)..."
         local s_layer s_method s_args s_name s_url
-        while read -r s_layer s_method s_args; do
+        while read -u 9 -r s_layer s_method s_args; do
             [[ "$s_layer" == "team" && "$OS" != "macos" ]] && continue
             case "$s_method" in
                 npx)
@@ -1094,7 +1097,7 @@ setup_agents() {
                     ;;
                 *)  echo "  [!] skills.manifest: unknown method '$s_method' for '$s_args'" ;;
             esac
-        done < <(manifest_rows "$skills_manifest")
+        done 9< <(manifest_rows "$skills_manifest")
         echo "  [+] Skills installed"
     else
         echo "  [!] npx or skills.manifest missing, skipping skill installation"

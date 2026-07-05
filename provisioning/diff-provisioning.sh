@@ -41,37 +41,59 @@ if grep -q 'skills\.manifest' "$INSTALL_SH"; then ok "install.sh reads skills.ma
 hard_skills="$(code_lines "$INSTALL_SH" | grep 'npx -y skills add' | grep -v '\$s_args' || true)"
 if [[ -n "$hard_skills" ]]; then drift "install.sh hardcodes skill installs (must come from skills.manifest):$hard_skills"; else ok "no hardcoded skill installs in install.sh"; fi
 
-# npx skill args as they appear in an installer, normalized to bare args
-installer_skills() { # $1 = file
-    code_lines "$1" | grep 'npx -y skills add -g -y' \
-        | sed -E 's/.*npx -y skills add -g -y //; s/ *>\/dev\/null.*$//; s/ *\|\| true.*$//; s/[[:space:]]+$//'
-}
-vendor_skills=""; $have_iv && vendor_skills="$(installer_skills "$IV_IMAGE_DIR/vendor-skills.sh")"
-
-while read -r layer method args; do
-    if [[ "$method" == "curl" ]]; then
-        # args = "<name> <url>" — presence checked by URL
-        url="${args#* }"
-        if $have_iv && [[ "$layer" == "team" ]]; then
-            if grep -q "$url" "$IV_IMAGE_DIR/vendor-skills.sh"; then ok "team skill (curl) $args in vendor-skills.sh"; else drift "team skill (curl) $args missing from vendor-skills.sh"; fi
-        fi
-        continue
-    fi
-    if $have_iv; then
-        case "$layer" in
-            team)     grep -qxF "$args" <<<"$vendor_skills" && ok "team skill $args vendored in iv-image" || drift "team skill $args missing from iv-image vendor-skills.sh" ;;
-            personal) grep -qxF "$args" <<<"$vendor_skills" && drift "personal skill $args is ALSO vendored in iv-image (layer wrong?)" || ok "personal skill $args not in iv-image" ;;
-        esac
-    fi
-done < <(rows skills.manifest)
-
-# Reverse direction: every npx skill iv-image vendors must be a team row
-manifest_skill_args="$(rows skills.manifest | awk '$2=="npx" {print substr($0, index($0,$3))}')"
+# iv-image side. Two states, auto-detected: after U5, vendor-skills.sh is a
+# manifest consumer (pin + no hardcoded installs + pin-lag check); before it,
+# legacy per-row literal checks apply.
 if $have_iv; then
-    while IFS= read -r args; do
-        [[ -z "$args" ]] && continue
-        grep -qxF "$args" <<<"$manifest_skill_args" || drift "vendor-skills.sh vendors unmanifested skill: $args"
-    done <<<"$vendor_skills"
+    if grep -q 'skills\.manifest' "$IV_IMAGE_DIR/vendor-skills.sh"; then
+        ok "vendor-skills.sh reads skills.manifest (manifest consumer)"
+        pin="$(tr -d '[:space:]' < "$IV_IMAGE_DIR/dotfiles-manifest.pin" 2>/dev/null || true)"
+        if [[ "$pin" =~ ^[0-9a-f]{40}$ ]]; then
+            ok "dotfiles-manifest.pin is a full SHA (${pin:0:12})"
+            # Pin lag on the rows that matter: team rows at the pin vs local manifest
+            if git -C "$DOTFILES" cat-file -e "$pin" 2>/dev/null; then
+                pinned_team="$(git -C "$DOTFILES" show "$pin:provisioning/skills.manifest" 2>/dev/null | grep -vE '^[[:space:]]*#|^[[:space:]]*$' | awk '$1=="team"' || true)"
+                current_team="$(rows skills.manifest | awk '$1=="team"')"
+                if [[ "$pinned_team" == "$current_team" ]]; then
+                    ok "team skill rows unchanged since iv-image pin"
+                else
+                    drift "team skill rows changed since iv-image's pin — rerun vendor-skills.sh (DOTFILES_SHA=<new sha>) in iv-image and commit"
+                fi
+            else
+                skip "pin commit not in local dotfiles history — cannot check pin lag"
+            fi
+        else
+            drift "iv-image dotfiles-manifest.pin missing or malformed"
+        fi
+        hard_vendor="$(code_lines "$IV_IMAGE_DIR/vendor-skills.sh" | grep 'npx -y skills add' | grep -v '\$args' || true)"
+        if [[ -n "$hard_vendor" ]]; then drift "vendor-skills.sh hardcodes skill installs (must come from skills.manifest):$hard_vendor"; else ok "no hardcoded skill installs in vendor-skills.sh"; fi
+    else
+        # Legacy imperative vendor-skills.sh: per-row literal checks
+        installer_skills() { # $1 = file
+            code_lines "$1" | grep 'npx -y skills add -g -y' \
+                | sed -E 's/.*npx -y skills add -g -y //; s/ *>\/dev\/null.*$//; s/ *\|\| true.*$//; s/[[:space:]]+$//'
+        }
+        vendor_skills="$(installer_skills "$IV_IMAGE_DIR/vendor-skills.sh")"
+        while read -r layer method args; do
+            if [[ "$method" == "curl" ]]; then
+                url="${args#* }"
+                if [[ "$layer" == "team" ]]; then
+                    if grep -q "$url" "$IV_IMAGE_DIR/vendor-skills.sh"; then ok "team skill (curl) $args in vendor-skills.sh"; else drift "team skill (curl) $args missing from vendor-skills.sh"; fi
+                fi
+                continue
+            fi
+            case "$layer" in
+                team)     grep -qxF "$args" <<<"$vendor_skills" && ok "team skill $args vendored in iv-image" || drift "team skill $args missing from iv-image vendor-skills.sh" ;;
+                personal) grep -qxF "$args" <<<"$vendor_skills" && drift "personal skill $args is ALSO vendored in iv-image (layer wrong?)" || ok "personal skill $args not in iv-image" ;;
+            esac
+        done < <(rows skills.manifest)
+        # Reverse direction: every npx skill iv-image vendors must be a team row
+        manifest_skill_args="$(rows skills.manifest | awk '$2=="npx" {print substr($0, index($0,$3))}')"
+        while IFS= read -r args; do
+            [[ -z "$args" ]] && continue
+            grep -qxF "$args" <<<"$manifest_skill_args" || drift "vendor-skills.sh vendors unmanifested skill: $args"
+        done <<<"$vendor_skills"
+    fi
 fi
 
 # --- mcp ------------------------------------------------------------------
@@ -83,23 +105,39 @@ if grep -q 'mcp\.manifest' "$INSTALL_SH"; then ok "install.sh reads mcp.manifest
 hard_mcp="$(code_lines "$INSTALL_SH" | grep 'claude mcp add --transport http' | grep -oE 'https://[^ "]+' || true)"
 if [[ -n "$hard_mcp" ]]; then drift "install.sh hardcodes MCP urls (must come from mcp.manifest): $hard_mcp"; else ok "no hardcoded MCP urls in install.sh"; fi
 
-while IFS='|' read -r name layer vm mac; do
-    name="$(echo "$name" | xargs)"; layer="$(echo "$layer" | xargs)"
-    vm="$(echo "$vm" | xargs)"; mac="$(echo "$mac" | xargs)"
-    if $have_iv; then
-        case "$layer" in
-            team)     grep -qF "$vm" "$setup_mcp" && ok "team mcp $name seeded by iv-image" || drift "team mcp $name vm-url missing from iv-image setup-mcp.sh" ;;
-            personal) grep -qF "\"$name\"" "$setup_mcp" && drift "personal mcp $name is ALSO seeded by iv-image (layer wrong?)" || ok "personal mcp $name not in iv-image" ;;
-        esac
-    fi
-done < <(rows mcp.manifest)
-
-# Reverse: every URL iv-image seeds must be a team row
+# iv-image side, auto-detected like skills: after U5 the vendor step bakes
+# agent/mcp-servers.json from the team rows and setup-mcp.sh just merges it;
+# before U5, setup-mcp.sh carries the URLs inline.
 if $have_iv; then
-    while IFS= read -r url; do
-        rows mcp.manifest | awk -F'|' '$2 ~ /team/ {gsub(/ /,"",$3); print $3}' | grep -qxF "$url" \
-            || drift "iv-image setup-mcp.sh seeds unmanifested server url: $url"
-    done < <(grep -oE 'https://[^"]+' "$setup_mcp")
+    servers_json="$IV_IMAGE_DIR/agent/mcp-servers.json"
+    if [[ -f "$servers_json" ]] && command -v jq >/dev/null 2>&1; then
+        # Exact-map compare: generated name->url must equal the team rows.
+        # (Personal rows sneaking in would break equality too.)
+        gen="$(jq -S 'with_entries(.value = .value.url)' "$servers_json")"
+        want="$(rows mcp.manifest | awk -F'|' '$2 ~ /team/ {gsub(/^ +| +$/,"",$1); gsub(/^ +| +$/,"",$3); print $1"\t"$3}' \
+            | jq -RnS 'reduce (inputs | split("\t")) as $r ({}; . + {($r[0]): $r[1]})')"
+        if [[ "$gen" == "$want" ]]; then
+            ok "iv-image mcp-servers.json matches mcp.manifest team rows"
+        else
+            drift "iv-image mcp-servers.json out of date vs mcp.manifest team rows — rerun vendor-skills.sh in iv-image and commit"
+        fi
+        grep -q 'mcp-servers\.json' "$setup_mcp" && ok "setup-mcp.sh merges mcp-servers.json" || drift "setup-mcp.sh does not use mcp-servers.json"
+    else
+        # Legacy inline setup-mcp.sh: per-row literal checks
+        while IFS='|' read -r name layer vm mac; do
+            name="$(echo "$name" | xargs)"; layer="$(echo "$layer" | xargs)"
+            vm="$(echo "$vm" | xargs)"
+            case "$layer" in
+                team)     grep -qF "$vm" "$setup_mcp" && ok "team mcp $name seeded by iv-image" || drift "team mcp $name vm-url missing from iv-image setup-mcp.sh" ;;
+                personal) grep -qF "\"$name\"" "$setup_mcp" && drift "personal mcp $name is ALSO seeded by iv-image (layer wrong?)" || ok "personal mcp $name not in iv-image" ;;
+            esac
+        done < <(rows mcp.manifest)
+        # Reverse: every URL iv-image seeds must be a team row
+        while IFS= read -r url; do
+            rows mcp.manifest | awk -F'|' '$2 ~ /team/ {gsub(/ /,"",$3); print $3}' | grep -qxF "$url" \
+                || drift "iv-image setup-mcp.sh seeds unmanifested server url: $url"
+        done < <(grep -oE 'https://[^"]+' "$setup_mcp")
+    fi
 fi
 
 # --- tools ----------------------------------------------------------------
