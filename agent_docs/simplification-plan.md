@@ -6,6 +6,24 @@ the `kylelundstedt/iv-image` derivative image for exe.dev VMs, the new
 **simplify, remove redundancy with iv-image, improve performance** across
 Ubuntu VMs and the two macOS machines (`klundstedt-mini`, `klundstedt-mbp`).
 
+## Status (2026-07-05, supervised resume in progress)
+
+Branch `plan/low-risk-subset` reviewed + merged (`a17bb60`). **U3 done** on
+master: `install.sh` skills/MCP sections now read the provisioning manifests
+(stub-harness verified: planned command set identical to the old hardcoded
+set for Linux + macOS claude, codex, and both skills paths);
+`diff-provisioning.sh` install.sh-side checks flipped to "reads the manifest,
+hardcodes nothing". **Caveat:** the plan's real-run verify on klundstedt-mbp
+is still pending — do a `./install.sh` there before trusting a fresh-machine
+path. Next: U5 (needs this pushed, pinned SHA), then U8 → U9 → U10 → U6 →
+U7 → U11.
+
+Unplanned fix (2026-07-05): multi-day healthcheck flapping on sync-repos +
+tigris-backup diagnosed and fixed (`ab1d21e`) — gitconfig_macos SSH rewrite
+beating the job's HTTPS rewrite, lastrun written on failed runs (skip pinged
+success over red), and iCloud-Drive .Trash breaking the home backup. The
+shared-helper consolidation of these scripts remains U10.
+
 ## Status (2026-07-03, unattended first pass — done)
 
 **U1, U2, U4, U12 complete** on branch `plan/low-risk-subset` (one commit per

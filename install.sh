@@ -773,6 +773,13 @@ run_stow() {
 }
 
 # --- setup_agents ---
+# --- provisioning manifest helpers ---
+# The skill/MCP sets are declared in provisioning/*.manifest (single source of
+# truth shared with iv-image — see agent_docs/simplification-plan.md, decision 3).
+manifest_rows() { grep -vE '^[[:space:]]*#|^[[:space:]]*$' "$1"; }
+# Trim leading/trailing whitespace from a pipe-manifest field.
+mtrim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; printf '%s' "${s%"${s##*[![:space:]]}"}"; }
+
 setup_agents() {
     echo ""
     echo "=== Agents ==="
@@ -885,35 +892,52 @@ setup_agents() {
             claude mcp remove --scope user "$srv" >/dev/null 2>&1 || true
         done
 
-        # On exe.dev VMs, use HTTP proxy integrations for servers that
-        # support static tokens (no secrets on VM disk). OAuth-only servers
-        # (Tigris, Readwise) need a one-time browser dance over an explicit
-        # `ssh -L 8765:localhost:8765 <vm>.exe.xyz` tunnel (not always-on).
-        if [[ "$OS" == "linux" ]]; then
-            claude mcp add --transport http --scope user motherduck https://motherduck-mcp.int.exe.xyz/mcp >/dev/null 2>&1 || true
-            claude mcp add --transport http --scope user github-home https://github-mcp-home.int.exe.xyz/mcp/ >/dev/null 2>&1 || true
-            claude mcp add --transport http --scope user github-work https://github-mcp-work.int.exe.xyz/mcp/ >/dev/null 2>&1 || true
-            # OAuth-only servers (first-use browser auth via an explicit -L 8765 tunnel)
-            claude mcp add --transport http --scope user tigris https://mcp.storage.dev/mcp >/dev/null 2>&1 || true
-            claude mcp add --transport http --scope user readwise https://mcp2.readwise.io/mcp >/dev/null 2>&1 || true
-            echo "  [+] MCP servers (3 via exe.dev proxy, 2 OAuth)"
+        # The server set + URLs come from provisioning/mcp.manifest
+        # (name|layer|vm-url|mac). On VMs the vm-url column is an exe.dev HTTP
+        # proxy integration (static tokens; no secrets on VM disk) or a direct
+        # OAuth endpoint — OAuth-only servers (Tigris, Readwise) need a one-time
+        # browser dance over an explicit `ssh -L 8765:localhost:8765 <vm>.exe.xyz`
+        # tunnel (not always-on). On macOS the mac column is a direct URL, or
+        # pat:<1p-account>:<op-ref> = the GitHub Copilot MCP endpoint with a
+        # Bearer PAT read from 1Password at install time.
+        local mcp_manifest="$DOTFILES_DIR/provisioning/mcp.manifest"
+        local m_name m_layer m_vm m_mac m_acct m_opref m_tok m_n=0
+        if [[ ! -f "$mcp_manifest" ]]; then
+            echo "  [!] $mcp_manifest missing — skipping MCP registration"
+        elif [[ "$OS" == "linux" ]]; then
+            while IFS='|' read -r m_name m_layer m_vm m_mac; do
+                m_name=$(mtrim "$m_name"); m_vm=$(mtrim "$m_vm")
+                [[ -z "$m_name" || -z "$m_vm" || "$m_vm" == "-" ]] && continue
+                claude mcp add --transport http --scope user "$m_name" "$m_vm" >/dev/null 2>&1 || true
+                m_n=$((m_n+1))
+            done < <(manifest_rows "$mcp_manifest")
+            echo "  [+] MCP servers ($m_n registered from mcp.manifest)"
         else
-            # macOS: OAuth servers + GitHub PATs from 1Password
-            claude mcp add --transport http --scope user motherduck https://api.motherduck.com/mcp >/dev/null 2>&1 || true
-            claude mcp add --transport http --scope user tigris https://mcp.storage.dev/mcp >/dev/null 2>&1 || true
-            claude mcp add --transport http --scope user readwise https://mcp2.readwise.io/mcp >/dev/null 2>&1 || true
+            # macOS: direct/OAuth URLs; pat: rows need 1Password
+            while IFS='|' read -r m_name m_layer m_vm m_mac; do
+                m_name=$(mtrim "$m_name"); m_mac=$(mtrim "$m_mac")
+                [[ -z "$m_name" || -z "$m_mac" ]] && continue
+                if [[ "$m_mac" == pat:* ]]; then
+                    if [[ "$op_configured" != true ]]; then
+                        echo "  Skipping $m_name (1Password not configured)"
+                        continue
+                    fi
+                    m_acct="${m_mac#pat:}"; m_acct="${m_acct%%:*}"
+                    m_opref="${m_mac#pat:*:}"
+                    m_tok=$(op read "$m_opref" --account "$m_acct" 2>/dev/null) || true
+                    [[ -n "$m_tok" ]] && claude mcp add-json --scope user "$m_name" \
+                        "{\"type\":\"http\",\"url\":\"https://api.githubcopilot.com/mcp/\",\"headers\":{\"Authorization\":\"Bearer $m_tok\"}}" >/dev/null 2>&1 || true
+                else
+                    claude mcp add --transport http --scope user "$m_name" "$m_mac" >/dev/null 2>&1 || true
+                fi
+            done < <(manifest_rows "$mcp_manifest")
             if [[ -n "$hub_url" ]]; then
                 claude mcp add --transport http --scope user hub-mcp "$hub_url" >/dev/null 2>&1 \
                     && echo "  [+] hub-mcp ($hub_url)" || true
             fi
             if [[ "$op_configured" == true ]]; then
-                local pat_home pat_work
-                pat_home=$(op read "op://Private/GitHub PAT Home/token" --account lundstedts.1password.com 2>/dev/null) || true
+                local pat_work
                 pat_work=$(op read "op://Employee/GitHub PAT IV/token" --account industryvault.1password.com 2>/dev/null) || true
-                [[ -n "$pat_home" ]] && claude mcp add-json --scope user github-home \
-                    "{\"type\":\"http\",\"url\":\"https://api.githubcopilot.com/mcp/\",\"headers\":{\"Authorization\":\"Bearer $pat_home\"}}" >/dev/null 2>&1 || true
-                [[ -n "$pat_work" ]] && claude mcp add-json --scope user github-work \
-                    "{\"type\":\"http\",\"url\":\"https://api.githubcopilot.com/mcp/\",\"headers\":{\"Authorization\":\"Bearer $pat_work\"}}" >/dev/null 2>&1 || true
 
                 # sync-repos.sh reads per-org GitHub PATs from the local login
                 # Keychain (fine-grained PATs are scoped per owner; gh's Home
@@ -961,7 +985,7 @@ setup_agents() {
                         && echo "  [+] sync-repos healthcheck → Keychain" || true
                 fi
             else
-                echo "  Skipping GitHub MCP servers (1Password not configured)"
+                echo "  Skipping Keychain credential provisioning (1Password not configured)"
             fi
         fi
     fi
@@ -977,25 +1001,26 @@ setup_agents() {
             codex mcp remove "$legacy" >/dev/null 2>&1 || true
         done
 
-        # OAuth servers — mirror of Claude Code's set. Add only if missing.
-        # codex mcp add eagerly opens a browser OAuth flow and blocks on the
-        # callback, so only run where there's a local browser to complete it.
-        # A remote VM has a TTY (IS_INTERACTIVE=true) but no browser — running
-        # this over SSH hangs forever — so gate on macOS, not just a TTY.
-        # Linux VMs defer Codex MCP (like the Codex GitHub servers below).
-        if [[ "$IS_INTERACTIVE" == true && "$OS" == "macos" ]]; then
-            for srv in "motherduck https://api.motherduck.com/mcp" \
-                       "tigris https://mcp.storage.dev/mcp" \
-                       "readwise https://mcp2.readwise.io/mcp"; do
-                read -r name url <<< "$srv"
-                if codex mcp get "$name" >/dev/null 2>&1; then
-                    echo "  [=] codex mcp: $name (already present)"
+        # OAuth servers — mirror of Claude Code's set: the mcp.manifest rows
+        # whose mac column is a direct URL (pat: rows are deferred, see below).
+        # Add only if missing: codex mcp add eagerly opens a browser OAuth flow
+        # and blocks on the callback, so only run where there's a local browser
+        # to complete it. A remote VM has a TTY (IS_INTERACTIVE=true) but no
+        # browser — running this over SSH hangs forever — so gate on macOS, not
+        # just a TTY. Linux VMs defer Codex MCP (like the Codex GitHub servers below).
+        if [[ "$IS_INTERACTIVE" == true && "$OS" == "macos" && -f "$mcp_manifest" ]]; then
+            local c_name c_layer c_vm c_mac
+            while IFS='|' read -r c_name c_layer c_vm c_mac; do
+                c_name=$(mtrim "$c_name"); c_mac=$(mtrim "$c_mac")
+                [[ -z "$c_name" || -z "$c_mac" || "$c_mac" == pat:* ]] && continue
+                if codex mcp get "$c_name" >/dev/null 2>&1; then
+                    echo "  [=] codex mcp: $c_name (already present)"
                 else
-                    codex mcp add "$name" --url "$url" >/dev/null 2>&1 \
-                        && echo "  [+] codex mcp: $name" \
-                        || echo "  [!] codex mcp add $name failed"
+                    codex mcp add "$c_name" --url "$c_mac" >/dev/null 2>&1 \
+                        && echo "  [+] codex mcp: $c_name" \
+                        || echo "  [!] codex mcp add $c_name failed"
                 fi
-            done
+            done < <(manifest_rows "$mcp_manifest")
         else
             echo "  Skipping Codex MCP servers (OAuth needs a local browser)"
         fi
@@ -1041,32 +1066,38 @@ setup_agents() {
         fi
     fi
 
-    # Skills
-    if command -v npx >/dev/null 2>&1; then
-        echo "  Installing agent skills..."
-        # Skills baked into iv-image — only install on macOS (Linux VMs get them from the image)
-        if [[ "$OS" == "macos" ]]; then
-            npx -y skills add -g -y matsonj/mviz >/dev/null 2>&1 || true
-            npx -y skills add -g -y vercel-labs/skills -s find-skills >/dev/null 2>&1 || true
-            npx -y skills add -g -y duckdb/duckdb-skills >/dev/null 2>&1 || true
-            npx -y skills add -g -y motherduckdb/agent-skills >/dev/null 2>&1 || true
-            npx -y skills add -g -y posit-dev/skills -s quarto-authoring brand-yml >/dev/null 2>&1 || true
-            npx -y skills add -g -y marimo-team/skills -s marimo-notebook marimo-batch >/dev/null 2>&1 || true
-            # archil-guide — no GitHub repo, download skill file directly
-            mkdir -p "$HOME/.agents/skills/archil-guide"
-            curl -fsSL https://archil.com/skill.md -o "$HOME/.agents/skills/archil-guide/SKILL.md" 2>/dev/null || true
-            for agent_dir in "$HOME/.claude/skills" "$HOME/.codex/skills"; do
-                [ -d "$agent_dir" ] && ln -sf "../../.agents/skills/archil-guide" "$agent_dir/archil-guide" 2>/dev/null || true
-            done
-        fi
-        # Personal skills (not in iv-image)
-        npx -y skills add -g -y tigrisdata/tigris-agents-plugins >/dev/null 2>&1 || true
-        npx -y skills add -g -y marimo-team/marimo-pair >/dev/null 2>&1 || true
-        npx -y skills add -g -y kylelundstedt/dotfiles -s sprites-dev >/dev/null 2>&1 || true
-        # apple-containers is private — installed locally on macOS only (npx -y skills add -g -y . -s apple-containers)
+    # Skills — the set comes from provisioning/skills.manifest (layer method
+    # args). Team skills are baked into iv-image, so they install on macOS only
+    # (Linux VMs get them vendored from the image); personal skills install
+    # everywhere. apple-containers is private — installed locally on macOS only
+    # (npx -y skills add -g -y . -s apple-containers).
+    local skills_manifest="$DOTFILES_DIR/provisioning/skills.manifest"
+    if command -v npx >/dev/null 2>&1 && [[ -f "$skills_manifest" ]]; then
+        echo "  Installing agent skills (skills.manifest)..."
+        local s_layer s_method s_args s_name s_url
+        while read -r s_layer s_method s_args; do
+            [[ "$s_layer" == "team" && "$OS" != "macos" ]] && continue
+            case "$s_method" in
+                npx)
+                    # $s_args is intentionally word-split (repo + optional -s flags)
+                    # shellcheck disable=SC2086
+                    npx -y skills add -g -y $s_args >/dev/null 2>&1 || true
+                    ;;
+                curl)
+                    # args = "<name> <url>" — no GitHub repo, download skill file directly
+                    read -r s_name s_url <<< "$s_args"
+                    mkdir -p "$HOME/.agents/skills/$s_name"
+                    curl -fsSL "$s_url" -o "$HOME/.agents/skills/$s_name/SKILL.md" 2>/dev/null || true
+                    for agent_dir in "$HOME/.claude/skills" "$HOME/.codex/skills"; do
+                        [ -d "$agent_dir" ] && ln -sf "../../.agents/skills/$s_name" "$agent_dir/$s_name" 2>/dev/null || true
+                    done
+                    ;;
+                *)  echo "  [!] skills.manifest: unknown method '$s_method' for '$s_args'" ;;
+            esac
+        done < <(manifest_rows "$skills_manifest")
         echo "  [+] Skills installed"
     else
-        echo "  [!] npx not found, skipping skill installation"
+        echo "  [!] npx or skills.manifest missing, skipping skill installation"
     fi
 
     if ! command -v op >/dev/null 2>&1; then

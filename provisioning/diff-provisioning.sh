@@ -34,25 +34,29 @@ rows() { grep -vE '^[[:space:]]*#|^[[:space:]]*$' "$MANIFEST_DIR/$1"; }
 
 # --- skills ---------------------------------------------------------------
 echo "=== skills.manifest ==="
+# install.sh consumes the manifest directly (U3), so its check is "reads the
+# manifest, hardcodes nothing". Per-row greps apply only to iv-image's
+# vendor-skills.sh, which stays imperative until U5 pins the manifest.
+if grep -q 'skills\.manifest' "$INSTALL_SH"; then ok "install.sh reads skills.manifest"; else drift "install.sh does not reference skills.manifest"; fi
+hard_skills="$(code_lines "$INSTALL_SH" | grep 'npx -y skills add' | grep -v '\$s_args' || true)"
+if [[ -n "$hard_skills" ]]; then drift "install.sh hardcodes skill installs (must come from skills.manifest):$hard_skills"; else ok "no hardcoded skill installs in install.sh"; fi
+
 # npx skill args as they appear in an installer, normalized to bare args
 installer_skills() { # $1 = file
     code_lines "$1" | grep 'npx -y skills add -g -y' \
         | sed -E 's/.*npx -y skills add -g -y //; s/ *>\/dev\/null.*$//; s/ *\|\| true.*$//; s/[[:space:]]+$//'
 }
-install_sh_skills="$(installer_skills "$INSTALL_SH")"
 vendor_skills=""; $have_iv && vendor_skills="$(installer_skills "$IV_IMAGE_DIR/vendor-skills.sh")"
 
 while read -r layer method args; do
     if [[ "$method" == "curl" ]]; then
         # args = "<name> <url>" — presence checked by URL
         url="${args#* }"
-        if grep -q "$url" "$INSTALL_SH"; then ok "skill (curl) $args in install.sh"; else drift "skill (curl) $args missing from install.sh"; fi
-        if $have_iv; then
-            if grep -q "$url" "$IV_IMAGE_DIR/vendor-skills.sh"; then ok "skill (curl) $args in vendor-skills.sh"; else drift "skill (curl) $args missing from vendor-skills.sh"; fi
+        if $have_iv && [[ "$layer" == "team" ]]; then
+            if grep -q "$url" "$IV_IMAGE_DIR/vendor-skills.sh"; then ok "team skill (curl) $args in vendor-skills.sh"; else drift "team skill (curl) $args missing from vendor-skills.sh"; fi
         fi
         continue
     fi
-    if grep -qxF "$args" <<<"$install_sh_skills"; then ok "skill $args in install.sh"; else drift "skill $args ($layer) missing from install.sh"; fi
     if $have_iv; then
         case "$layer" in
             team)     grep -qxF "$args" <<<"$vendor_skills" && ok "team skill $args vendored in iv-image" || drift "team skill $args missing from iv-image vendor-skills.sh" ;;
@@ -61,12 +65,8 @@ while read -r layer method args; do
     fi
 done < <(rows skills.manifest)
 
-# Reverse direction: every npx skill an installer adds must be in the manifest
+# Reverse direction: every npx skill iv-image vendors must be a team row
 manifest_skill_args="$(rows skills.manifest | awk '$2=="npx" {print substr($0, index($0,$3))}')"
-while IFS= read -r args; do
-    [[ -z "$args" ]] && continue
-    grep -qxF "$args" <<<"$manifest_skill_args" || drift "install.sh installs unmanifested skill: $args"
-done <<<"$install_sh_skills"
 if $have_iv; then
     while IFS= read -r args; do
         [[ -z "$args" ]] && continue
@@ -77,20 +77,15 @@ fi
 # --- mcp ------------------------------------------------------------------
 echo "=== mcp.manifest ==="
 setup_mcp="$IV_IMAGE_DIR/agent/setup-mcp.sh"
+# install.sh consumes the manifest directly (U3): check "reads the manifest,
+# hardcodes no URLs". Per-row greps apply only to iv-image's setup-mcp.sh.
+if grep -q 'mcp\.manifest' "$INSTALL_SH"; then ok "install.sh reads mcp.manifest"; else drift "install.sh does not reference mcp.manifest"; fi
+hard_mcp="$(code_lines "$INSTALL_SH" | grep 'claude mcp add --transport http' | grep -oE 'https://[^ "]+' || true)"
+if [[ -n "$hard_mcp" ]]; then drift "install.sh hardcodes MCP urls (must come from mcp.manifest): $hard_mcp"; else ok "no hardcoded MCP urls in install.sh"; fi
+
 while IFS='|' read -r name layer vm mac; do
     name="$(echo "$name" | xargs)"; layer="$(echo "$layer" | xargs)"
     vm="$(echo "$vm" | xargs)"; mac="$(echo "$mac" | xargs)"
-    # vm-url must appear in install.sh's Linux branch
-    if [[ "$vm" != "-" ]]; then
-        grep -qF "$vm" "$INSTALL_SH" && ok "mcp $name vm-url in install.sh" || drift "mcp $name vm-url $vm missing from install.sh"
-    fi
-    # mac column: direct URL, or pat:<account>:<op-ref> whose op-ref install.sh must read
-    if [[ "$mac" == pat:* ]]; then
-        opref="${mac#pat:*:}"
-        grep -qF "$opref" "$INSTALL_SH" && ok "mcp $name PAT ref in install.sh" || drift "mcp $name PAT ref $opref missing from install.sh"
-    else
-        grep -qF "$mac" "$INSTALL_SH" && ok "mcp $name mac url in install.sh" || drift "mcp $name mac url $mac missing from install.sh"
-    fi
     if $have_iv; then
         case "$layer" in
             team)     grep -qF "$vm" "$setup_mcp" && ok "team mcp $name seeded by iv-image" || drift "team mcp $name vm-url missing from iv-image setup-mcp.sh" ;;
@@ -106,11 +101,6 @@ if $have_iv; then
             || drift "iv-image setup-mcp.sh seeds unmanifested server url: $url"
     done < <(grep -oE 'https://[^"]+' "$setup_mcp")
 fi
-# Reverse: every `claude mcp add --transport http` URL in install.sh must be manifested (hub-mcp exempt: registered via $hub_url variable)
-while IFS= read -r url; do
-    rows mcp.manifest | awk -F'|' '{gsub(/ /,"",$3); gsub(/ /,"",$4); print $3; print $4}' | grep -qxF "$url" \
-        || drift "install.sh registers unmanifested MCP url: $url"
-done < <(code_lines "$INSTALL_SH" | grep 'claude mcp add --transport http' | grep -oE 'https://[^ ]+')
 
 # --- tools ----------------------------------------------------------------
 echo "=== tools.manifest ==="
