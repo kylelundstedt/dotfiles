@@ -23,10 +23,21 @@ EXT=/Volumes/OWC8TB
 # a freshly-shot photo still mid-download from iCloud flaps the gate at 04:00.
 PHOTOS_MISSING_MAX=0
 
-# Skip if a recent run already completed.
+# Dead-man's-switch monitor (healthchecks.io). URL in Keychain
+# (tigris-backup:healthcheck-url); pings are no-ops if it's unset. /start at
+# begin, bare = success, /fail = failure (with summary). Defined BEFORE the
+# staleness skip so the skip can ping success: lastrun is only written by a
+# fully-successful run, so "fresh" is exactly the monitor's definition of
+# success. Without that ping, a manual afternoon run shifts the 04:00 nightly
+# into the guard window and the check goes red on a silent skip (2026-07-06).
+kc() { security find-generic-password -s "tigris-backup:$1" -w 2>/dev/null; }
+HC_URL=$(kc healthcheck-url)
+hc() { [[ -n "$HC_URL" ]] && curl -fsS -m 10 --retry 3 "${HC_URL}${1:-}" "${@:2}" >/dev/null 2>&1 || true; }
+
+# Skip if a recent run already completed — still ping success (data is fresh).
 if [[ -f "$LAST_RUN" ]]; then
     now=$(date +%s); last=$(cat "$LAST_RUN" 2>/dev/null || echo 0)
-    if (( now - last < MIN_INTERVAL )); then echo "ran $(( (now-last)/3600 ))h ago; skip"; exit 0; fi
+    if (( now - last < MIN_INTERVAL )); then echo "ran $(( (now-last)/3600 ))h ago; skip"; hc; exit 0; fi
 fi
 # Don't collide with an in-progress rclone (e.g. the initial push).
 if pgrep -f "rclone (copy|sync)" >/dev/null 2>&1; then echo "rclone already running; skip"; exit 0; fi
@@ -39,16 +50,11 @@ LOGDIR="$HOME/Library/Logs/tigris-backup"; mkdir -p "$LOGDIR"
 exec > >(tee -a "$LOGDIR/$(date +%F-%H%M%S).log") 2>&1
 find "$LOGDIR" -name '*.log' -type f -mtime +30 -delete 2>/dev/null || true
 
-kc() { security find-generic-password -s "tigris-backup:$1" -w 2>/dev/null; }
 tid=$(kc s3-key-id); tsec=$(kc s3-secret); cpw=$(kc crypt-password); csalt=$(kc crypt-salt)
 if [[ -z "$tid" || -z "$tsec" || -z "$cpw" || -z "$csalt" ]]; then
     echo "FATAL: tigris-backup creds missing from Keychain"; exit 1
 fi
 
-# Dead-man's-switch monitor (healthchecks.io). URL in Keychain (tigris-backup:healthcheck-url);
-# pings are no-ops if it's unset. /start at begin, bare = success, /fail = failure (with summary).
-HC_URL=$(kc healthcheck-url)
-hc() { [[ -n "$HC_URL" ]] && curl -fsS -m 10 --retry 3 "${HC_URL}${1:-}" "${@:2}" >/dev/null 2>&1 || true; }
 hc /start
 FAILURES=()
 
