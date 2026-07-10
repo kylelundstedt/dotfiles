@@ -30,7 +30,14 @@ execution: MCP servers are baked at _vendor_ time into a generated
 iv-image clones, including a pin-lag check on team rows). **Gotcha fixed
 en route (`3d4cebb`):** manifest read-loops must feed on fd 9 — npx eats
 stdin and silently dropped 34 of 35 rows; install.sh had the same bug in all
-four U3 loops. **Next:** U8 → U9 → U10 → U6 → U7 → U11.
+four U3 loops. **U8 done (2026-07-10, `4b8c092`):** personal-mcp split to the private
+`kylelundstedt/personal-mcp` repo (filter-repo, 16 commits preserved;
+self-locating scripts; plists at the `~/github` clone path; `bootstrap.sh`).
+Deployed on the mini and verified before removal from dotfiles: all 4 jobs
+loaded from the new location, server live from the new clone, healthcheck
+job kickstarted under launchd (exit 0). check-key-expiry LaunchAgent also
+now stowed + loaded (closes U12's deploy). **Next:** U9 (in the new repo,
+on the mini) → U10 → U6 → U7 → U11.
 
 Unplanned fix (2026-07-05): multi-day healthcheck flapping on sync-repos +
 tigris-backup diagnosed and fixed (`ab1d21e`) — gitconfig_macos SSH rewrite
