@@ -17,7 +17,12 @@ hardcodes nothing". **Caveat:** the plan's real-run verify on klundstedt-mbp
 is still pending — do a `./install.sh` there before trusting a fresh-machine
 path.
 
-**U5 implemented — PR open: kylelundstedt/iv-image#1** (decision at
+**U5 done — iv-image#1 merged 2026-07-10** after the throwaway-VM check
+passed (stock exeuntu, `tag:iv`: 35 skills vendored + symlinked for both
+harnesses, MCP == exactly the team rows via proxy URLs, lockfile records the
+pin, tools present; VM deleted). Note: per-repo integrations attached at
+`new --integration=…` take ~1 min to propagate — retry the first clone.
+Design decision at
 execution: MCP servers are baked at _vendor_ time into a generated
 `agent/mcp-servers.json`, like skills — provisioning stays no-network;
 `dotfiles-manifest.pin` = `d8e3c4d`). Re-vendored: identical 35-skill set +
@@ -25,8 +30,7 @@ execution: MCP servers are baked at _vendor_ time into a generated
 iv-image clones, including a pin-lag check on team rows). **Gotcha fixed
 en route (`3d4cebb`):** manifest read-loops must feed on fd 9 — npx eats
 stdin and silently dropped 34 of 35 rows; install.sh had the same bug in all
-four U3 loops. **Pending:** throwaway-VM provision check (PR checklist),
-then merge → U8 → U9 → U10 → U6 → U7 → U11.
+four U3 loops. **Next:** U8 → U9 → U10 → U6 → U7 → U11.
 
 Unplanned fix (2026-07-05): multi-day healthcheck flapping on sync-repos +
 tigris-backup diagnosed and fixed (`ab1d21e`) — gitconfig_macos SSH rewrite
