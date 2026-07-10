@@ -36,8 +36,17 @@ self-locating scripts; plists at the `~/github` clone path; `bootstrap.sh`).
 Deployed on the mini and verified before removal from dotfiles: all 4 jobs
 loaded from the new location, server live from the new clone, healthcheck
 job kickstarted under launchd (exit 0). check-key-expiry LaunchAgent also
-now stowed + loaded (closes U12's deploy). **Next:** U9 (in the new repo,
-on the mini) → U10 → U6 → U7 → U11.
+now stowed + loaded (closes U12's deploy). **U9 done (2026-07-10):** python/CLI half delegated to a Sonnet subagent
+per the plan's tiering (lib/embed.py + 3 consumers rewired, 15/15 tests;
+web search wrappers folded into hub/search.sh --semantic with byte-identical
+output; _DEDUP_KEY_SQL hoisted — which surfaced that _semantic_messages had
+been using a tuple _approximation_ of the key that could over-collapse
+SMS/iMessage; now canonical). Launchd half here: hub/rebuild-hub.sh
+(failure-isolated, ATTACH guard verified), inline hub block removed from
+web-archive-refresh.sh, cascade rescheduled (03:00 / 03:30 / 04:00 /
+backup 04:30 — collision gone). All deployed + kickstart-verified under
+launchd on the mini. Open: create the healthchecks.io check for
+personal-mcp:hub-healthcheck-url. **Next:** U10 → U6 → U7 → U11.
 
 Unplanned fix (2026-07-05): multi-day healthcheck flapping on sync-repos +
 tigris-backup diagnosed and fixed (`ab1d21e`) — gitconfig_macos SSH rewrite

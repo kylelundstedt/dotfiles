@@ -11,12 +11,16 @@
         <string>-c</string>
         <string>$HOME/dotfiles/backup/tigris-backup.sh</string>
     </array>
+    <!-- 04:30, not 04:00: rebuild-hub (personal-mcp repo) rewrites
+         ~/archives/hub/hub.duckdb at 04:00 — the old shared slot had the
+         backup copying the file mid-rewrite. Cascade: msgvault 03:00,
+         web-archive-refresh 03:30, rebuild-hub 04:00, backup 04:30. -->
     <key>StartCalendarInterval</key>
     <dict>
         <key>Hour</key>
         <integer>4</integer>
         <key>Minute</key>
-        <integer>0</integer>
+        <integer>30</integer>
     </dict>
     <key>StandardOutPath</key>
     <string>/tmp/tigris-backup.log</string>
