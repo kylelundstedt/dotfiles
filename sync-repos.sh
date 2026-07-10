@@ -143,6 +143,15 @@ sync_repos() {
         if [ -d "$repo_dir/.git" ]; then
             if git -C "$repo_dir" rev-parse HEAD >/dev/null 2>&1; then
                 echo "  fetch $name"
+                # Normalize origin to the canonical https form first. Historical
+                # clones carry ssh-form or case-variant URLs (e.g. lowercase
+                # industryvault/snowflake_usage) that dodge the owner-qualified
+                # insteadOf rules and fall into an equal-length rewrite tie that
+                # the gitconfig_macos ssh rule can win under launchd (observed
+                # 2026-07-07..09: one repo failing every scheduled run while
+                # interactive repros passed). Canonical URL + owner rule =
+                # longest match everywhere, no tie to lose. Idempotent.
+                git -C "$repo_dir" remote set-url origin "https://github.com/$owner/$name.git" 2>/dev/null || true
                 if git_https "$tok" "$owner" -C "$repo_dir" fetch --all --quiet; then
                     # Fast-forward default branch so local HEAD stays current.
                     local default_branch current_branch
