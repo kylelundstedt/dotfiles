@@ -2,12 +2,11 @@
 
 Supplementary context for AI agents working in this repository.
 
-| File                        | Purpose                                                                          |
-| --------------------------- | -------------------------------------------------------------------------------- |
-| `agents-advanced.md`        | When and how to add rules and skills beyond `AGENTS.md`                          |
-| `agents-recommendations.md` | Operating patterns, dual-agent workflows, task routing, maintenance checklists   |
-| `simplification-plan.md`    | Repo review + plan: dotfiles↔iv-image boundary, personal-mcp/automation de-dup   |
-| `personal-mcp.md`           | The `hub-mcp` unified personal-archive search server (email/calendar/read-later) |
-| `tigris-backup-runbook.md`  | klundstedt-mini → Tigris encrypted backup runbook                                |
-| `linux.md`                  | Linux platform notes and testing                                                 |
-| `secrets.md`                | Secret management — exe.dev integrations, 1Password patterns, MCP server auth    |
+| File                        | Purpose                                                                        |
+| --------------------------- | ------------------------------------------------------------------------------ |
+| `agents-advanced.md`        | When and how to add rules and skills beyond `AGENTS.md`                        |
+| `agents-recommendations.md` | Operating patterns, dual-agent workflows, task routing, maintenance checklists |
+| `simplification-plan.md`    | Repo review + plan: dotfiles↔iv-image boundary, personal-mcp/automation de-dup |
+| `tigris-backup-runbook.md`  | klundstedt-mini → Tigris encrypted backup runbook                              |
+| `linux.md`                  | Linux platform notes and testing                                               |
+| `secrets.md`                | Secret management — exe.dev integrations, 1Password patterns, MCP server auth  |

@@ -89,3 +89,5 @@ zstyle ':completion:*:git:*' group-order 'main commands' 'alias commands' 'exter
 export PATH="$PATH:$HOME/.lmstudio/bin"
 # End of LM Studio CLI section
 
+
+alias gam="/Users/klundstedt/bin/gam7/gam"

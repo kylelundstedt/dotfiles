@@ -2,9 +2,9 @@
 
 ## personal-mcp / archives hub (klundstedt-mini)
 
-The `hub-mcp` unified-search server and its ingest pipeline. Canonical, fuller TODO
-lives in `~/archives/README.md` on klundstedt-mini (not in git); these are the items
-worth tracking where the code lives. See [agent_docs/personal-mcp.md](agent_docs/personal-mcp.md).
+The `hub-mcp` unified-search server and its ingest pipeline now live in the private
+`kylelundstedt/personal-mcp` repo (split 2026-07-10); serving-side TODOs move there.
+What stays here is the MCP _client_ registration (`install.sh`).
 
 - [ ] **Connect MCP clients on other devices** — `install.sh` now auto-registers `hub-mcp` on personal Macs (#14: localhost on the mini, tailnet URL elsewhere if reachable), so a fresh `klundstedt-mbp` install picks it up. `klundstedt-iphone` needs the Tailscale app reconnected first (offline ~231d as of 2026-06), then point its MCP client at `https://klundstedt-mini.dojo-sun.ts.net/mcp`.
 

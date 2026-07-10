@@ -57,25 +57,24 @@ From here, the agent can walk you through customization (git identity, AWS, SSH)
 
 Configuration is managed with [GNU Stow](http://www.gnu.org/software/stow/), which creates symlinks from this repo into your home directory. Each top-level directory is a "package" that gets stowed independently:
 
-| Directory         | Purpose                                                                                                                    | Stow Target                           | Platform |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | -------- |
-| `1Password/`      | 1Password SSH agent config                                                                                                 | `~/.config/1Password/`                | macOS    |
-| `agents/`         | Agent infrastructure — `AGENTS.md`, Claude/Codex symlinks, skills, MCP wrappers, Claude Code settings                      | `~/`                                  | Both     |
-| `agent_docs/`     | Reference docs for this repo — agent setup plans, platform notes, secret management                                        | N/A (not stowed)                      | Both     |
-| `aws/`            | Optional AWS CLI configuration, only useful if you install/use AWS CLI separately                                          | `~/.aws/`                             | Linux    |
-| `ghostty/`        | Ghostty terminal configuration                                                                                             | `~/.config/ghostty/`                  | macOS    |
-| `git/`            | Git configuration with OS-specific includes                                                                                | `~/`                                  | Both     |
-| `homebrew/`       | Brewfile for macOS casks and Mac App Store apps                                                                            | `~/`                                  | macOS    |
-| `launchd/`        | LaunchAgents — scheduled jobs (repo sync; personal-mcp ingest + server; Tigris backup)                                     | `~/Library/LaunchAgents/`             | macOS    |
-| `ssh/`            | SSH client configuration                                                                                                   | `~/.ssh/`                             | Both     |
-| `starship/`       | Starship prompt configuration                                                                                              | `~/.config/`                          | Both     |
-| `vscode/`         | VS Code IDE settings & keybindings                                                                                         | `~/Library/Application Support/Code/` | macOS    |
-| `sync-repos.sh`   | Clones/fetches all GitHub repos for personal and work accounts                                                             | N/A (standalone script)               | Both     |
-| `personal-mcp/`   | Personal MCP server + its data ingest (msgvault email/iMessage, calendar, Reader/web → unified hub) — klundstedt-mini only | N/A (run in place)                    | macOS    |
-| `backup/`         | Nightly encrypted backup of home + external data to Tigris (`tigris-backup.sh` + excludes) — klundstedt-mini only          | N/A (run in place)                    | macOS    |
-| `test-install.sh` | Tests install.sh across Apple Container, Sprite, and exe.dev                                                               | N/A (standalone script)               | macOS    |
-| `zed/`            | Zed editor settings                                                                                                        | `~/.config/zed/`                      | macOS    |
-| `zsh/`            | Zsh shell configuration                                                                                                    | `~/`                                  | Both     |
+| Directory         | Purpose                                                                                                           | Stow Target                           | Platform |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------- | -------- |
+| `1Password/`      | 1Password SSH agent config                                                                                        | `~/.config/1Password/`                | macOS    |
+| `agents/`         | Agent infrastructure — `AGENTS.md`, Claude/Codex symlinks, skills, MCP wrappers, Claude Code settings             | `~/`                                  | Both     |
+| `agent_docs/`     | Reference docs for this repo — agent setup plans, platform notes, secret management                               | N/A (not stowed)                      | Both     |
+| `aws/`            | Optional AWS CLI configuration, only useful if you install/use AWS CLI separately                                 | `~/.aws/`                             | Linux    |
+| `ghostty/`        | Ghostty terminal configuration                                                                                    | `~/.config/ghostty/`                  | macOS    |
+| `git/`            | Git configuration with OS-specific includes                                                                       | `~/`                                  | Both     |
+| `homebrew/`       | Brewfile for macOS casks and Mac App Store apps                                                                   | `~/`                                  | macOS    |
+| `launchd/`        | LaunchAgents — scheduled jobs (repo sync; Tigris backup; key-expiry check)                                        | `~/Library/LaunchAgents/`             | macOS    |
+| `ssh/`            | SSH client configuration                                                                                          | `~/.ssh/`                             | Both     |
+| `starship/`       | Starship prompt configuration                                                                                     | `~/.config/`                          | Both     |
+| `vscode/`         | VS Code IDE settings & keybindings                                                                                | `~/Library/Application Support/Code/` | macOS    |
+| `sync-repos.sh`   | Clones/fetches all GitHub repos for personal and work accounts                                                    | N/A (standalone script)               | Both     |
+| `backup/`         | Nightly encrypted backup of home + external data to Tigris (`tigris-backup.sh` + excludes) — klundstedt-mini only | N/A (run in place)                    | macOS    |
+| `test-install.sh` | Tests install.sh across Apple Container, Sprite, and exe.dev                                                      | N/A (standalone script)               | macOS    |
+| `zed/`            | Zed editor settings                                                                                               | `~/.config/zed/`                      | macOS    |
+| `zsh/`            | Zsh shell configuration                                                                                           | `~/`                                  | Both     |
 
 Git uses a generated OS include so only one platform-specific file is active:
 
@@ -129,7 +128,7 @@ Invoke a skill by typing `/skill-name` in Claude Code or Codex (e.g. `/join-tail
 | `github-home` | GitHub API (personal account) | PAT   |
 | `github-work` | GitHub API (work account)     | PAT   |
 
-`klundstedt-mini` also runs a personal **`hub-mcp`** server — unified search over email/iMessage, calendar, and saved web/Reader content from `~/archives/hub` (see the `personal-mcp/` package). It binds `127.0.0.1:8765` and is exposed tailnet-only over HTTPS via `tailscale serve`, so it's registered as a local HTTP MCP server rather than provisioned by `install.sh`.
+`klundstedt-mini` also runs a personal **`hub-mcp`** server — unified search over email/iMessage, calendar, and saved web/Reader content from `~/archives/hub` (code in the private `kylelundstedt/personal-mcp` repo, cloned to `~/github/kylelundstedt/personal-mcp`; its `bootstrap.sh` loads the server + ingest LaunchAgents). It binds `127.0.0.1:8765` and is exposed tailnet-only over HTTPS via `tailscale serve`, so it's registered as a local HTTP MCP server rather than provisioned by `install.sh`.
 
 **Per-project context** — Create an `AGENTS.md` at the repo root with project-specific conventions, a `CLAUDE.md` symlink to it, and an `agent_docs/` directory for supplementary context.
 
@@ -185,7 +184,6 @@ Re-run `install.sh` on a VM only when a pull _adds or removes_ files (new skills
 - [Linux](agent_docs/linux.md) — platform notes, OrbStack, local sprites (Apple Container), Fly.io Sprites, Docker testing, cloud-init
 - [Adding Rules and Skills](agent_docs/agents-advanced.md) — when and how to extend agent configuration beyond `AGENTS.md`
 - [Agent Recommendations](agent_docs/agents-recommendations.md) — dual-agent operating patterns, routing defaults, maintenance checklists
-- [Personal MCP Server](agent_docs/personal-mcp.md) — the `hub-mcp` unified search server on klundstedt-mini, its ingest scripts, and LaunchAgent schedules
 - [Tigris Backup Runbook](agent_docs/tigris-backup-runbook.md) — what's backed up, credentials, and the disaster-recovery restore procedure
 
 ---
