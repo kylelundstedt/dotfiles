@@ -94,7 +94,25 @@ need() { ! command -v "$1" >/dev/null 2>&1; }
 # means here; there's no per-tool version parsing to drift. Without --upgrade,
 # present tools are skipped so re-runs stay fast. Replaces bare `need` in the CLI
 # tool / agent guards, which otherwise skip anything already on PATH forever.
-want() { need "$1" || [[ "$UPGRADE" == true ]]; }
+#
+# IV-provisioned exe.dev VM (U7, Core decision 1): iv-image's provision-iv.sh
+# owns the team baseline there — pinned tools, team AGENTS.md, team MCP
+# servers, its ssh stanza — and install.sh behaves as a thin personal overlay:
+# personal delta only, never redo or clobber what the image laid down. A bare
+# exe.dev VM without the IV layer still gets the full personal install.
+# (Provision iv-image BEFORE dotfiles on VMs that want both.)
+IS_IV_VM=false
+[[ -d /exe.dev && -f "$HOME/iv-provision.lock" ]] && IS_IV_VM=true
+
+# want() also refuses team-layer tools (tools.manifest) on IV VMs: those are
+# iv-image's, version-pinned — installing (or --upgrade'ing) the floating
+# dotfiles copy would shadow the pin.
+want() {
+    if [[ "$IS_IV_VM" == true ]] && grep -qE "^team[[:space:]]+$1[[:space:]]*$" "$DOTFILES_DIR/provisioning/tools.manifest" 2>/dev/null; then
+        return 1
+    fi
+    need "$1" || [[ "$UPGRADE" == true ]]
+}
 
 # Set GITHUB_TOKEN from gh CLI if available (raises rate limit from 60 to 5000/hr)
 if [[ -z "${GITHUB_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
@@ -562,26 +580,29 @@ SSHEOF
         echo "  [+] SSH config (macOS)"
 
     elif [[ "$OS" == "linux" ]]; then
-        cat > "$ssh_config" <<'SSHEOF'
-# Managed by dotfiles/install.sh — do not edit manually.
-SSHEOF
-
-        # CanonicalizeHostname must come BEFORE Host blocks. OpenSSH's
-        # "first obtained value" rule means Host blocks otherwise get
-        # evaluated against the short name, before canonicalization can
-        # rewrite it. Verified empirically: with these lines in the
-        # middle of the file, `ssh gitlake` from another VM falls through
-        # to default StrictHostKeyChecking and fails on host-key change.
-        if [[ -n "$tailnet_domain" ]]; then
-            cat >> "$ssh_config" <<SSHEOF
+        # The personal stanzas live in a marker-managed block PREPENDED to the
+        # file (U7 — no truncating writes): iv-image's provision-iv.sh appends
+        # its own `iv-provision` block, which must survive re-runs of either
+        # provisioner. Prepending also keeps CanonicalizeHostname BEFORE all
+        # Host blocks — OpenSSH's "first obtained value" rule means Host
+        # blocks otherwise get evaluated against the short name, before
+        # canonicalization can rewrite it. Verified empirically: with these
+        # lines mid-file, `ssh gitlake` from another VM falls through to
+        # default StrictHostKeyChecking and fails on host-key change.
+        local block_file rest_file
+        block_file=$(mktemp); rest_file=$(mktemp)
+        {
+            echo "# >>> dotfiles ssh >>>"
+            echo "# Managed by dotfiles/install.sh — edit the repo, not this block."
+            if [[ -n "$tailnet_domain" ]]; then
+                cat <<SSHEOF
 
 CanonicalizeHostname yes
 CanonicalDomains $tailnet_domain
 CanonicalizeMaxDots 0
 SSHEOF
-        fi
-
-        cat >> "$ssh_config" <<SSHEOF
+            fi
+            cat <<SSHEOF
 
 Host github.com
   Hostname ssh.github.com
@@ -606,9 +627,25 @@ Match host *.ts.net exec "$LOCAL_BIN/ssh-tailnet-tagged %h tag:dev"
   StrictHostKeyChecking no
   UserKnownHostsFile /dev/null
   LogLevel ERROR
+# <<< dotfiles ssh <<<
 SSHEOF
-
-        echo "  [+] SSH config (Linux)"
+        } > "$block_file"
+        # Foreign content to preserve: everything outside our marker block.
+        # Migration: files written by the pre-U7 truncating version ("do not
+        # edit manually" header, no markers) were wholly ours EXCEPT an
+        # iv-provision block appended after the fact — keep only that.
+        if [[ -f "$ssh_config" ]]; then
+            if grep -q '^# >>> dotfiles ssh >>>' "$ssh_config"; then
+                awk '/^# >>> dotfiles ssh >>>/{f=1;next} /^# <<< dotfiles ssh <<</{f=0;next} !f' "$ssh_config" > "$rest_file"
+            elif head -1 "$ssh_config" | grep -q '^# Managed by dotfiles/install.sh'; then
+                awk '/^# >>> iv-provision ssh >>>/{f=1} f; /^# <<< iv-provision ssh <<</{f=0}' "$ssh_config" > "$rest_file"
+            else
+                cat "$ssh_config" > "$rest_file"
+            fi
+        fi
+        cat "$block_file" "$rest_file" > "$ssh_config"
+        rm -f "$block_file" "$rest_file"
+        echo "  [+] SSH config (Linux — dotfiles block prepended, foreign blocks preserved)"
 
         # GitHub known host
         if ! grep -q 'ssh.github.com' "$HOME/.ssh/known_hosts" 2>/dev/null; then
@@ -688,6 +725,34 @@ set_shell() {
     fi
 }
 
+# --- overlay_agents_delta ---
+# IV VMs only (U7): layer the personal AGENTS.md delta onto iv-image's team
+# file instead of replacing it. The personal file's shared block (embedded
+# from provisioning/agents-shared.md) is already IN the team file at the
+# image's pin, so the delta = the personal file minus that block, minus the
+# standalone header/preamble. Marker-managed — idempotent across re-runs of
+# either provisioner.
+overlay_agents_delta() {
+    [[ "$IS_IV_VM" == true ]] || return 0
+    local team="$HOME/.agents/AGENTS.md" src="$DOTFILES_DIR/agents/.agents/AGENTS.md"
+    if [[ ! -f "$team" ]]; then
+        echo "  [!] team AGENTS.md missing — skipping personal overlay"
+        return 0
+    fi
+    local delta existing
+    delta=$(awk '/^<!-- >>> shared/{sh=1;next} /^<!-- <<< shared/{sh=0;next} sh{next} /^## /{started=1} started' "$src")
+    # $(…) strips trailing newlines, so re-runs can't accumulate blank lines
+    existing=$(awk '/^<!-- >>> personal overlay >>>/{f=1;next} /^<!-- <<< personal overlay <<</{f=0;next} !f' "$team")
+    {
+        printf '%s\n\n' "$existing"
+        echo "<!-- >>> personal overlay >>> (dotfiles agents/.agents/AGENTS.md minus its shared block — managed by install.sh) -->"
+        echo ""
+        printf '%s\n' "$delta"
+        echo "<!-- <<< personal overlay <<< -->"
+    } > "$team"
+    echo "  [+] personal AGENTS.md delta layered onto the team file"
+}
+
 # --- run_stow ---
 run_stow() {
     if [[ "$SKIP_STOW" == true ]]; then
@@ -722,18 +787,23 @@ run_stow() {
     # ~/.config/shelley/ tree. Foreign symlinks must be moved aside before
     # stow will write its own; stow-created symlinks (target inside
     # $DOTFILES_DIR) are left alone so reruns are idempotent.
-    for f in "$HOME/.claude/settings.json" "$HOME/.claude/CLAUDE.md" "$HOME/.codex/AGENTS.md" "$HOME/.agents/AGENTS.md"; do
-        if [[ -f "$f" && ! -L "$f" ]]; then
-            mv "$f" "${f}.pre-dotfiles.$(date +%Y%m%d%H%M%S)"
-            echo "  Backed up $f"
-        elif [[ -L "$f" ]]; then
-            target=$(readlink -f "$f" 2>/dev/null || true)
-            if [[ -n "$target" && "$target" != "$DOTFILES_DIR"/* ]]; then
+    # NOT on IV VMs (U7): there, the team agent config (iv-image) stays in
+    # place — the agents package is stowed around it and the personal
+    # AGENTS.md delta is layered in by overlay_agents_delta below.
+    if [[ "$IS_IV_VM" != true ]]; then
+        for f in "$HOME/.claude/settings.json" "$HOME/.claude/CLAUDE.md" "$HOME/.codex/AGENTS.md" "$HOME/.agents/AGENTS.md"; do
+            if [[ -f "$f" && ! -L "$f" ]]; then
                 mv "$f" "${f}.pre-dotfiles.$(date +%Y%m%d%H%M%S)"
-                echo "  Backed up foreign symlink $f → $target"
+                echo "  Backed up $f"
+            elif [[ -L "$f" ]]; then
+                target=$(readlink -f "$f" 2>/dev/null || true)
+                if [[ -n "$target" && "$target" != "$DOTFILES_DIR"/* ]]; then
+                    mv "$f" "${f}.pre-dotfiles.$(date +%Y%m%d%H%M%S)"
+                    echo "  Backed up foreign symlink $f → $target"
+                fi
             fi
-        fi
-    done
+        done
+    fi
 
     # In non-interactive Linux, back up shell config files that containers provide
     if [[ "$OS" == "linux" && "$IS_INTERACTIVE" == false ]]; then
@@ -746,14 +816,23 @@ run_stow() {
 
     echo "  Packages: ${packages[*]}"
     for folder in "${packages[@]}"; do
+        # IV VMs: stow the agents package AROUND the team agent files —
+        # iv-image owns ~/.agents/AGENTS.md and the CLAUDE.md/AGENTS.md
+        # symlinks there; the personal delta is layered in afterwards.
+        local -a stow_extra=()
+        if [[ "$IS_IV_VM" == true && "$folder" == "agents" ]]; then
+            stow_extra=(--ignore='AGENTS\.md' --ignore='CLAUDE\.md')
+        fi
         if [[ "$DRY_RUN" == true ]]; then
-            stow --no-folding -R -n -t "$HOME" "$folder"
+            stow --no-folding -R -n -t "$HOME" "${stow_extra[@]+"${stow_extra[@]}"}" "$folder"
         elif [[ "$OS" == "macos" || "$IS_INTERACTIVE" == true ]]; then
-            stow --adopt --no-folding -R -t "$HOME" "$folder"
+            stow --adopt --no-folding -R -t "$HOME" "${stow_extra[@]+"${stow_extra[@]}"}" "$folder"
         else
-            stow --no-folding -R -t "$HOME" "$folder"
+            stow --no-folding -R -t "$HOME" "${stow_extra[@]+"${stow_extra[@]}"}" "$folder"
         fi
     done
+
+    overlay_agents_delta
 
     # Ensure 1Password config dir permissions
     if [[ "$OS" == "macos" ]]; then
@@ -889,9 +968,17 @@ setup_agents() {
 
     # --- Claude Code ---
     if command -v claude >/dev/null 2>&1; then
+        # On IV VMs the team-layer servers (mcp.manifest) are seeded by
+        # iv-image's setup-mcp.sh — the overlay must neither remove nor
+        # re-add them (U7).
+        local team_mcp=""
+        if [[ "$IS_IV_VM" == true && -f "$DOTFILES_DIR/provisioning/mcp.manifest" ]]; then
+            team_mcp=$(manifest_rows "$DOTFILES_DIR/provisioning/mcp.manifest" | awk -F'|' '$2 ~ /team/ {gsub(/ /,"",$1); print $1}')
+        fi
         # Remove stale or migrated servers before re-adding with correct URLs.
         # On Linux, motherduck migrates from OAuth to exe.dev proxy.
         for srv in dlt motherduck github-home github-work tigris readwise hub-mcp; do
+            [[ -n "$team_mcp" ]] && grep -qx "$srv" <<<"$team_mcp" && continue
             claude mcp remove --scope user "$srv" >/dev/null 2>&1 || true
         done
 
@@ -909,12 +996,18 @@ setup_agents() {
             echo "  [!] $mcp_manifest missing — skipping MCP registration"
         elif [[ "$OS" == "linux" ]]; then
             while IFS='|' read -u 9 -r m_name m_layer m_vm m_mac; do
-                m_name=$(mtrim "$m_name"); m_vm=$(mtrim "$m_vm")
+                m_name=$(mtrim "$m_name"); m_layer=$(mtrim "$m_layer"); m_vm=$(mtrim "$m_vm")
                 [[ -z "$m_name" || -z "$m_vm" || "$m_vm" == "-" ]] && continue
+                # IV VMs: team rows already seeded by iv-image — personal only
+                [[ "$IS_IV_VM" == true && "$m_layer" == "team" ]] && continue
                 claude mcp add --transport http --scope user "$m_name" "$m_vm" >/dev/null 2>&1 || true
                 m_n=$((m_n+1))
             done 9< <(manifest_rows "$mcp_manifest")
-            echo "  [+] MCP servers ($m_n registered from mcp.manifest)"
+            if [[ "$IS_IV_VM" == true ]]; then
+                echo "  [+] MCP servers ($m_n personal rows; team rows left to iv-image)"
+            else
+                echo "  [+] MCP servers ($m_n registered from mcp.manifest)"
+            fi
         else
             # macOS: direct/OAuth URLs; pat: rows need 1Password
             while IFS='|' read -u 9 -r m_name m_layer m_vm m_mac; do

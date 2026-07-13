@@ -27,7 +27,7 @@ fi
 
 # Resolve TS_AUTHKEY from 1Password if not already set. Only the VM-creating
 # modes need it — hook/provisioning are local smoke checks.
-case "$mode" in container|sprite|exe|all)
+case "$mode" in container|sprite|exe|overlay|all)
     if [ -z "${TS_AUTHKEY:-}" ] && command -v op >/dev/null 2>&1; then
         TS_AUTHKEY="$(op read "op://Employee/Tailscale - iv-internal-test/credential" --account industryvault.1password.com 2>/dev/null || true)"
     fi
@@ -305,15 +305,74 @@ test_provisioning() {
     fi
 }
 
+# --- IV overlay (U7): dotfiles as a thin personal overlay on an IV VM ---
+# Provisions iv-image (team baseline) on a fresh exeuntu VM, then runs the
+# PUSHED dotfiles install.sh (the pipe self-bootstraps from GitHub master) and
+# asserts the overlay behavior: team baseline intact, personal delta layered.
+test_overlay() {
+    echo ""
+    echo "=== IV overlay test (iv-image baseline + dotfiles personal delta) ==="
+    local vm="test-iv-overlay"
+    if ! ssh -o ConnectTimeout=30 exe.dev "new --name=$vm --tag=iv --integration=github-kylelundstedt-iv-image" >/dev/null 2>&1; then
+        log_fail "overlay: VM create failed"; return
+    fi
+    sleep 20   # VM boot + integration propagation (first clone may still 404 — retried below)
+    echo "--- provisioning iv-image (team baseline) ---"
+    if ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new "$vm.exe.xyz" '
+        for i in 1 2 3; do
+            git clone -q https://github-kylelundstedt-iv-image.int.exe.xyz/kylelundstedt/iv-image.git ~/iv-image 2>/dev/null && break
+            sleep 20
+        done
+        [ -d ~/iv-image ] && ~/iv-image/provision-iv.sh > /tmp/provision.log 2>&1 && [ -f ~/iv-provision.lock ]'; then
+        log_pass "overlay: iv-image provisioned"
+    else
+        log_fail "overlay: iv-image provisioning failed"
+        ssh -o ConnectTimeout=30 exe.dev "rm $vm" >/dev/null 2>&1 || true
+        return
+    fi
+    echo "--- running dotfiles install.sh (overlay path) ---"
+    if cat "$DOTFILES_DIR/install.sh" | ssh -o ConnectTimeout=30 "$vm.exe.xyz" \
+        "env TS_AUTHKEY='${TS_AUTHKEY:-}' GITHUB_TOKEN='${GITHUB_TOKEN:-}' bash" > /tmp/overlay-install.log 2>&1; then
+        log_pass "overlay: install.sh completed"
+    else
+        log_fail "overlay: install.sh failed — see /tmp/overlay-install.log"
+    fi
+    echo "--- verifying overlay invariants ---"
+    parse_results "overlay" "$(ssh -o ConnectTimeout=30 "$vm.exe.xyz" 'bash -s' << 'OVERLAY_VERIFY'
+export PATH=$HOME/.local/bin:$PATH
+A=~/.agents/AGENTS.md
+grep -q "IV Agent Instructions" "$A" && echo "OK team-agents-header" || echo "MISSING team-agents-header"
+[ "$(grep -c ">>> personal overlay" "$A")" = 1 ] && echo "OK personal-overlay-block" || echo "MISSING personal-overlay-block"
+grep -q "^## Memory" "$A" && echo "OK personal-section-memory" || echo "MISSING personal-section-memory"
+grep -q "^## Cloud CLIs" "$A" && echo "OK team-section-cloud-clis" || echo "MISSING team-section-cloud-clis"
+[ "$(grep "^## " "$A" | sort | uniq -d | wc -l)" = 0 ] && echo "OK no-duplicate-sections" || echo "MISSING no-duplicate-sections"
+[ -f ~/.claude/settings.json ] && [ ! -L ~/.claude/settings.json ] && echo "OK team-settings-intact" || echo "MISSING team-settings-intact"
+[ -L ~/.agents/refresh-env.sh ] && echo "OK agents-package-stowed" || echo "MISSING agents-package-stowed"
+mcp_list=$(claude mcp list 2>/dev/null || true)
+for srv in motherduck github-work github-home tigris readwise; do
+    echo "$mcp_list" | grep -q "$srv" && echo "OK mcp:$srv" || echo "MISSING mcp:$srv"
+done
+duckdb --version 2>/dev/null | grep -q "1.5.3" && echo "OK team-tool-pinned-duckdb" || echo "MISSING team-tool-pinned-duckdb"
+command -v starship >/dev/null && echo "OK personal-tool-starship" || echo "MISSING personal-tool-starship"
+grep -q ">>> dotfiles ssh" ~/.ssh/config && echo "OK ssh-dotfiles-block" || echo "MISSING ssh-dotfiles-block"
+grep -q ">>> iv-provision ssh" ~/.ssh/config && echo "OK ssh-iv-block-preserved" || echo "MISSING ssh-iv-block-preserved"
+[ "$(grep -vE '^#|^$' ~/.ssh/config | head -1 | awk '{print $1}')" = "CanonicalizeHostname" ] && echo "OK ssh-canonicalize-first" || echo "MISSING ssh-canonicalize-first"
+OVERLAY_VERIFY
+)"
+    echo "--- tearing down ---"
+    ssh -o ConnectTimeout=30 exe.dev "rm $vm" >/dev/null 2>&1 && echo "  VM deleted"
+}
+
 # --- Dispatch ---
 case "$mode" in
     container)    test_container ;;
     sprite)       test_sprite ;;
     exe)          test_no_hook; test_exe ;;
-    all)          test_provisioning; test_no_hook; test_container; test_sprite; test_exe ;;
+    overlay)      test_overlay ;;
+    all)          test_provisioning; test_no_hook; test_container; test_sprite; test_exe; test_overlay ;;
     hook)         test_no_hook ;;
     provisioning) test_provisioning ;;
-    *)            echo "Usage: $0 [container|sprite|exe|hook|provisioning|all]"; exit 1 ;;
+    *)            echo "Usage: $0 [container|sprite|exe|hook|overlay|provisioning|all]"; exit 1 ;;
 esac
 
 TOTAL=$((PASS + FAIL))
