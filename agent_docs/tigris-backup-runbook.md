@@ -23,10 +23,14 @@ backup is worthless if you can't decrypt it. Keep the credentials below in
   per-snapshot delete). Archive tier is **GLACIER_IR** (instant retrieval),
   not plain GLACIER (which is frozen — see below).
 - Filter: `tigris-backup-filter.txt` (rclone `--filter-from`) — keeps
-  `~/Library/Mobile Documents` (iCloud Drive) but **excludes the rest of
-  `~/Library`** (app state + all TCC-protected dirs — the unattended job has no
-  Full Disk Access), plus `node_modules`/`.venv`, `.lmstudio/models`, `.Trash`,
-  `.cache`, `.DS_Store`, sockets, and the regenerable `archives/hub` DuckDB.
+  `~/Library/Mobile Documents` (iCloud Drive proper, `com~apple~CloudDocs`)
+  but **excludes the iCloud trash and `iCloud~*` app containers** (evicted /
+  dataless files there fail rclone reads with 'resource deadlock avoided' —
+  bit twice, 2026-07-04 and 07-11; app-container data lives in the app
+  vendors' own clouds) and **the rest of `~/Library`** (app state + all
+  TCC-protected dirs — the unattended job has no Full Disk Access), plus
+  `node_modules`/`.venv`, `.lmstudio/models`, `.Trash`, `.cache`,
+  `.DS_Store`, sockets, and the regenerable `archives/hub` DuckDB.
 - **Client-side encryption** via rclone `crypt` (standard filename + directory
   name encryption). Tigris stores ciphertext only.
 
@@ -114,8 +118,11 @@ to confirm the archive fetch now PASSes too.
 ## The nightly job
 
 - `backup/tigris-backup.sh` → launchd `com.kylelundstedt.tigris-backup`,
-  **daily 04:00**. Mini-only (hostname guard). Creds from the login Keychain
-  (runs unattended).
+  **daily 04:30** (last in the cascade: msgvault 03:00, web-archive-refresh
+  03:30, rebuild-hub 04:00 — so it never copies `hub.duckdb` mid-rewrite).
+  Mini-only (hostname guard). Creds from the login Keychain (runs
+  unattended). Staleness skip (<20h since last clean run) pings the
+  healthcheck success — see `agent_docs/monitoring.md`.
 - SQLite-checkpoints `msgvault.db`/`vectors.db`, then incremental `rclone sync`
   of: home, photos (→ backup bucket) and aws-s3, box, iphone-backup,
   messages-store (→ archive bucket). Recovery is via bucket soft-delete (30 days),

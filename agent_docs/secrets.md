@@ -65,6 +65,7 @@ Machine-readable expiry dates live in `provisioning/keys.manifest`, checked mont
 | Tigris backup rclone key              | `op://Personal/Tigris mini-backup rclone key` (industryvault)           | none           | Keychain `tigris-backup:s3-key-id` / `s3-secret` (mini)                                                      |
 | Tigris backup crypt password+salt     | `op://Personal/Tigris mini-backup rclone crypt` (industryvault)         | none           | Keychain `tigris-backup:crypt-password` / `crypt-salt` (mini) — **DR-critical: never rotate without a plan** |
 | OWC8TB disk passphrase                | `op://Personal/OWC8TB disk encryption/password` (industryvault)         | none           | Keychain `owc8tb-encryption` (mini)                                                                          |
+| healthchecks.io API key (read-write)  | not in 1P — Keychain only                                               | none           | Keychain `healthchecks:api-key` (mini) — manages check configs (see `monitoring.md`)                         |
 
 ### Rotation procedures
 

@@ -45,8 +45,15 @@ SMS/iMessage; now canonical). Launchd half here: hub/rebuild-hub.sh
 (failure-isolated, ATTACH guard verified), inline hub block removed from
 web-archive-refresh.sh, cascade rescheduled (03:00 / 03:30 / 04:00 /
 backup 04:30 — collision gone). All deployed + kickstart-verified under
-launchd on the mini. Open: create the healthchecks.io check for
-personal-mcp:hub-healthcheck-url. **Next:** U10 → U6 → U7 → U11.
+launchd on the mini. The hub healthcheck is created + wired (2026-07-10).
+
+**Monitoring incident (2026-07-11..13):** the U9 reschedule was not
+propagated to the healthchecks.io check schedules — daily UP/DOWN flapping
+until fixed. Full post-mortem + registry: `agent_docs/monitoring.md`.
+Read-write API key now in Keychain (`healthchecks:api-key`), so check
+configs are agent-manageable. U10's spec grows accordingly: skip-must-ping
+as a `_lib.sh` property, kickstart-based verification, and a registry drift
+check against the API. **Next:** U10 → U6 → U7 → U11.
 
 Unplanned fix (2026-07-05): multi-day healthcheck flapping on sync-repos +
 tigris-backup diagnosed and fixed (`ab1d21e`) — gitconfig_macos SSH rewrite
