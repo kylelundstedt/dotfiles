@@ -20,6 +20,11 @@ Grace sizing rules (each learned the hard way):
 - Staleness-skipping jobs must **ping success on skip** (sync-repos,
   tigris-backup do) or a manual run phase-shifts the nightly into a silent
   skip and the check starves.
+- **Don't kickstart jobs concurrently that the schedule serializes.**
+  web-archive-refresh (writes web-archive.duckdb) and rebuild-hub (attaches
+  it read-only) conflict on the DuckDB lock — the 03:30/04:00 stagger is
+  load-bearing. Kickstarting both at once (2026-07-13) failed the web job
+  and pinged /fail. One at a time, in schedule order.
 
 ## Registry (project: klundstedt-mini, TZ America/Los_Angeles)
 
