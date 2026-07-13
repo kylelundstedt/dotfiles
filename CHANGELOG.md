@@ -4,6 +4,38 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-07-13 — post-plan repo review (3-way audit + fixes)
+
+Fanned three reviewers over docs, scripts, and packages; verified every finding
+against the files before acting (`17dedd0`).
+
+- **Bug:** `setup_agents`' `mcp_manifest` was `local` to the Claude block but
+  read in the sibling Codex block — under `set -u`, a codex-only machine
+  (Claude install failed) died mid-install on an unbound variable. Hoisted;
+  failure structure reproduced in a minimal repro before/after.
+- **Undeployed skills:** `join-tailnet`/`upgrade-vm` had no `skills.manifest`
+  row — installs are fully manifest-driven and stow ignores the skills dir, so
+  no machine (including the mini) actually had them installed; they'd only ever
+  been run via repo paths. Row added; verified by installing through it.
+- Spliced the SSH-guard hook into the mini's live `settings.json` (seeding is
+  only-if-absent, so template additions never propagate — general fix parked);
+  added `base tailscale` to `tools.manifest`.
+- **Doc staleness (10 items):** upgrade-vm SKILL.md taught the _revoked_
+  API-key flow (now OAuth two-step; its script flagged legacy — it predates the
+  stock-exeuntu model); AGENTS.md claimed Linux SSH config is "written from
+  scratch"; README was missing the `provisioning/` row, the U7 overlay
+  explanation, readwise, `--upgrade`, the MotherDuck skills row, and a
+  monitoring.md link; the backup runbook contradicted itself on the check cron;
+  test-install's banner omitted `overlay`; zshrc pointed at a deleted
+  wrapper-scripts dir; two dead TODO items; the completed plan's `install.sh:N`
+  citations marked as historical.
+- Pattern behind most of it: docs _authored_ during the plan stayed accurate;
+  docs that merely _describe_ changed things drifted — and several "mark it
+  done" edits had silently no-op'd against prettier-padded tables. Standing
+  rule now: landing-verify doc edits like code edits.
+- Structural findings (working code, no defect) parked in TODO.md "install.sh /
+  script hygiene" rather than fixed same-day — see that section.
+
 ## 2026-07-03..13 — simplification plan (all 12 units)
 
 Full record: [agent_docs/simplification-plan.md](agent_docs/simplification-plan.md)
