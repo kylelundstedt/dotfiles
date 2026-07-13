@@ -32,7 +32,7 @@ Grace sizing rules (each learned the hard way):
 | ----------------------------------- | ------------------------------------------- | -------------------- | --------------- | ----- | ---------------------------------------------- |
 | `sync-repos`                        | dotfiles `sync-repos.sh`                    | 00:00 + 12h wake     | `0 0 * * *`     | 6h    | `sync-repos:healthcheck-url`                   |
 | `tigris-backup`                     | dotfiles `backup/tigris-backup.sh`          | 04:30                | `30 4 * * *`    | 8h    | `tigris-backup:healthcheck-url`                |
-| `personal-mcp: msgvault`            | personal-mcp `msgvault-sync.sh`             | 03:00                | `0 3 * * *`     | —     | `personal-mcp:msgvault-healthcheck-url`        |
+| `personal-mcp: msgvault`            | personal-mcp `msgvault-sync.sh`             | 03:00                | `0 3 * * *`     | 3h    | `personal-mcp:msgvault-healthcheck-url`        |
 | `personal-mcp: web-archive-refresh` | personal-mcp `web-archive-refresh.sh`       | 03:30                | `30 3 * * *`    | 3h    | `personal-mcp:web-healthcheck-url`             |
 | `personal-mcp: rebuild-hub`         | personal-mcp `hub/rebuild-hub.sh`           | 04:00                | `0 4 * * *`     | 2h    | `personal-mcp:hub-healthcheck-url`             |
 | `personal-mcp: mcp-server`          | personal-mcp `healthcheck-mcp.sh` (probe)   | every 15 min         | period 15m      | 30m   | `personal-mcp:mcp-server-healthcheck-url`      |
