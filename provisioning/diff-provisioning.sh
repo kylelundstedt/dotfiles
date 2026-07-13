@@ -96,6 +96,43 @@ if $have_iv; then
     fi
 fi
 
+# --- agents-shared ----------------------------------------------------------
+# provisioning/agents-shared.md is the canonical copy of the AGENTS.md
+# sections shared between the personal file (embedded verbatim between
+# shared markers) and the IV team file (vendored by iv-image at its pin).
+echo "=== agents-shared.md ==="
+shared_src="$MANIFEST_DIR/agents-shared.md"
+extract_shared() { awk '/^<!-- >>> shared/{f=1;next} /^<!-- <<< shared/{f=0} f' "$1"; }
+if [[ -f "$shared_src" ]]; then
+    if diff -q <(extract_shared "$DOTFILES/agents/.agents/AGENTS.md") "$shared_src" >/dev/null 2>&1; then
+        ok "personal AGENTS.md shared block matches agents-shared.md"
+    else
+        drift "personal AGENTS.md shared block differs from agents-shared.md — re-embed verbatim"
+    fi
+    if $have_iv && grep -q '>>> shared' "$IV_IMAGE_DIR/agent/AGENTS.md" 2>/dev/null; then
+        iv_pin="$(tr -d '[:space:]' < "$IV_IMAGE_DIR/dotfiles-manifest.pin" 2>/dev/null || true)"
+        if [[ "$iv_pin" =~ ^[0-9a-f]{40}$ ]] && git -C "$DOTFILES" cat-file -e "$iv_pin" 2>/dev/null; then
+            if diff -q <(extract_shared "$IV_IMAGE_DIR/agent/AGENTS.md") \
+                       <(git -C "$DOTFILES" show "$iv_pin:provisioning/agents-shared.md" 2>/dev/null) >/dev/null 2>&1; then
+                ok "iv-image AGENTS.md shared block matches agents-shared.md at its pin"
+            else
+                drift "iv-image AGENTS.md shared block differs from agents-shared.md at pin ${iv_pin:0:12} — rerun vendor-skills.sh in iv-image"
+            fi
+            if diff -q <(git -C "$DOTFILES" show "$iv_pin:provisioning/agents-shared.md" 2>/dev/null) "$shared_src" >/dev/null 2>&1; then
+                ok "agents-shared.md unchanged since iv-image pin"
+            else
+                drift "agents-shared.md changed since iv-image's pin — bump the pin (DOTFILES_SHA=<new> ./vendor-skills.sh) and commit in iv-image"
+            fi
+        else
+            skip "iv-image pin unavailable — cannot check its shared AGENTS.md block"
+        fi
+    elif $have_iv; then
+        skip "iv-image AGENTS.md has no shared markers yet (pre-U6 clone)"
+    fi
+else
+    drift "provisioning/agents-shared.md missing"
+fi
+
 # --- mcp ------------------------------------------------------------------
 echo "=== mcp.manifest ==="
 setup_mcp="$IV_IMAGE_DIR/agent/setup-mcp.sh"
