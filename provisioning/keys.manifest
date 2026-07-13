@@ -14,9 +14,7 @@
 # Checked monthly by check-key-expiry.sh (launchd:
 # com.kylelundstedt.check-key-expiry). Update `expires` on every rotation.
 
-tailscale-api-key | tailscale-api-token | 2026-08-21 | - | exe.dev:tailscale-api
-tailscale-authkey-iv-internal-dev | tailscale-auth-key | unknown | op://Employee/Tailscale - iv-internal-dev/credential @ industryvault.1password.com | install.sh:setup_tailscale(macOS), apple-containers skill, sprites-dev skill
-tailscale-authkey-iv-internal-test | tailscale-auth-key | unknown | op://Employee/Tailscale - iv-internal-test/credential @ industryvault.1password.com | test-install.sh
+tailscale-oauth-client | oauth-client (auth_keys+devices:core write, tag:dev) | none | op://Employee/Tailscale OAuth Dev @ industryvault.1password.com | exe.dev:tailscale-api (Basic header), install.sh (mini join + VM join), test-install.sh, join-tailnet/upgrade-vm skills
 github-pat-home | github-fine-grained-pat | unknown | op://Private/GitHub PAT Home/token @ lundstedts.1password.com | claude-mcp:github-home(macOS), gh-auth(headless fallback), exe.dev:github-mcp-home
 github-pat-iv | github-fine-grained-pat | unknown | op://Employee/GitHub PAT IV/token @ industryvault.1password.com | claude-mcp:github-work(macOS), keychain:sync-repos:IndustryVault, exe.dev:github-mcp-work
 github-pat-iv-cmg | github-fine-grained-pat | unknown | op://Employee/GitHub PAT IV-CMG/token @ industryvault.1password.com | keychain:sync-repos:iv-cmg

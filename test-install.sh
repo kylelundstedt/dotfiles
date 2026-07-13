@@ -28,11 +28,23 @@ fi
 # Resolve TS_AUTHKEY from 1Password if not already set. Only the VM-creating
 # modes need it — hook/provisioning are local smoke checks.
 case "$mode" in container|sprite|exe|overlay|all)
+    # Mint a short-lived reusable tag:dev key via the Tailscale OAuth client
+    # (U11 — replaced the static iv-internal-test auth key). Reusable because
+    # one test run may join several VMs; 1h expiry, ephemeral nodes.
     if [ -z "${TS_AUTHKEY:-}" ] && command -v op >/dev/null 2>&1; then
-        TS_AUTHKEY="$(op read "op://Employee/Tailscale - iv-internal-test/credential" --account industryvault.1password.com 2>/dev/null || true)"
+        _ts_cid="$(op read "op://Employee/Tailscale OAuth Dev/Client ID" --account industryvault.1password.com 2>/dev/null || true)"
+        _ts_csec="$(op read "op://Employee/Tailscale OAuth Dev/Client secret" --account industryvault.1password.com 2>/dev/null || true)"
+        if [ -n "$_ts_cid" ] && [ -n "$_ts_csec" ]; then
+            _ts_tok="$(curl -fsS -m 15 -u "$_ts_cid:$_ts_csec" -d "grant_type=client_credentials" \
+                https://api.tailscale.com/api/v2/oauth/token 2>/dev/null | jq -r '.access_token // empty' || true)"
+            [ -n "$_ts_tok" ] && TS_AUTHKEY="$(curl -fsS -m 15 -X POST -H "Authorization: Bearer $_ts_tok" \
+                -H "Content-Type: application/json" \
+                -d '{"capabilities":{"devices":{"create":{"reusable":true,"ephemeral":true,"preauthorized":true,"tags":["tag:dev"]}}},"expirySeconds":3600,"description":"test-install"}' \
+                https://api.tailscale.com/api/v2/tailnet/-/keys 2>/dev/null | jq -r '.key // empty' || true)"
+        fi
     fi
     if [ -z "${TS_AUTHKEY:-}" ]; then
-        echo "ERROR: No TS_AUTHKEY — Tailscale auth will fail. Set TS_AUTHKEY or sign in to 1Password."
+        echo "ERROR: No TS_AUTHKEY and OAuth mint failed. Set TS_AUTHKEY or sign in to 1Password."
         exit 1
     fi
     export TS_AUTHKEY

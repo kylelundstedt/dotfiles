@@ -24,8 +24,13 @@ set -euo pipefail
 # Stock exeuntu ships tailscaled DISABLED (iv-image enabled it); enable+start
 # either way so `tailscale up` can reach the local daemon.
 sudo systemctl enable --now tailscaled
-KEY=$(curl -fsSL -X POST https://tailscale-api.int.exe.xyz/api/v2/tailnet/-/keys \
-  -H "Content-Type: application/json" \
+# Two-step (OAuth client behind the proxy): exchange for a 1h token via the
+# proxy, then mint against the public API (the proxy injects Authorization on
+# every request, so only the exchange goes through it).
+TOKEN=$(curl -fsSL -X POST -d "grant_type=client_credentials" \
+  https://tailscale-api.int.exe.xyz/api/v2/oauth/token | jq -r .access_token)
+KEY=$(curl -fsSL -X POST https://api.tailscale.com/api/v2/tailnet/-/keys \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"capabilities":{"devices":{"create":{"reusable":false,"ephemeral":true,"preauthorized":true,"tags":["tag:dev"]}}}}' \
   | jq -r .key)
 sudo tailscale up --ssh --accept-dns --hostname="$(hostname)" --authkey="$KEY"

@@ -31,8 +31,20 @@ JOIN="${SKILL_DIR}/../join-tailnet/join-tailnet.sh"
 
 log() { printf 'upgrade-vm: %s\n' "$*" >&2; }
 
+# Two-step (U11, 2026-07): exchange the proxy-injected OAuth client creds for
+# a short-lived token, then do the device operations against the public API
+# (the proxy injects Authorization on every request, so only the exchange
+# goes through it). Token TTL 1h >> script runtime.
+TS_API=https://api.tailscale.com
+ts_token=$(curl -fsSL --max-time 15 -X POST -d "grant_type=client_credentials" \
+  "${PROXY%/}/api/v2/oauth/token" | jq -r '.access_token // empty' || true)
+if [ -z "$ts_token" ]; then
+  log "OAuth token exchange via $PROXY failed — is the tailscale-api integration reachable from this control node?"
+  exit 1
+fi
+
 stale_ids() {
-  curl -fsSL --max-time 10 "${PROXY%/}/api/v2/tailnet/-/devices" \
+  curl -fsSL --max-time 10 -H "Authorization: Bearer $ts_token" "$TS_API/api/v2/tailnet/-/devices" \
     | jq -r --arg h "$VM" '.devices[] | select(.hostname == $h) | .id'
 }
 
@@ -55,7 +67,7 @@ for _ in $(seq 1 12); do
   [ -z "$ids" ] && break
   for id in $ids; do
     log "deleting stale tailnet node id=$id"
-    curl -fsS -o /dev/null -X DELETE "${PROXY%/}/api/v2/device/$id" || true
+    curl -fsS -o /dev/null -X DELETE -H "Authorization: Bearer $ts_token" "$TS_API/api/v2/device/$id" || true
   done
   sleep 3
 done

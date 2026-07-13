@@ -53,7 +53,9 @@ sleep 3
 Resolve the auth key and bring Tailscale up:
 
 ```bash
-TS_AUTHKEY="$(op read 'op://Employee/Tailscale - iv-internal-dev/credential' --account industryvault.1password.com)"
+# Mint an ephemeral tag:dev key via the Tailscale OAuth client (see agent_docs/secrets.md)
+_tok=$(curl -fsS -u "$(op read 'op://Employee/Tailscale OAuth Dev/Client ID' --account industryvault.1password.com):$(op read 'op://Employee/Tailscale OAuth Dev/Client secret' --account industryvault.1password.com)" -d grant_type=client_credentials https://api.tailscale.com/api/v2/oauth/token | jq -r .access_token)
+TS_AUTHKEY=$(curl -fsS -X POST -H "Authorization: Bearer $_tok" -H "Content-Type: application/json" -d '{"capabilities":{"devices":{"create":{"reusable":false,"ephemeral":true,"preauthorized":true,"tags":["tag:dev"]}}},"expirySeconds":600}' https://api.tailscale.com/api/v2/tailnet/-/keys | jq -r .key)
 container exec -e "TS_AUTHKEY=$TS_AUTHKEY" <name> tailscale up --authkey "$TS_AUTHKEY" --hostname <name> --ssh
 ```
 

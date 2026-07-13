@@ -179,7 +179,9 @@ After creating a new Sprite, set up Tailscale and install dotfiles. Tailscale pr
 Pass `TS_AUTHKEY` and `TS_HOSTNAME` so install.sh handles Tailscale end-to-end:
 
 ```bash
-TS_AUTHKEY="$(op read 'op://Employee/Tailscale - iv-internal-dev/credential' --account industryvault.1password.com)"
+# Mint an ephemeral tag:dev key via the Tailscale OAuth client (see agent_docs/secrets.md)
+_tok=$(curl -fsS -u "$(op read 'op://Employee/Tailscale OAuth Dev/Client ID' --account industryvault.1password.com):$(op read 'op://Employee/Tailscale OAuth Dev/Client secret' --account industryvault.1password.com)" -d grant_type=client_credentials https://api.tailscale.com/api/v2/oauth/token | jq -r .access_token)
+TS_AUTHKEY=$(curl -fsS -X POST -H "Authorization: Bearer $_tok" -H "Content-Type: application/json" -d '{"capabilities":{"devices":{"create":{"reusable":false,"ephemeral":true,"preauthorized":true,"tags":["tag:dev"]}}},"expirySeconds":600}' https://api.tailscale.com/api/v2/tailnet/-/keys | jq -r .key)
 sprite exec -s <name> -env "TS_AUTHKEY=$TS_AUTHKEY,TS_HOSTNAME=<name>" -- bash -c "curl -fsSL https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/install.sh | bash"
 ```
 

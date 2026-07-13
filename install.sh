@@ -1284,18 +1284,30 @@ setup_tailscale() {
 
             # Authenticate with SSH enabled
             if sudo -n true 2>/dev/null; then
+                # klundstedt-mini is a TAGGED device (tag:dev, persistent) —
+                # mint it a non-ephemeral tag:dev key via the Tailscale OAuth
+                # client (U11; retired the static iv-internal-dev key). Other
+                # Macs (mbp) are untagged user devices: TS_AUTHKEY env or the
+                # one-time interactive browser flow below.
                 local ts_key="${TS_AUTHKEY:-}"
-                if [[ -z "$ts_key" ]] && command -v op >/dev/null 2>&1; then
-                    ts_key=$(op read "op://Employee/Tailscale - iv-internal-dev/credential" --account industryvault.1password.com 2>/dev/null) || true
+                if [[ -z "$ts_key" && "$(scutil --get LocalHostName 2>/dev/null)" == "klundstedt-mini" ]] && command -v op >/dev/null 2>&1; then
+                    local ts_cid ts_csec ts_token
+                    ts_cid=$(op read "op://Employee/Tailscale OAuth Dev/Client ID" --account industryvault.1password.com 2>/dev/null) || true
+                    ts_csec=$(op read "op://Employee/Tailscale OAuth Dev/Client secret" --account industryvault.1password.com 2>/dev/null) || true
+                    if [[ -n "$ts_cid" && -n "$ts_csec" ]]; then
+                        ts_token=$(curl -fsS -m 15 -u "$ts_cid:$ts_csec" -d "grant_type=client_credentials" https://api.tailscale.com/api/v2/oauth/token 2>/dev/null | jq -r '.access_token // empty') || true
+                        [[ -n "$ts_token" ]] && ts_key=$(curl -fsS -m 15 -X POST -H "Authorization: Bearer $ts_token" -H "Content-Type: application/json" \
+                            -d '{"capabilities":{"devices":{"create":{"reusable":false,"ephemeral":false,"preauthorized":true,"tags":["tag:dev"]}}},"expirySeconds":600,"description":"install.sh mini join"}' \
+                            https://api.tailscale.com/api/v2/tailnet/-/keys 2>/dev/null | jq -r '.key // empty') || true
+                    fi
                 fi
-
                 if [[ -n "$ts_key" ]]; then
                     sudo tailscale up --ssh --accept-dns --authkey="$ts_key" 2>/dev/null && echo "  [+] Tailscale up (SSH enabled)" || echo "  [!] tailscale up failed"
                 elif tailscale status >/dev/null 2>&1; then
                     echo "  Already authenticated"
                     sudo tailscale set --ssh --accept-dns 2>/dev/null || true
                 else
-                    echo "  No auth key found. Run: sudo tailscale up --ssh"
+                    echo "  Not authenticated. Run: sudo tailscale up --ssh   (one-time browser login)"
                 fi
             elif tailscale status >/dev/null 2>&1; then
                 echo "  Already authenticated"
@@ -1376,16 +1388,23 @@ setup_tailscale() {
         local ts_key="${TS_AUTHKEY:-}"
         if [[ -z "$ts_key" ]]; then
             local ts_proxy="https://tailscale-api.int.exe.xyz"
-            if curl -sfo /dev/null --connect-timeout 2 "$ts_proxy/api/v2/tailnet/-/devices" 2>/dev/null; then
-                echo "  exe.dev proxy reachable — generating auth key"
+            # Two-step (U11, 2026-07): the proxy injects the Tailscale OAuth
+            # client's Basic credentials on every request, so only the token
+            # exchange goes through it; the 1h Bearer token then talks to the
+            # public API directly. The exchange doubles as the reachability probe.
+            local ts_token ts_api="https://api.tailscale.com"
+            ts_token=$(curl -sL --connect-timeout 2 --max-time 15 -X POST -d "grant_type=client_credentials" \
+                "$ts_proxy/api/v2/oauth/token" 2>/dev/null | jq -r '.access_token // empty') || true
+            if [[ -n "$ts_token" ]]; then
+                echo "  exe.dev proxy reachable — generating auth key (OAuth)"
                 # Clean stale nodes with same hostname (prevents -2 suffix)
                 local did
-                for did in $(curl -sL "$ts_proxy/api/v2/tailnet/-/devices" \
+                for did in $(curl -sL -H "Authorization: Bearer $ts_token" "$ts_api/api/v2/tailnet/-/devices" \
                     | jq -r --arg h "$TS_HOSTNAME" '.devices[] | select(.hostname == $h) | .id'); do
-                    curl -sL -X DELETE "$ts_proxy/api/v2/device/$did" >/dev/null
+                    curl -sL -X DELETE -H "Authorization: Bearer $ts_token" "$ts_api/api/v2/device/$did" >/dev/null
                 done
                 # Generate single-use ephemeral auth key
-                ts_key=$(curl -sL -X POST "$ts_proxy/api/v2/tailnet/-/keys" \
+                ts_key=$(curl -sL -X POST -H "Authorization: Bearer $ts_token" "$ts_api/api/v2/tailnet/-/keys" \
                     -H "Content-Type: application/json" \
                     -d '{"capabilities":{"devices":{"create":{"reusable":false,"ephemeral":true,"preauthorized":true,"tags":["tag:dev"]}}}}' \
                     | jq -r '.key')

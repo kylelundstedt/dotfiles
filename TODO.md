@@ -15,7 +15,7 @@ Strategy: no plaintext secrets on VM disk. Each secret uses the narrowest delive
 | Secret                       | Mechanism                                                             | Status            |
 | ---------------------------- | --------------------------------------------------------------------- | ----------------- |
 | GitHub clone/push            | exe.dev GitHub integration                                            | Done              |
-| Tailscale auth key           | exe.dev HTTP proxy integration → ephemeral key per boot               | Done (2026-05-23) |
+| Tailscale auth key           | OAuth client behind exe.dev proxy → 1h token → ephemeral key per join | Done (2026-07-13) |
 | Tailscale ghost node cleanup | Setup script via same HTTP proxy                                      | Done (2026-05-23) |
 | Git commit signing           | SSH agent forwarding via Tailscale                                    | Done              |
 | MCP MotherDuck               | exe.dev HTTP proxy integration (`motherduck-mcp`)                     | Done (2026-05-23) |
@@ -28,7 +28,6 @@ Strategy: no plaintext secrets on VM disk. Each secret uses the narrowest delive
 - [ ] Create per-project 1P service account (read-only access to project vault)
 - [ ] Extend `install.sh` to accept `OP_SERVICE_ACCOUNT_TOKEN` env var; write to `~/.config/op/sa-token`
 - [ ] Validate `op run --env-file` flow on a real project
-- [ ] Rotate Tailscale API key before 2026-08-21 (`ssh exe.dev integrations remove tailscale-api` then re-add)
 - [ ] Rotate GitHub PATs when expired (`ssh exe.dev integrations remove github-mcp-home` then re-add)
 
 ## Tailscale ACL

@@ -33,16 +33,28 @@ if [ "$state" = "Running" ]; then
   exit 0
 fi
 
+# Two-step (U11, 2026-07): the proxy injects the Tailscale OAuth client's
+# Basic credentials on every request, so only the token exchange goes through
+# it; the short-lived Bearer token then mints against the public API directly.
+token=$(curl -fsSL --connect-timeout 5 --max-time 15 \
+  -X POST -d "grant_type=client_credentials" \
+  "${PROXY%/}/api/v2/oauth/token" | jq -r '.access_token // empty' || true)
+if [ -z "$token" ]; then
+  echo "join-tailnet: OAuth token exchange via ${PROXY} failed" >&2
+  echo "  is the tailscale-api integration attached to this VM (--tag=iv)?" >&2
+  exit 1
+fi
+
 key=$(curl -fsSL --connect-timeout 5 --max-time 15 \
+  -H "Authorization: Bearer $token" \
   -H "Content-Type: application/json" \
-  -X POST "${PROXY%/}/api/v2/tailnet/-/keys" \
+  -X POST "https://api.tailscale.com/api/v2/tailnet/-/keys" \
   -d "{\"capabilities\":{\"devices\":{\"create\":{\"reusable\":false,\"ephemeral\":true,\"preauthorized\":true,\"tags\":[\"${TAG}\"]}}},\"expirySeconds\":600}" \
   | jq -r '.key // empty' || true)
 
 case "$key" in
   tskey-*) ;;
-  *) echo "join-tailnet: failed to mint auth key from ${PROXY}" >&2
-     echo "  is the tailscale-api integration attached to this VM (--tag=iv)?" >&2
+  *) echo "join-tailnet: failed to mint auth key (token OK, mint failed — check the OAuth client's auth_keys scope / ${TAG} tag)" >&2
      exit 1 ;;
 esac
 
