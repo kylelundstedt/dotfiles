@@ -23,3 +23,4 @@ github-pat-iv-cmg | github-fine-grained-pat | unknown | op://Employee/GitHub PAT
 tigris-backup-rclone-key | s3-access-key | none | op://Personal/Tigris mini-backup rclone key @ industryvault.1password.com | keychain:tigris-backup:s3-key-id,keychain:tigris-backup:s3-secret
 tigris-backup-crypt | rclone-crypt-password+salt | none | op://Personal/Tigris mini-backup rclone crypt @ industryvault.1password.com | keychain:tigris-backup:crypt-password,keychain:tigris-backup:crypt-salt
 owc8tb-passphrase | disk-encryption-passphrase | none | op://Personal/OWC8TB disk encryption/password @ industryvault.1password.com | keychain:owc8tb-encryption
+healthchecks-api-key | api-key (read-write) | none | - | keychain:healthchecks:api-key (mini) — manages check configs; created 2026-07-13

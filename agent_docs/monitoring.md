@@ -30,19 +30,18 @@ Grace sizing rules (each learned the hard way):
 
 | Check                               | Job (repo)                                  | Job schedule         | Check schedule  | Grace | Keychain ping-URL item                         |
 | ----------------------------------- | ------------------------------------------- | -------------------- | --------------- | ----- | ---------------------------------------------- |
-| `sync-repos`                        | dotfiles `sync-repos.sh`                    | 00:00 + 12h wake     | `0 0 * * *`     | ~19h  | `sync-repos:healthcheck-url`                   |
+| `sync-repos`                        | dotfiles `sync-repos.sh`                    | 00:00 + 12h wake     | `0 0 * * *`     | 6h    | `sync-repos:healthcheck-url`                   |
 | `tigris-backup`                     | dotfiles `backup/tigris-backup.sh`          | 04:30                | `30 4 * * *`    | 8h    | `tigris-backup:healthcheck-url`                |
 | `personal-mcp: msgvault`            | personal-mcp `msgvault-sync.sh`             | 03:00                | `0 3 * * *`     | —     | `personal-mcp:msgvault-healthcheck-url`        |
 | `personal-mcp: web-archive-refresh` | personal-mcp `web-archive-refresh.sh`       | 03:30                | `30 3 * * *`    | 3h    | `personal-mcp:web-healthcheck-url`             |
 | `personal-mcp: rebuild-hub`         | personal-mcp `hub/rebuild-hub.sh`           | 04:00                | `0 4 * * *`     | 2h    | `personal-mcp:hub-healthcheck-url`             |
-| `personal-mcp: mcp-server`          | personal-mcp `healthcheck-mcp.sh` (probe)   | every 15 min         | period 15m      | —     | `personal-mcp:mcp-server-healthcheck-url`      |
+| `personal-mcp: mcp-server`          | personal-mcp `healthcheck-mcp.sh` (probe)   | every 15 min         | period 15m      | 30m   | `personal-mcp:mcp-server-healthcheck-url`      |
 | `check-key-expiry`                  | dotfiles `provisioning/check-key-expiry.sh` | monthly (1st, 10:00) | not created yet | —     | `key-expiry:healthcheck-url` (not provisioned) |
 
-Grace values marked — are unverified (set in the dashboard; not readable
-without an API key). If a read-write API key is ever stored
-(`healthchecks:api-key` in the Keychain), check schedules become
-agent-manageable and a drift check against this table becomes possible
-(natural U10+ follow-up).
+All schedules + graces verified against the live API (2026-07-13). A
+read-write API key is stored as `healthchecks:api-key` in the login
+Keychain, so check schedules are agent-manageable and a drift check of this
+table against `GET /api/v3/checks/` is possible (natural U10+ follow-up).
 
 ## Incident notes
 
