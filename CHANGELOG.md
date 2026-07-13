@@ -4,6 +4,69 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-07-03..13 — simplification plan (all 12 units)
+
+Full record: [agent_docs/simplification-plan.md](agent_docs/simplification-plan.md)
+(review, four core decisions, per-unit execution notes). The shape of it: dotfiles
+declares, iv-image pins, personal-mcp serves.
+
+- **Provisioning became declarative (U2/U3/U4/U5).** New `provisioning/` dir:
+  `skills.manifest`, `mcp.manifest`, `tools.manifest` are the single source for
+  what gets installed where (`team`/`personal` layers). `install.sh` reads them;
+  iv-image's `vendor-skills.sh` vendors skills + a generated `mcp-servers.json`
+  from them **at a pinned dotfiles commit** (`dotfiles-manifest.pin`) so the team
+  image stays reproducible. `diff-provisioning.sh` (in `test-install.sh
+provisioning`) flags drift both ways, including pin lag. Gotcha for the ages:
+  manifest read-loops must feed on **fd 9** — `npx` eats stdin and silently
+  dropped 34 of 35 rows.
+- **personal-mcp split out (U8/U9).** The archives-hub server + ingest pipelines
+  moved to the private `kylelundstedt/personal-mcp` repo (filter-repo, history
+  preserved) — ends PII shipping to every VM via the public repo. De-dup'd there
+  (one `lib/embed.py`, one search CLI, canonical dedup key — the old semantic-
+  search dedup was a lossy approximation that could over-collapse SMS). Hub
+  rebuild is its own failure-isolated job (a Readwise outage used to silently
+  freeze email/calendar search freshness). Cascade re-spaced: msgvault 03:00 →
+  web refresh 03:30 → rebuild-hub 04:00 → tigris-backup 04:30 (kills the 04:00
+  backup-vs-rewrite collision). dotfiles keeps the hub-mcp _client_ registration
+  and the backup.
+- **Shared AGENTS.md sections single-sourced (U6).** `provisioning/agents-shared.md`
+  is canonical; the personal file embeds it between markers, iv-image vendors it
+  at the pin. Reconciled mechanically: 0 rules lost.
+- **install.sh is a thin overlay on IV VMs (U7).** Gated on `/exe.dev` +
+  `~/iv-provision.lock`: team tools never installed/upgraded over (pins survive),
+  team MCP untouched, agents package stowed _around_ the team files with the
+  personal AGENTS.md delta + SessionStart hook spliced in, Linux SSH config is a
+  prepended marker block that preserves iv-image's stanza (no more truncating
+  writes). Verified 20/20 on a throwaway IV VM — the first run caught a real
+  stow conflict (settings.json seeding) no sandbox could see.
+- **Shared job library (U10).** `backup/_lib.sh` (keychain, healthcheck pings,
+  staleness-skip, locks, dated logs, the rclone crypt env shared with
+  restore-drill). The month's monitoring rules are library properties now:
+  skip-must-ping-success, lastrun-only-on-clean-runs. Two sync-repos plists
+  merged into one (both triggers). Verified: env byte-diff, restore drill 3/3,
+  both skip paths kickstarted under launchd with pings confirmed via API.
+- **Tailscale on a non-expiring OAuth client (U11).** Killed the 2026-08-21 API
+  key deadline and both static `iv-internal-*` auth keys. Finding: the client
+  secret is NOT accepted as a static API credential — the exe.dev integration
+  injects Basic client creds, flows exchange via the proxy for a 1h token, then
+  hit the public API. Client needs `auth_keys` AND `devices:core` (write),
+  tag:dev. The mini is a _tagged_ device (mbp isn't), so its rebuild mints a
+  non-ephemeral tag:dev key via op. Old credentials revoked and verified gone.
+- **Credential + monitoring management (U12 + incident fallout).**
+  `keys.manifest` + monthly `check-key-expiry.sh` (35d window — must exceed the
+  monthly cadence); `checks.manifest` + `check-monitoring.sh` verify every
+  healthchecks.io schedule/grace against the live API (read-write key in
+  Keychain). Born of the 07-04..09 and 07-11..13 flapping incidents
+  (post-mortems in [agent_docs/monitoring.md](agent_docs/monitoring.md)): the
+  gitconfig SSH rewrite that only lost the tie under launchd, lastrun-on-failure,
+  evicted iCloud files (.Trash, then `iCloud~*` app containers — now excluded
+  wholesale), and job reschedules that didn't move their check schedules.
+- **Docs cleanup (U1)** and the standing lesson set: verify scheduled jobs via
+  `launchctl kickstart`, not shell reproductions of launchd; verify that doc
+  edits actually landed (prettier padding silently no-ops exact-match seds).
+- Open: one real `./install.sh` run on klundstedt-mbp (U3 verify). iv-image PRs
+  #1/#2/#3 merged as the cross-repo halves.
+
 ## 2026-06-27
 
 - **klundstedt-mini archive backup → Tigris (done).** `~/archives/` (msgvault email, calendar DuckDB, `speaking-engagements.md`) is inside `$HOME/`, which `backup/tigris-backup.sh` syncs nightly to `tigris:klundstedt-mini-backup` (`bkup:home`) — client-side encrypted via rclone crypt, with nightly Tigris snapshots. No exclude pattern covers `archives/`, so it's fully captured. External-volume archives (aws-s3, box, iphone-backup, messages-store) go to the GLACIER `klundstedt-mini-archive` bucket. Supersedes the original "create bucket + scheduled sync" task.
