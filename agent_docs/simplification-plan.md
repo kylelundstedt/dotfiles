@@ -53,7 +53,15 @@ until fixed. Full post-mortem + registry: `agent_docs/monitoring.md`.
 Read-write API key now in Keychain (`healthchecks:api-key`), so check
 configs are agent-manageable. U10's spec grows accordingly: skip-must-ping
 as a `_lib.sh` property, kickstart-based verification, and a registry drift
-check against the API. **Next:** U10 → U6 → U7 → U11.
+check against the API.
+
+**U10 done (2026-07-13, `9cf3a27`):** backup/_lib.sh extracted (env diff
+clean, restore-drill 3/3 through the lib, both skip paths kickstart-verified
+under launchd with pings confirmed on the API); sync plists merged;
+checks.manifest + check-monitoring.sh enforce the monitoring registry in
+test-install.sh provisioning. **Next:** U6 → U7 (cross-repo pair) → U11
+(Tailscale OAuth, before 2026-08-21). Overnight validation: tonight's
+midnight sync + 04:30 backup are the first scheduled runs through the lib.
 
 Unplanned fix (2026-07-05): multi-day healthcheck flapping on sync-repos +
 tigris-backup diagnosed and fixed (`ab1d21e`) — gitconfig_macos SSH rewrite
