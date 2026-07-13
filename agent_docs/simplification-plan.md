@@ -6,7 +6,7 @@ the `kylelundstedt/iv-image` derivative image for exe.dev VMs, the new
 **simplify, remove redundancy with iv-image, improve performance** across
 Ubuntu VMs and the two macOS machines (`klundstedt-mini`, `klundstedt-mbp`).
 
-## Status (2026-07-05, supervised resume in progress)
+## Status (2026-07-05..13 — PLAN COMPLETE, all 12 units)
 
 Branch `plan/low-risk-subset` reviewed + merged (`a17bb60`). **U3 done** on
 master: `install.sh` skills/MCP sections now read the provisioning manifests
@@ -327,12 +327,11 @@ collides on:
    Stays in dotfiles; independent of the split.
 5. **Docs/config cleanup — ✅ done (U1):** delete `snowflake-auth-policy.md` +
    `agent-shell-eval.md` (and their index/TODO rows); add the Memory restatement
-   to root `AGENTS.md`; sync `settings.json.example` (SSH-guard hook still
-   pending — see Status).
+   to root `AGENTS.md`; sync `settings.json.example` (SSH-guard hook found in iv-image's
+   settings.json during U7 and added to the example — closed).
 6. **API key management** (Core decision 4): runbook + expiry alarm **✅ done
-   (U12)**; Tailscale API-key → OAuth client (U11) still open and retires the
-   time-sensitive 2026-08-21 rotation. Largely independent of the
-   boundary/split work.
+   (U12)**; Tailscale API-key → OAuth client **✅ done (U11)** — the 2026-08-21
+   deadline is retired; nothing in the fleet expires anymore.
 
 ### Sequencing
 
@@ -356,18 +355,18 @@ manual subagents vs the Workflow tool) decided at execution time.
 | U2 ✅  | Manifest data files                | `provisioning/{skills,mcp,tools}.manifest` (new)                                                                                | S                            | —                                | awk parse smoke-test; row counts == current install set                                 | low    |
 | U4 ✅  | Drift-check                        | `provisioning/diff-provisioning.sh`; hook into `test-install.sh`                                                                | S                            | U2                               | flags a deliberately-injected drift                                                     | low    |
 | U12 ✅ | API-key runbook + alarm            | `agent_docs/secrets.md`, `provisioning/keys.manifest`, `check-key-expiry.sh` + plist                                            | S                            | —                                | `check-key-expiry.sh` dry-run warns <14d                                                | low    |
-| U10    | `backup/_lib.sh`                   | `backup/_lib.sh` (new), `tigris-backup.sh`, `sync-repos.sh`, `restore-drill.sh`, merge 2 sync plists                            | ★                            | —                                | `restore-drill.sh` + one manual `tigris-backup` run **(mini)**; behavior byte-identical | high   |
-| U3     | Manifest consumers (dotfiles)      | `install.sh` skills+MCP sections                                                                                                | ★                            | U2                               | `--dry-run` + real run on mbp: skills/MCP set unchanged; `test-install.sh`              | med    |
-| U5     | Manifest consumers (iv-image) + PR | iv-image `vendor-skills.sh`, `agent/setup-mcp.sh`                                                                               | ★                            | U2 pushed (pinned SHA)           | throwaway VM: team skills/MCP present                                                   | med    |
-| U8     | personal-mcp split                 | `git filter-repo` → private `kylelundstedt/personal-mcp`; path fixups; `bootstrap.sh`; move 4 plists (+ rebuild-hub)            | ★+H                          | —                                | fresh clone + bootstrap **(mini)**; plists load; server reachable                       | high   |
-| U9     | personal-mcp de-dup (new repo)     | `lib/embed.py` + 4 consumers, one hub `search.sh --semantic`, `hub/rebuild-hub.sh` + ATTACH guard, `_DEDUP_KEY_SQL`, reschedule | S (python/CLI) / ★ (launchd) | U8                               | `test_server.py` + manual cascade **(mini)**                                            | med    |
-| U6     | AGENTS.md reconciliation (c)       | iv-image `agent/AGENTS.md` (absorb shared), dotfiles `agents/.agents/AGENTS.md` (trim to deltas)                                | ★                            | coordinate both repos            | read-through: no rule lost                                                              | med    |
-| U7     | VM overlay                         | `install.sh` (gate `/exe.dev`; skip iv-owned agent/MCP/SSH; personal delta only)                                                | ★                            | U3, U6                           | `test-install.sh` exe path on a VM; team baseline intact                                | med-hi |
-| U11    | Tailscale → OAuth client           | OAuth client (tag:dev); `install.sh:1140`, `test-install.sh`, join-tailnet proxy; retire API key + static auth keys             | ★                            | verify integration accepts OAuth | `join-tailnet` on a fresh VM                                                            | med    |
+| U10 ✅ | `backup/_lib.sh`                   | `backup/_lib.sh` (new), `tigris-backup.sh`, `sync-repos.sh`, `restore-drill.sh`, merge 2 sync plists                            | ★                            | —                                | `restore-drill.sh` + one manual `tigris-backup` run **(mini)**; behavior byte-identical | high   |
+| U3 ✅  | Manifest consumers (dotfiles)      | `install.sh` skills+MCP sections                                                                                                | ★                            | U2                               | `--dry-run` + real run on mbp: skills/MCP set unchanged; `test-install.sh`              | med    |
+| U5 ✅  | Manifest consumers (iv-image) + PR | iv-image `vendor-skills.sh`, `agent/setup-mcp.sh`                                                                               | ★                            | U2 pushed (pinned SHA)           | throwaway VM: team skills/MCP present                                                   | med    |
+| U8 ✅  | personal-mcp split                 | `git filter-repo` → private `kylelundstedt/personal-mcp`; path fixups; `bootstrap.sh`; move 4 plists (+ rebuild-hub)            | ★+H                          | —                                | fresh clone + bootstrap **(mini)**; plists load; server reachable                       | high   |
+| U9 ✅  | personal-mcp de-dup (new repo)     | `lib/embed.py` + 4 consumers, one hub `search.sh --semantic`, `hub/rebuild-hub.sh` + ATTACH guard, `_DEDUP_KEY_SQL`, reschedule | S (python/CLI) / ★ (launchd) | U8                               | `test_server.py` + manual cascade **(mini)**                                            | med    |
+| U6 ✅  | AGENTS.md reconciliation (c)       | iv-image `agent/AGENTS.md` (absorb shared), dotfiles `agents/.agents/AGENTS.md` (trim to deltas)                                | ★                            | coordinate both repos            | read-through: no rule lost                                                              | med    |
+| U7 ✅  | VM overlay                         | `install.sh` (gate `/exe.dev`; skip iv-owned agent/MCP/SSH; personal delta only)                                                | ★                            | U3, U6                           | `test-install.sh` exe path on a VM; team baseline intact                                | med-hi |
+| U11 ✅ | Tailscale → OAuth client           | OAuth client (tag:dev); `install.sh:1140`, `test-install.sh`, join-tailnet proxy; retire API key + static auth keys             | ★                            | verify integration accepts OAuth | `join-tailnet` on a fresh VM                                                            | med    |
 
-**Done (branch `plan/low-risk-subset`):** U1, U2, U4, U12 — see Status at top.
-**Next:** U10; U3 (U2 is in); U5 after the branch merges + pushes (pinned SHA).
-**Serialize:** U8 → U9. **Later phase:** U6 → U7. **Anytime:** U11.
+**All 12 units done (2026-07-13)** — see Status at top for per-unit records.
+The only open verification is a real `./install.sh` run on klundstedt-mbp
+(from U3's verify column).
 
 **Delegatable to cheap models:** U1, U2, U4, U12, and U9's python/CLI half.
 Everything else is destructive, subtle bash, outward-facing, DR-critical, or
