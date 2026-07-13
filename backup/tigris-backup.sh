@@ -13,6 +13,8 @@ if [[ "$(scutil --get LocalHostName 2>/dev/null)" != "klundstedt-mini" ]]; then
     echo "not klundstedt-mini; skipping tigris-backup."; exit 0
 fi
 
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+
 LOCKDIR=/tmp/tigris-backup.lock
 LAST_RUN=/tmp/tigris-backup.lastrun
 MIN_INTERVAL=$((20 * 3600))
@@ -23,39 +25,22 @@ EXT=/Volumes/OWC8TB
 # a freshly-shot photo still mid-download from iCloud flaps the gate at 04:00.
 PHOTOS_MISSING_MAX=0
 
-# Dead-man's-switch monitor (healthchecks.io). URL in Keychain
-# (tigris-backup:healthcheck-url); pings are no-ops if it's unset. /start at
-# begin, bare = success, /fail = failure (with summary). Defined BEFORE the
-# staleness skip so the skip can ping success: lastrun is only written by a
-# fully-successful run, so "fresh" is exactly the monitor's definition of
-# success. Without that ping, a manual afternoon run shifts the 04:00 nightly
-# into the guard window and the check goes red on a silent skip (2026-07-06).
-kc() { security find-generic-password -s "tigris-backup:$1" -w 2>/dev/null; }
-HC_URL=$(kc healthcheck-url)
-hc() { [[ -n "$HC_URL" ]] && curl -fsS -m 10 --retry 3 "${HC_URL}${1:-}" "${@:2}" >/dev/null 2>&1 || true; }
+# Monitoring + skip/lock/log semantics come from _lib.sh (the skip pings
+# success by construction — see the lib header for why that's load-bearing).
+job_hc_init "tigris-backup:healthcheck-url"
 
-# Skip if a recent run already completed — still ping success (data is fresh).
-if [[ -f "$LAST_RUN" ]]; then
-    now=$(date +%s); last=$(cat "$LAST_RUN" 2>/dev/null || echo 0)
-    if (( now - last < MIN_INTERVAL )); then echo "ran $(( (now-last)/3600 ))h ago; skip"; hc; exit 0; fi
-fi
+job_stale_skip "$LAST_RUN" "$MIN_INTERVAL" && { echo "ran ${JOB_STALE_AGE_H}h ago; skip"; exit 0; }
 # Don't collide with an in-progress rclone (e.g. the initial push).
 if pgrep -f "rclone (copy|sync)" >/dev/null 2>&1; then echo "rclone already running; skip"; exit 0; fi
 # Single instance.
-mkdir "$LOCKDIR" 2>/dev/null || { echo "another tigris-backup running; exit"; exit 0; }
+job_lock "$LOCKDIR" || { echo "another tigris-backup running; exit"; exit 0; }
 trap 'rmdir "$LOCKDIR" 2>/dev/null' EXIT
 
-# Persistent, dated logs (launchd's /tmp log is wiped on reboot; keep 30 days).
-LOGDIR="$HOME/Library/Logs/tigris-backup"; mkdir -p "$LOGDIR"
-exec > >(tee -a "$LOGDIR/$(date +%F-%H%M%S).log") 2>&1
-find "$LOGDIR" -name '*.log' -type f -mtime +30 -delete 2>/dev/null || true
+job_log "$HOME/Library/Logs/tigris-backup"
 
-tid=$(kc s3-key-id); tsec=$(kc s3-secret); cpw=$(kc crypt-password); csalt=$(kc crypt-salt)
-if [[ -z "$tid" || -z "$tsec" || -z "$cpw" || -z "$csalt" ]]; then
-    echo "FATAL: tigris-backup creds missing from Keychain"; exit 1
-fi
+tigris_rclone_env || exit 1
 
-hc /start
+job_hc /start
 FAILURES=()
 
 # The archive sources + Photos live on the encrypted external drive, which comes
@@ -70,18 +55,6 @@ if ! mount | grep -qF "on $EXT ("; then
     echo "external $EXT STILL not mounted after unlock attempt — archive sources unavailable"
     FAILURES+=("external-drive-unmounted")
 fi
-
-export RCLONE_CONFIG_TIGRIS_TYPE=s3 RCLONE_CONFIG_TIGRIS_PROVIDER=Other
-export RCLONE_CONFIG_TIGRIS_ACCESS_KEY_ID="$tid" RCLONE_CONFIG_TIGRIS_SECRET_ACCESS_KEY="$tsec"
-export RCLONE_CONFIG_TIGRIS_ENDPOINT=https://t3.storage.dev RCLONE_CONFIG_TIGRIS_REGION=auto RCLONE_CONFIG_TIGRIS_ACL=private
-ob_pw=$(rclone obscure "$cpw"); ob_salt=$(rclone obscure "$csalt")
-export RCLONE_CONFIG_BKUP_TYPE=crypt RCLONE_CONFIG_BKUP_REMOTE=tigris:klundstedt-mini-backup
-export RCLONE_CONFIG_BKUP_FILENAME_ENCRYPTION=standard RCLONE_CONFIG_BKUP_DIRECTORY_NAME_ENCRYPTION=true
-export RCLONE_CONFIG_BKUP_PASSWORD="$ob_pw" RCLONE_CONFIG_BKUP_PASSWORD2="$ob_salt"
-export RCLONE_CONFIG_ARCH_TYPE=crypt RCLONE_CONFIG_ARCH_REMOTE=tigris:klundstedt-mini-archive
-export RCLONE_CONFIG_ARCH_FILENAME_ENCRYPTION=standard RCLONE_CONFIG_ARCH_DIRECTORY_NAME_ENCRYPTION=true
-export RCLONE_CONFIG_ARCH_PASSWORD="$ob_pw" RCLONE_CONFIG_ARCH_PASSWORD2="$ob_salt"
-export TIGRIS_STORAGE_ACCESS_KEY_ID="$tid" TIGRIS_STORAGE_SECRET_ACCESS_KEY="$tsec"
 
 # --max-delete aborts a sync that would remove an abnormal number of files
 # (guards against a missing/empty source wiping the backup).
@@ -163,10 +136,10 @@ sync_one msgatt "$EXT/messages-store"             arch:messages-store --s3-stora
 # you want a full point-in-time copy.)
 
 if [[ ${#FAILURES[@]} -eq 0 ]]; then
-    date +%s > "$LAST_RUN"   # only mark success when every phase succeeded
-    hc                        # success ping -> resets the dead-man's-switch
+    job_mark_done "$LAST_RUN"   # only mark success when every phase succeeded
+    job_hc                       # success ping -> resets the dead-man's-switch
     echo "=== $(date '+%F %T') tigris-backup DONE (all phases OK) ==="
 else
     echo "=== $(date '+%F %T') tigris-backup DONE WITH FAILURES: ${FAILURES[*]} ==="
-    hc /fail --data-raw "tigris-backup $(scutil --get LocalHostName 2>/dev/null) $(date '+%F %T') failed: ${FAILURES[*]}"
+    job_hc /fail --data-raw "tigris-backup $(scutil --get LocalHostName 2>/dev/null) $(date '+%F %T') failed: ${FAILURES[*]}"
 fi

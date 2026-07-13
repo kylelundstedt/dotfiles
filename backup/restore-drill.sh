@@ -5,22 +5,10 @@
 # Run periodically (e.g. quarterly). Uses the same Keychain creds as the nightly job.
 set -uo pipefail
 
-kc() { security find-generic-password -s "tigris-backup:$1" -w 2>/dev/null; }
-tid=$(kc s3-key-id); tsec=$(kc s3-secret); cpw=$(kc crypt-password); csalt=$(kc crypt-salt)
-if [[ -z "$tid" || -z "$tsec" || -z "$cpw" || -z "$csalt" ]]; then
-    echo "FATAL: tigris-backup creds missing from Keychain"; exit 1
-fi
-
-export RCLONE_CONFIG_TIGRIS_TYPE=s3 RCLONE_CONFIG_TIGRIS_PROVIDER=Other
-export RCLONE_CONFIG_TIGRIS_ACCESS_KEY_ID="$tid" RCLONE_CONFIG_TIGRIS_SECRET_ACCESS_KEY="$tsec"
-export RCLONE_CONFIG_TIGRIS_ENDPOINT=https://t3.storage.dev RCLONE_CONFIG_TIGRIS_REGION=auto
-ob_pw=$(rclone obscure "$cpw"); ob_salt=$(rclone obscure "$csalt")
-for R in BKUP:klundstedt-mini-backup ARCH:klundstedt-mini-archive; do
-    n=${R%%:*}; b=${R#*:}
-    export RCLONE_CONFIG_${n}_TYPE=crypt RCLONE_CONFIG_${n}_REMOTE="tigris:$b"
-    export RCLONE_CONFIG_${n}_FILENAME_ENCRYPTION=standard RCLONE_CONFIG_${n}_DIRECTORY_NAME_ENCRYPTION=true
-    export RCLONE_CONFIG_${n}_PASSWORD="$ob_pw" RCLONE_CONFIG_${n}_PASSWORD2="$ob_salt"
-done
+# Creds + rclone remotes (tigris/bkup/arch) come from the shared library —
+# the same env the nightly writes with, so the drill proves the real path.
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+tigris_rclone_env || exit 1
 
 DRILL=$(mktemp -d /tmp/tigris-restore-drill.XXXXXX)
 trap 'rm -rf "$DRILL"' EXIT

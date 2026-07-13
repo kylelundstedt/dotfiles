@@ -11,6 +11,9 @@
         <string>-c</string>
         <string>$HOME/dotfiles/sync-repos.sh</string>
     </array>
+    <!-- Both triggers on one job (was two plists differing only by trigger):
+         midnight daily + every 12h as a wake-from-sleep catch-up. The script's
+         20h staleness guard prevents redundant full runs. -->
     <key>StartCalendarInterval</key>
     <dict>
         <key>Hour</key>
@@ -18,6 +21,8 @@
         <key>Minute</key>
         <integer>0</integer>
     </dict>
+    <key>StartInterval</key>
+    <integer>43200</integer>
     <key>StandardOutPath</key>
     <string>/tmp/sync-repos.log</string>
     <key>StandardErrorPath</key>

@@ -11,11 +11,11 @@
 # Clone/fetch tries SSH first, then falls back to HTTPS with the per-org token
 # (covers orgs where the SSH key lacks SSO authorization, e.g. USAA).
 #
-# Scheduled by two LaunchAgents:
-#   - midnight daily (StartCalendarInterval)
-#   - every 12h as a catch-up for wake-from-sleep (StartInterval)
-# Staleness check below prevents redundant runs.
+# Scheduled by ONE LaunchAgent carrying both triggers: midnight daily
+# (StartCalendarInterval) + every 12h as a wake-from-sleep catch-up
+# (StartInterval). Staleness check below prevents redundant runs.
 set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/backup/_lib.sh"
 
 LAST_RUN_FILE="/tmp/sync-repos.lastrun"
 LOCKFILE="/tmp/sync-repos.lock"
@@ -24,27 +24,19 @@ GITHUB_DIR="$HOME/github"
 SKIP_REPOS="dotfiles"  # managed separately at ~/dotfiles
 FAILED=0; FAILED_REPOS=()  # hard failures — used to fail the healthcheck honestly
 
-# Dead-man's-switch heartbeat (healthchecks.io). Ping URL in the login Keychain
-# (sync-repos:healthcheck-url) — mini-only, no-op if absent. Defined up here so the
-# staleness skip below can ALSO ping success: lastrun is only written on a clean
-# run, so a skip means "a sync SUCCEEDED recently enough" (fresh data), which is
-# success for the monitor — not a missed run. Two
-# schedules (midnight + 12h wakeup) plus ad-hoc manual runs mean skips are normal;
-# without this ping the grace window expires and the check false-alarms red.
-hc() { local u; u=$(security find-generic-password -s "sync-repos:healthcheck-url" -w 2>/dev/null); [ -n "$u" ] && curl -fsS -m 10 --retry 3 "${u}${1:-}" "${@:2}" >/dev/null 2>&1 || true; }
+# Monitoring + skip/lock semantics come from backup/_lib.sh: the staleness skip
+# pings success by construction (lastrun is only written by a clean run, so
+# "fresh" IS success). Two triggers plus ad-hoc manual runs mean skips are
+# normal; a silent skip would false-alarm the check red (see the lib header).
+job_hc_init "sync-repos:healthcheck-url"
 
-# Skip if last successful run was recent — still ping success (data is fresh).
-if [[ -f "$LAST_RUN_FILE" ]]; then
-    last_run=$(cat "$LAST_RUN_FILE")
-    now=$(date +%s)
-    if (( now - last_run < MIN_INTERVAL )); then
-        echo "Last sync was $(( (now - last_run) / 3600 ))h ago, skipping."
-        hc; exit 0
-    fi
+if job_stale_skip "$LAST_RUN_FILE" "$MIN_INTERVAL"; then
+    echo "Last sync was ${JOB_STALE_AGE_H}h ago, skipping."
+    exit 0
 fi
 
 # Prevent overlapping runs
-if ! mkdir "$LOCKFILE" 2>/dev/null; then
+if ! job_lock "$LOCKFILE"; then
     echo "Another sync-repos is already running (lockfile: $LOCKFILE). Exiting."
     exit 0
 fi
@@ -54,7 +46,6 @@ fi
 ASKPASS="$(mktemp -t sync-repos-askpass)"
 printf '#!/bin/sh\nprintf "%%s" "$SYNC_REPOS_TOKEN"\n' > "$ASKPASS"
 chmod +x "$ASKPASS"
-# (hc heartbeat helper is defined near the top so the staleness skip can use it.)
 # /start at begin, success on clean exit, /fail otherwise.
 # Success ONLY on a clean exit with zero failed repos — a partial failure (or a
 # mid-run set -e abort) pings /fail with a summary so the check goes red honestly.
@@ -62,19 +53,19 @@ finish() {
     local rc=$?; set +e
     rmdir "$LOCKFILE" 2>/dev/null; rm -f "$ASKPASS"
     if [ "$rc" -eq 0 ] && [ "$FAILED" -eq 0 ]; then
-        hc
+        job_hc
     else
-        hc /fail --data-raw "sync-repos $(scutil --get LocalHostName 2>/dev/null) $(date '+%F %T') rc=$rc failed=$FAILED: ${FAILED_REPOS[*]:-aborted-early}"
+        job_hc /fail --data-raw "sync-repos $(scutil --get LocalHostName 2>/dev/null) $(date '+%F %T') rc=$rc failed=$FAILED: ${FAILED_REPOS[*]:-aborted-early}"
     fi
 }
 trap finish EXIT
-hc /start
+job_hc /start
 
 # Resolve the GitHub token for an owner.
 token_for() {
     case "$1" in
-        IndustryVault) security find-generic-password -s "sync-repos:IndustryVault" -w 2>/dev/null ;;
-        iv-cmg)        security find-generic-password -s "sync-repos:iv-cmg" -w 2>/dev/null ;;
+        IndustryVault) job_kc "sync-repos:IndustryVault" ;;
+        iv-cmg)        job_kc "sync-repos:iv-cmg" ;;
         *)             gh auth token 2>/dev/null ;;  # kylelundstedt, USAA -> Home
     esac
 }
@@ -199,6 +190,6 @@ sync_repos USAA "$GITHUB_DIR/USAA"
 if [[ "$FAILED" -gt 0 ]]; then
     echo "==> Done $(date) — $FAILED repo(s) FAILED: ${FAILED_REPOS[*]}"
 else
-    date +%s > "$LAST_RUN_FILE"
+    job_mark_done "$LAST_RUN_FILE"
     echo "==> Done $(date) — all repos synced"
 fi

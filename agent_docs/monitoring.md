@@ -26,22 +26,19 @@ Grace sizing rules (each learned the hard way):
   load-bearing. Kickstarting both at once (2026-07-13) failed the web job
   and pinged /fail. One at a time, in schedule order.
 
-## Registry (project: klundstedt-mini, TZ America/Los_Angeles)
+## Registry
 
-| Check                               | Job (repo)                                  | Job schedule         | Check schedule  | Grace | Keychain ping-URL item                         |
-| ----------------------------------- | ------------------------------------------- | -------------------- | --------------- | ----- | ---------------------------------------------- |
-| `sync-repos`                        | dotfiles `sync-repos.sh`                    | 00:00 + 12h wake     | `0 0 * * *`     | 6h    | `sync-repos:healthcheck-url`                   |
-| `tigris-backup`                     | dotfiles `backup/tigris-backup.sh`          | 04:30                | `30 4 * * *`    | 8h    | `tigris-backup:healthcheck-url`                |
-| `personal-mcp: msgvault`            | personal-mcp `msgvault-sync.sh`             | 03:00                | `0 3 * * *`     | 3h    | `personal-mcp:msgvault-healthcheck-url`        |
-| `personal-mcp: web-archive-refresh` | personal-mcp `web-archive-refresh.sh`       | 03:30                | `30 3 * * *`    | 3h    | `personal-mcp:web-healthcheck-url`             |
-| `personal-mcp: rebuild-hub`         | personal-mcp `hub/rebuild-hub.sh`           | 04:00                | `0 4 * * *`     | 2h    | `personal-mcp:hub-healthcheck-url`             |
-| `personal-mcp: mcp-server`          | personal-mcp `healthcheck-mcp.sh` (probe)   | every 15 min         | period 15m      | 30m   | `personal-mcp:mcp-server-healthcheck-url`      |
-| `check-key-expiry`                  | dotfiles `provisioning/check-key-expiry.sh` | monthly (1st, 10:00) | not created yet | —     | `key-expiry:healthcheck-url` (not provisioned) |
+The registry is data, not prose: **`provisioning/checks.manifest`** pairs
+every check with its expected schedule, timezone, and grace.
+`provisioning/check-monitoring.sh` verifies it against the live API (runs in
+`test-install.sh provisioning`; needs Keychain `healthchecks:api-key`,
+mini-only, self-skips elsewhere). Ping URLs stay in the login Keychain, one
+per job (`<job>:healthcheck-url` / `personal-mcp:<job>-healthcheck-url`).
 
-All schedules + graces verified against the live API (2026-07-13). A
-read-write API key is stored as `healthchecks:api-key` in the login
-Keychain, so check schedules are agent-manageable and a drift check of this
-table against `GET /api/v3/checks/` is possible (natural U10+ follow-up).
+Shared job semantics (staleness skip pings success, lastrun only on clean
+runs, locks, dated logs) live in `backup/_lib.sh`, sourced by
+tigris-backup.sh, sync-repos.sh, and restore-drill.sh — the rules above are
+library properties, not per-script conventions.
 
 ## Incident notes
 

@@ -1,0 +1,22 @@
+# healthchecks.io check registry — the expected configuration of every check
+# in the klundstedt-mini project. THE RULE: a job reschedule is not done until
+# its check row here AND the dashboard move in the same change (the 2026-07-11
+# flapping was exactly this drift). Verified against the live API by
+# provisioning/check-monitoring.sh (needs Keychain healthchecks:api-key —
+# mini-only; skips elsewhere).
+#
+# Columns (pipe-separated, fields trimmed):
+#   name      check name exactly as on healthchecks.io
+#   schedule  cron:<expr> (with tz below) or period:<seconds>
+#   tz        cron timezone (- for period checks)
+#   grace-s   grace in seconds
+#   job       the launchd job that pings it (repo:label)
+#
+# Ping URLs stay in the login Keychain (see agent_docs/monitoring.md).
+
+sync-repos | cron:0 0 * * * | America/Los_Angeles | 21600 | dotfiles:com.kylelundstedt.sync-repos
+tigris-backup | cron:30 4 * * * | America/Los_Angeles | 28800 | dotfiles:com.kylelundstedt.tigris-backup
+personal-mcp: msgvault-sync | cron:0 3 * * * | America/Los_Angeles | 10800 | personal-mcp:com.kylelundstedt.msgvault-sync
+personal-mcp: web-archive-refresh | cron:30 3 * * * | America/Los_Angeles | 10800 | personal-mcp:com.kylelundstedt.web-archive-refresh
+personal-mcp: rebuild-hub | cron:0 4 * * * | America/Los_Angeles | 7200 | personal-mcp:com.kylelundstedt.rebuild-hub
+personal-mcp: mcp-server | period:900 | - | 1800 | personal-mcp:com.kylelundstedt.personal-mcp-healthcheck

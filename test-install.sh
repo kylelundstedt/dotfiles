@@ -296,6 +296,13 @@ test_provisioning() {
     else
         log_fail "provisioning drift found — see /tmp/diff-provisioning.out"
     fi
+    # healthchecks.io check configs vs checks.manifest (mini-only: needs the
+    # API key in the Keychain; the script self-skips elsewhere).
+    if "$DOTFILES_DIR/provisioning/check-monitoring.sh" > /tmp/check-monitoring.out 2>&1; then
+        log_pass "healthchecks configs match checks.manifest (check-monitoring.sh)"
+    else
+        log_fail "monitoring drift found — see /tmp/check-monitoring.out"
+    fi
 }
 
 # --- Dispatch ---
