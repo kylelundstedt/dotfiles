@@ -8,5 +8,6 @@ Supplementary context for AI agents working in this repository.
 | `agents-recommendations.md` | Operating patterns, dual-agent workflows, task routing, maintenance checklists |
 | `simplification-plan.md`    | Repo review + plan: dotfiles↔iv-image boundary, personal-mcp/automation de-dup |
 | `tigris-backup-runbook.md`  | klundstedt-mini → Tigris encrypted backup runbook                              |
+| `monitoring.md`             | healthchecks.io registry — job↔check schedule pairs, grace rules, incidents    |
 | `linux.md`                  | Linux platform notes and testing                                               |
 | `secrets.md`                | Secret management — exe.dev integrations, 1Password patterns, MCP server auth  |

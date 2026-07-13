@@ -14,10 +14,16 @@
 - **/dist/**
 - **/build/**
 - **/target/**
-# iCloud Drive trash first (first match wins): evicted files in here fail with
-# 'resource deadlock avoided' on read and rc=1 the whole home sync (2026-07-04).
+# iCloud exclusions first (first match wins). Evicted/dataless items anywhere
+# under Mobile Documents fail with 'resource deadlock avoided' on read and
+# rc=1 the whole home sync. Two classes bitten so far: the iCloud trash
+# (2026-07-04) and app containers (iCloud~com~microsoft~Office~Excel,
+# 2026-07-11..13). App containers (iCloud~*) are app-synced data that lives in
+# the vendor's own cloud — excluded wholesale rather than whack-a-mole.
 - /Library/Mobile Documents/.Trash/**
-# Keep iCloud Drive (it lives under ~/Library/Mobile Documents) — real user data
+- /Library/Mobile Documents/iCloud~*/**
+# Keep iCloud Drive proper (com~apple~CloudDocs = the user's real files, kept
+# fully downloaded on this machine) — real user data
 + /Library/Mobile Documents/**
 # Exclude the rest of ~/Library: app state/caches + the macOS TCC-protected dirs
 # (Accounts, Biome, Cookies, HomeKit, Application Support/*, Safari, etc.) that
