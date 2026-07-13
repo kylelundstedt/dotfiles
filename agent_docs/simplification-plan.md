@@ -59,9 +59,17 @@ check against the API.
 clean, restore-drill 3/3 through the lib, both skip paths kickstart-verified
 under launchd with pings confirmed on the API); sync plists merged;
 checks.manifest + check-monitoring.sh enforce the monitoring registry in
-test-install.sh provisioning. **Next:** U6 → U7 (cross-repo pair) → U11
-(Tailscale OAuth, before 2026-08-21). Overnight validation: tonight's
-midnight sync + 04:30 backup are the first scheduled runs through the lib.
+test-install.sh provisioning. Overnight validation: tonight's midnight
+sync + 04:30 backup are the first scheduled runs through the lib.
+
+**U6 implemented — PR open: kylelundstedt/iv-image#2** (dotfiles side
+merged, `5f2d69f`). The shared ~5 sections live in
+`provisioning/agents-shared.md`; the personal AGENTS.md embeds them between
+markers (deltas only outside), iv-image vendors them at its pin (bumped to
+`5f2d69f`). Reconciliation verified mechanically: 0 rules lost, 4
+intentional rewordings. diff-provisioning enforces both copies + pin lag.
+**Next:** merge iv-image#2 → U7 (VM overlay; its throwaway-VM check can
+cover both) → U11 (Tailscale OAuth, before 2026-08-21).
 
 Unplanned fix (2026-07-05): multi-day healthcheck flapping on sync-repos +
 tigris-backup diagnosed and fixed (`ab1d21e`) — gitconfig_macos SSH rewrite
