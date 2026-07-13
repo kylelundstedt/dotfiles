@@ -347,6 +347,7 @@ grep -q "^## Memory" "$A" && echo "OK personal-section-memory" || echo "MISSING 
 grep -q "^## Cloud CLIs" "$A" && echo "OK team-section-cloud-clis" || echo "MISSING team-section-cloud-clis"
 [ "$(grep "^## " "$A" | sort | uniq -d | wc -l)" = 0 ] && echo "OK no-duplicate-sections" || echo "MISSING no-duplicate-sections"
 [ -f ~/.claude/settings.json ] && [ ! -L ~/.claude/settings.json ] && echo "OK team-settings-intact" || echo "MISSING team-settings-intact"
+grep -q "refresh-env.sh" ~/.claude/settings.json && grep -q "exe.dev SSH guard" ~/.claude/settings.json && echo "OK settings-hook-spliced" || echo "MISSING settings-hook-spliced"
 [ -L ~/.agents/refresh-env.sh ] && echo "OK agents-package-stowed" || echo "MISSING agents-package-stowed"
 mcp_list=$(claude mcp list 2>/dev/null || true)
 for srv in motherduck github-work github-home tigris readwise; do

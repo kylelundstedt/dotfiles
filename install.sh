@@ -753,6 +753,22 @@ overlay_agents_delta() {
     echo "  [+] personal AGENTS.md delta layered onto the team file"
 }
 
+# --- overlay_claude_settings ---
+# IV VMs only (U7): iv-image owns ~/.claude/settings.json (team defaults +
+# the exe.dev SSH guard). Splice ONLY the personal SessionStart hook into it
+# (the auto ~/dotfiles refresh on session start) — without it the overlay
+# would cost VMs the dotfiles auto-pull. Idempotent, keyed on the script path.
+overlay_claude_settings() {
+    [[ "$IS_IV_VM" == true ]] || return 0
+    local f="$HOME/.claude/settings.json"
+    [[ -f "$f" ]] || return 0
+    command -v jq >/dev/null 2>&1 || return 0
+    grep -q "refresh-env.sh" "$f" && return 0
+    jq '.hooks.SessionStart = ((.hooks.SessionStart // []) + [{"hooks":[{"type":"command","command":"\"$HOME/.agents/refresh-env.sh\"","timeout":20}]}])' \
+        "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+    echo "  [+] SessionStart refresh-env hook spliced into team settings.json"
+}
+
 # --- run_stow ---
 run_stow() {
     if [[ "$SKIP_STOW" == true ]]; then
@@ -764,9 +780,11 @@ run_stow() {
     echo "=== Stow ==="
 
     # agents/.claude/settings.json is gitignored (Claude Code mutates it at runtime).
-    # Seed it from the example so stow has something to link.
+    # Seed it from the example so stow has something to link — except on IV VMs,
+    # where iv-image owns ~/.claude/settings.json (team defaults + SSH guard) and
+    # the personal SessionStart hook is spliced in by overlay_claude_settings.
     local claude_settings="$DOTFILES_DIR/agents/.claude/settings.json"
-    if [[ ! -f "$claude_settings" && -f "${claude_settings}.example" ]]; then
+    if [[ "$IS_IV_VM" != true && ! -f "$claude_settings" && -f "${claude_settings}.example" ]]; then
         cp "${claude_settings}.example" "$claude_settings"
         echo "  Seeded agents/.claude/settings.json from example"
     fi
@@ -821,7 +839,10 @@ run_stow() {
         # symlinks there; the personal delta is layered in afterwards.
         local -a stow_extra=()
         if [[ "$IS_IV_VM" == true && "$folder" == "agents" ]]; then
-            stow_extra=(--ignore='AGENTS\.md' --ignore='CLAUDE\.md')
+            # settings\.json is anchored at end by stow, so the .example
+            # still stows; a settings.json left by a pre-U7 run must not
+            # conflict with iv-image's real file.
+            stow_extra=(--ignore='AGENTS\.md' --ignore='CLAUDE\.md' --ignore='settings\.json')
         fi
         if [[ "$DRY_RUN" == true ]]; then
             stow --no-folding -R -n -t "$HOME" "${stow_extra[@]+"${stow_extra[@]}"}" "$folder"
@@ -833,6 +854,7 @@ run_stow() {
     done
 
     overlay_agents_delta
+    overlay_claude_settings
 
     # Ensure 1Password config dir permissions
     if [[ "$OS" == "macos" ]]; then

@@ -21,6 +21,19 @@
           }
         ]
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CMD=$(jq -r '.tool_input.command'); if echo \"$CMD\" | grep -qE '\\bssh\\b.*exe\\.(dev|xyz)'; then HITS=$(ps -eo pid,comm,args | grep -E '/ssh\\b' | grep -E 'exe\\.(dev|xyz)' | grep -v zed-ssh-session || true); if [ -n \"$HITS\" ]; then printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"BLOCKED: SSH to exe.dev/exe.xyz already in progress. One at a time — wait for it to finish before retrying.\"}}\\n'; fi; fi",
+            "timeout": 5,
+            "statusMessage": "Checking exe.dev SSH guard..."
+          }
+        ]
+      }
     ]
   }
 }
