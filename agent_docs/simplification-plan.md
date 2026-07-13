@@ -78,9 +78,21 @@ U1's missing "SSH-guard hook", now also in settings.json.example), and the
 Linux SSH config is a prepended marker block that preserves iv's stanza.
 Verified: sandbox harnesses per gate, then `test-install.sh overlay` on a
 throwaway IV VM — 20/20 (first run caught a real conflict: the
-settings.json seeding; fixed + re-run clean). **Next:** U11 (Tailscale
-OAuth, before 2026-08-21) — the last unit. Still open from U3: one real
-`./install.sh` run on klundstedt-mbp.
+settings.json seeding; fixed + re-run clean). **U11 done (2026-07-13, `93eacec` + iv-image#3, docs-only):** the
+verify-at-execution answer was NO — the OAuth client secret is not accepted
+as a static API credential — so the integration injects Basic client creds
+and every flow does the standard exchange (1h token) via the proxy, then
+hits the public API. Scopes needed: auth_keys AND devices:core (write),
+tag:dev — the device-cleanup calls in upgrade-vm/install.sh need the
+latter. Live tailnet state corrected an assumption: the mini IS a tagged
+device, so its rebuild path mints a non-ephemeral tag:dev key via op; the
+mbp stays a user device (browser join). Both static iv-internal-* keys and
+the expiring API key are retired from all code and docs; fresh-VM
+join-tailnet verified end-to-end after the integration swap. Console
+cleanup (user): revoke the old API key + delete the iv-internal-* keys.
+
+**ALL 12 UNITS DONE.** Still open from U3: one real `./install.sh` run on
+klundstedt-mbp.
 
 Unplanned fix (2026-07-05): multi-day healthcheck flapping on sync-repos +
 tigris-backup diagnosed and fixed (`ab1d21e`) — gitconfig_macos SSH rewrite
