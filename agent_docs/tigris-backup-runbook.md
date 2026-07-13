@@ -111,9 +111,10 @@ GLACIER fetch, then cleans up:
 backup/restore-drill.sh
 ```
 
-Last run: IA restore + decrypt + cryptcheck **PASS**. Archive was re-tiered to
-GLACIER_IR (directly retrievable) — re-run the drill after the re-tier completes
-to confirm the archive fetch now PASSes too.
+Last run (2026-07-13): all three checks **PASS** — IA restore + decrypt,
+cryptcheck, and the GLACIER_IR archive fetch. The drill now FAILS (not INFO)
+if an archive object isn't directly retrievable, since post-re-tier that's a
+regression.
 
 ## The nightly job
 

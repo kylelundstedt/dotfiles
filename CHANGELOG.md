@@ -35,6 +35,17 @@ against the files before acting (`17dedd0`).
   rule now: landing-verify doc edits like code edits.
 - Structural findings (working code, no defect) parked in TODO.md "install.sh /
   script hygiene" rather than fixed same-day — see that section.
+- **Cross-review follow-up (Codex, same day):** a failure-semantics audit found
+  what the staleness-scoped review couldn't — sync-repos treated a missing
+  token or failed/empty `gh repo list` as SUCCESS (`return 0`, lastrun written,
+  green ping) while an entire org's mirror went stale; with GitHub PATs now the
+  fleet's only expiring credentials, that was the exact path an expiry would
+  take. Owner-level failures now FAIL loudly (all three paths harness-tested).
+  Also: the restore drill's GLACIER fetch failure is now a FAIL, not INFO (the
+  "unverified thaw" narrative predated the GLACIER_IR re-tier), and test_exe's
+  5×3s SSH retry loop — which violated the repo's own SYN-drop rule — is now
+  wait-20s + one attempt + one 30s retry. Dangerous-mode aliases reviewed and
+  kept as-is (deliberate solo-operator posture).
 
 ## 2026-07-03..13 — simplification plan (all 12 units)
 

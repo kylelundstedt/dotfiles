@@ -42,11 +42,12 @@ gfile=$(rclone lsf arch:box --files-only 2>/dev/null | head -1)
 if [[ -z "$gfile" ]]; then
     echo "  SKIP: arch:box has no files yet (initial archive push may be pending)"
 elif rclone copy "arch:box/$gfile" "$DRILL/glacier/" 2>/tmp/drill-glacier.err; then
-    ok "GLACIER object retrieved directly (no thaw needed): $gfile"
+    ok "GLACIER_IR object retrieved directly (no thaw needed): $gfile"
 else
-    echo "  INFO: GLACIER (Archive tier) object not directly retrievable — expected;"
-    echo "        recovery requires a restore/thaw request first. Archive recovery is"
-    echo "        UNVERIFIED until the thaw path is confirmed (see runbook 'Archive restore')."
+    # The archive tier is GLACIER_IR (instant retrieval) and this fetch has
+    # passed since the 2026-07 re-tier — a failure now is a REGRESSION (e.g.
+    # objects re-frozen to plain GLACIER), not a known limitation.
+    bad "archive object not retrievable ($gfile) — tier regressed? see /tmp/drill-glacier.err"
 fi
 
 echo "=== drill done: $pass passed, $fail failed ==="

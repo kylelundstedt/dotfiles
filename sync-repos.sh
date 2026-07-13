@@ -103,23 +103,36 @@ sync_repos() {
 
     echo "==> Syncing $owner → $target_dir"
 
+    # Owner-level auth/listing problems must FAIL the run loudly: a missing
+    # Keychain token or an expired PAT makes the listing fail/empty, and a
+    # silent skip here kept updating lastrun + pinging the healthcheck green
+    # while an entire org's mirror went stale (found in the 2026-07-13
+    # cross-review). All four owners always have source repos, so an empty
+    # listing means broken auth/scope, not an empty account.
     local tok
     tok="$(token_for "$owner")"
     if [[ -z "$tok" ]]; then
-        echo "  WARN: no token for '$owner' (Keychain item sync-repos:$owner missing?). Skipping."
+        echo "  FAIL: no token for '$owner' (Keychain item sync-repos:$owner missing, or gh auth broken) — owner NOT mirrored"
+        FAILED=$((FAILED+1)); FAILED_REPOS+=("$owner/(no-token)")
         return 0
     fi
 
-    # Capture the listing first so an empty result is visible rather than a
-    # silent no-op (a token without access to the org returns 0 repos).
-    local listing
-    listing=$(GH_TOKEN="$tok" gh repo list "$owner" \
+    local listing gh_err
+    gh_err=$(mktemp -t sync-repos-gh-err)
+    if ! listing=$(GH_TOKEN="$tok" gh repo list "$owner" \
         --limit 1000 \
         --source \
         --json name \
-        --jq '.[].name' 2>/dev/null) || listing=""
+        --jq '.[].name' 2>"$gh_err"); then
+        echo "  FAIL: repo listing for '$owner' failed: $(head -1 "$gh_err") — owner NOT mirrored"
+        rm -f "$gh_err"
+        FAILED=$((FAILED+1)); FAILED_REPOS+=("$owner/(listing-failed)")
+        return 0
+    fi
+    rm -f "$gh_err"
     if [[ -z "$listing" ]]; then
-        echo "  WARN: 0 repos visible for '$owner' with its token. Skipping."
+        echo "  FAIL: 0 repos visible for '$owner' (expired PAT / missing scope?) — owner NOT mirrored"
+        FAILED=$((FAILED+1)); FAILED_REPOS+=("$owner/(empty-listing)")
         return 0
     fi
 

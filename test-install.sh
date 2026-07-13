@@ -240,12 +240,15 @@ test_exe() {
     fi
     echo "  Created VM: $vm_host"
 
-    # Wait for SSH to become available
-    local attempt
-    for attempt in 1 2 3 4 5; do
-        $ssh_vm -o ConnectTimeout=5 "$vm_host" true 2>/dev/null && break
-        sleep 3
-    done
+    # Wait for SSH — per the repo's own exe.dev discipline: ~20s after
+    # create, then ONE attempt with ConnectTimeout=30, then ONE retry after
+    # 30s. Rapid-fire attempts trip exe.dev's per-IP SYN drop (minutes-long
+    # lockout); the old 5×3s loop here predated that lesson.
+    sleep 20
+    if ! $ssh_vm -o ConnectTimeout=30 "$vm_host" true 2>/dev/null; then
+        sleep 30
+        $ssh_vm -o ConnectTimeout=30 "$vm_host" true 2>/dev/null || true
+    fi
 
     echo ""
     echo "--- Setting up user ---"

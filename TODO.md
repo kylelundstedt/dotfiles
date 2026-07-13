@@ -61,7 +61,8 @@ Cross-AI / multi-machine persistent memory via Basic Memory (basicmachines-co). 
 
 ## install.sh / script hygiene (from the 2026-07-13 repo review)
 
-- [ ] Replace swallowed errors in `setup_agents` (`>/dev/null 2>&1 || true` → explicit `echo "[!] X failed"` on non-zero)
+- [ ] **(priority ↑ per 2026-07-13 cross-review)** Replace swallowed errors in `setup_agents` (`>/dev/null 2>&1 || true` → explicit `echo "[!] X failed"` on non-zero); make the MCP/skills counters count successes, not attempts — same dishonest-green class as the sync-repos listing bug
+- [ ] Lightweight CI (GitHub Actions): `bash -n` all scripts, `plutil -lint` plists, manifest parse smoke — the floor of `test-install.sh provisioning` that needs no Keychain/VM
 - [ ] Split `setup_agents` (~350 lines, six concerns) and `setup_git` (git config + two SSH strategies) into focused functions
 - [ ] Adopt `backup/_lib.sh` in `owc8tb-unlock.sh`, `check-key-expiry.sh`, `check-monitoring.sh` (hand-rolled `job_kc`/`job_hc`/mini-guard copies); unify the three manifest-field trim idioms
 - [ ] `settings.json` propagation: install.sh seeds from the example only when absent, so new hooks never reach existing installs — add an idempotent merge (like `overlay_claude_settings`)
