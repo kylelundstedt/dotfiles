@@ -68,8 +68,19 @@ merged, `5f2d69f`). The shared ~5 sections live in
 markers (deltas only outside), iv-image vendors them at its pin (bumped to
 `5f2d69f`). Reconciliation verified mechanically: 0 rules lost, 4
 intentional rewordings. diff-provisioning enforces both copies + pin lag.
-**Next:** merge iv-image#2 → U7 (VM overlay; its throwaway-VM check can
-cover both) → U11 (Tailscale OAuth, before 2026-08-21).
+**U7 done (2026-07-13, `781a72d`):** install.sh is a thin personal overlay
+on IV VMs, gated on `/exe.dev` + `~/iv-provision.lock` (bare exe VMs keep
+the full install). Team tools never touched (want() refuses tools.manifest
+team rows), team MCP neither removed nor re-added, agents package stowed
+AROUND the team files with the personal AGENTS.md delta + the SessionStart
+refresh hook spliced in (iv's settings.json — which turned out to hold
+U1's missing "SSH-guard hook", now also in settings.json.example), and the
+Linux SSH config is a prepended marker block that preserves iv's stanza.
+Verified: sandbox harnesses per gate, then `test-install.sh overlay` on a
+throwaway IV VM — 20/20 (first run caught a real conflict: the
+settings.json seeding; fixed + re-run clean). **Next:** U11 (Tailscale
+OAuth, before 2026-08-21) — the last unit. Still open from U3: one real
+`./install.sh` run on klundstedt-mbp.
 
 Unplanned fix (2026-07-05): multi-day healthcheck flapping on sync-repos +
 tigris-backup diagnosed and fixed (`ab1d21e`) — gitconfig_macos SSH rewrite
