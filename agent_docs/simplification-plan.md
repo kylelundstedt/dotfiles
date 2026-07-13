@@ -62,7 +62,7 @@ checks.manifest + check-monitoring.sh enforce the monitoring registry in
 test-install.sh provisioning. Overnight validation: tonight's midnight
 sync + 04:30 backup are the first scheduled runs through the lib.
 
-**U6 implemented — PR open: kylelundstedt/iv-image#2** (dotfiles side
+**U6 done — iv-image#2 merged 2026-07-13** (dotfiles side
 merged, `5f2d69f`). The shared ~5 sections live in
 `provisioning/agents-shared.md`; the personal AGENTS.md embeds them between
 markers (deltas only outside), iv-image vendors them at its pin (bumped to
