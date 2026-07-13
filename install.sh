@@ -988,14 +988,19 @@ setup_agents() {
         fi
     fi
 
+    # Declared HERE, not inside the Claude block: the Codex block below also
+    # reads it, and under set -u a codex-only machine (Claude install failed)
+    # would otherwise die on an unbound variable.
+    local mcp_manifest="$DOTFILES_DIR/provisioning/mcp.manifest"
+
     # --- Claude Code ---
     if command -v claude >/dev/null 2>&1; then
         # On IV VMs the team-layer servers (mcp.manifest) are seeded by
         # iv-image's setup-mcp.sh — the overlay must neither remove nor
         # re-add them (U7).
         local team_mcp=""
-        if [[ "$IS_IV_VM" == true && -f "$DOTFILES_DIR/provisioning/mcp.manifest" ]]; then
-            team_mcp=$(manifest_rows "$DOTFILES_DIR/provisioning/mcp.manifest" | awk -F'|' '$2 ~ /team/ {gsub(/ /,"",$1); print $1}')
+        if [[ "$IS_IV_VM" == true && -f "$mcp_manifest" ]]; then
+            team_mcp=$(manifest_rows "$mcp_manifest" | awk -F'|' '$2 ~ /team/ {gsub(/ /,"",$1); print $1}')
         fi
         # Remove stale or migrated servers before re-adding with correct URLs.
         # On Linux, motherduck migrates from OAuth to exe.dev proxy.
@@ -1012,7 +1017,6 @@ setup_agents() {
         # tunnel (not always-on). On macOS the mac column is a direct URL, or
         # pat:<1p-account>:<op-ref> = the GitHub Copilot MCP endpoint with a
         # Bearer PAT read from 1Password at install time.
-        local mcp_manifest="$DOTFILES_DIR/provisioning/mcp.manifest"
         local m_name m_layer m_vm m_mac m_acct m_opref m_tok m_n=0
         if [[ ! -f "$mcp_manifest" ]]; then
             echo "  [!] $mcp_manifest missing — skipping MCP registration"

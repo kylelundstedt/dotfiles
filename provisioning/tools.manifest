@@ -26,6 +26,8 @@
 base git
 base curl
 base jq
+# tailscaled ships in exeuntu (disabled); install.sh only starts/joins it
+base tailscale
 
 # iv-image layer (provision-iv.sh)
 team duckdb

@@ -169,7 +169,7 @@ passphrase there preserves "stolen external drive alone = undecryptable."
 - Ping URL is in the **login Keychain** (`tigris-backup:healthcheck-url`) and in
   1Password (`Tigris mini-backup rclone key` → `healthcheck_url`). If unset,
   pings are silently skipped (backup still runs).
-- Check config: cron `0 4 * * *`, grace **8h**. Re-provision the Keychain item
+- Check config: cron `30 4 * * *`, grace **8h**. Re-provision the Keychain item
   from 1Password on a rebuild (along with the `tigris-backup:*` cred items).
 
 ## CLI gotcha (tigris 3.x)

@@ -4,7 +4,7 @@ One command to set up a fully configured development environment on macOS or Lin
 
 ## What You Get
 
-**AI agent platform** — [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [Codex CLI](https://github.com/openai/codex) with a shared instruction system (`AGENTS.md`), cross-agent skills (`join-tailnet`, `upgrade-vm`, `apple-containers`, `sprites-dev`, `mviz`, `find-skills`), four remote MCP servers (GitHub home/work, MotherDuck, Tigris) via HTTP transport plus a personal `hub-mcp` server on `klundstedt-mini`, and a convention for per-project agent context (`agent_docs/`)
+**AI agent platform** — [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [Codex CLI](https://github.com/openai/codex) with a shared instruction system (`AGENTS.md`), cross-agent skills (`join-tailnet`, `upgrade-vm`, `apple-containers`, `sprites-dev`, `mviz`, `find-skills`), five remote MCP servers (GitHub home/work, MotherDuck, Tigris, Readwise) via HTTP transport plus a personal `hub-mcp` server on `klundstedt-mini`, and a convention for per-project agent context (`agent_docs/`)
 
 **Shell** — Zsh with [Starship](https://starship.rs/) prompt, [Atuin](https://atuin.sh/) history sync, [Zoxide](https://github.com/ajeetdsouza/zoxide) smart `cd`, [Carapace](https://carapace.sh/) completions, and [Direnv](https://direnv.net/)
 
@@ -12,7 +12,7 @@ One command to set up a fully configured development environment on macOS or Lin
 
 **Dev tools** — Git with 1Password SSH signing, Tigris CLI for object storage, DuckDB, Python via [uv](https://docs.astral.sh/uv/)
 
-**Remote development** — Primary platform is [exe.dev](https://exe.dev) with a custom image (`iv-image`) that bakes in team agent config, MCP servers, and skills. Personal dotfiles (`install.sh`) layer on top for shell, CLI tools, and personal MCP servers. Zed's [remote development](https://zed.dev/docs/remote-development) connects over SSH. Tailscale provides stable hostnames, and SSH agent forwarding from the Mac's 1Password agent enables git clone/push and commit signing — no tokens needed on the VMs.
+**Remote development** — Primary platform is [exe.dev](https://exe.dev): stock VMs get the team baseline from the `iv-image` provisioning script (pinned tools, team agent config, team MCP servers, vendored skills — sourced from this repo's `provisioning/` manifests at a pinned commit). On such VMs `install.sh` detects the IV layer (`~/iv-provision.lock`) and acts as a **thin personal overlay**: it adds only the personal delta (shell, personal CLI tools, personal MCP servers, personal AGENTS.md sections) and never touches what the image laid down. On bare VMs and Macs it does the full install. Zed's [remote development](https://zed.dev/docs/remote-development) connects over SSH. Tailscale provides stable hostnames, and SSH agent forwarding from the Mac's 1Password agent enables git clone/push and commit signing — no tokens needed on the VMs.
 
 ---
 
@@ -34,9 +34,10 @@ cd ~/dotfiles
 ./install.sh --skip-agents   # Skip Claude/Codex/MCP setup
 ./install.sh --skip-stow     # Skip stow step
 ./install.sh --dry-run       # Preview stow changes
+./install.sh --upgrade       # Reinstall every CLI at latest
 ```
 
-**Flags:** `--apps`, `--dry-run`, `--skip-stow`, `--skip-agents`, `--tailscale-ssh`
+**Flags:** `--apps`, `--dry-run`, `--skip-stow`, `--skip-agents`, `--tailscale-ssh`, `--upgrade`
 
 **Hosts:** `klundstedt-mini` is the always-on Mac mini SSH target — install it with `--tailscale-ssh` on the **first** run so it runs open-source `tailscaled` (system daemon via `sudo brew services`) for incoming Tailscale SSH. After that, the brew formula is auto-detected and every subsequent `./install.sh` maintains it without the flag. Other macOS machines use the standard Tailscale app and don't need the flag.
 
@@ -60,19 +61,20 @@ Configuration is managed with [GNU Stow](http://www.gnu.org/software/stow/), whi
 | Directory         | Purpose                                                                                                           | Stow Target                           | Platform |
 | ----------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------- | -------- |
 | `1Password/`      | 1Password SSH agent config                                                                                        | `~/.config/1Password/`                | macOS    |
-| `agents/`         | Agent infrastructure — `AGENTS.md`, Claude/Codex symlinks, skills, MCP wrappers, Claude Code settings             | `~/`                                  | Both     |
+| `agents/`         | Agent infrastructure — `AGENTS.md`, Claude/Codex symlinks, skills, Claude Code settings                           | `~/`                                  | Both     |
 | `agent_docs/`     | Reference docs for this repo — agent setup plans, platform notes, secret management                               | N/A (not stowed)                      | Both     |
 | `aws/`            | Optional AWS CLI configuration, only useful if you install/use AWS CLI separately                                 | `~/.aws/`                             | Linux    |
 | `ghostty/`        | Ghostty terminal configuration                                                                                    | `~/.config/ghostty/`                  | macOS    |
 | `git/`            | Git configuration with OS-specific includes                                                                       | `~/`                                  | Both     |
 | `homebrew/`       | Brewfile for macOS casks and Mac App Store apps                                                                   | `~/`                                  | macOS    |
 | `launchd/`        | LaunchAgents — scheduled jobs (repo sync; Tigris backup; key-expiry check)                                        | `~/Library/LaunchAgents/`             | macOS    |
+| `provisioning/`   | Declarative manifests (skills, MCP, tools, keys, checks) + drift checks vs install.sh, iv-image, healthchecks.io  | N/A (not stowed)                      | Both     |
 | `ssh/`            | SSH client configuration                                                                                          | `~/.ssh/`                             | Both     |
 | `starship/`       | Starship prompt configuration                                                                                     | `~/.config/`                          | Both     |
 | `vscode/`         | VS Code IDE settings & keybindings                                                                                | `~/Library/Application Support/Code/` | macOS    |
 | `sync-repos.sh`   | Clones/fetches all GitHub repos for personal and work accounts                                                    | N/A (standalone script)               | Both     |
 | `backup/`         | Nightly encrypted backup of home + external data to Tigris (`tigris-backup.sh` + excludes) — klundstedt-mini only | N/A (run in place)                    | macOS    |
-| `test-install.sh` | Tests install.sh across Apple Container, Sprite, and exe.dev                                                      | N/A (standalone script)               | macOS    |
+| `test-install.sh` | Tests install.sh (Apple Container, Sprite, exe.dev) + local `provisioning`/`hook` checks + the IV `overlay` mode  | N/A (standalone script)               | macOS    |
 | `zed/`            | Zed editor settings                                                                                               | `~/.config/zed/`                      | macOS    |
 | `zsh/`            | Zsh shell configuration                                                                                           | `~/`                                  | Both     |
 
@@ -108,7 +110,8 @@ Both Claude Code and Codex CLI share a single instruction file (`AGENTS.md`) dep
 | `sprites-dev`      | This repo                                                                               | Manage remote Sprites (Fly.io microVMs) — back-burnered |
 | `mviz`             | [matsonj/mviz](https://github.com/matsonj/mviz)                                         | Chart and report builder                                |
 | `find-skills`      | [vercel-labs/skills](https://github.com/vercel-labs/skills)                             | Skill discovery and installation                        |
-| 5 Tigris skills    | [tigrisdata/tigris-agents-plugins](https://github.com/tigrisdata/tigris-agents-plugins) | Tigris CLI — auth, buckets, objects, access keys, IAM   |
+| MotherDuck skills  | [motherduckdb/agent-skills](https://github.com/motherduckdb/agent-skills)               | MotherDuck — query, Dives, Flights, modeling, sharing   |
+| Tigris skills      | [tigrisdata/tigris-agents-plugins](https://github.com/tigrisdata/tigris-agents-plugins) | Tigris — auth, buckets, objects, access keys, IAM, more |
 | DuckDB skills      | [duckdb/duckdb-skills](https://github.com/duckdb/duckdb-skills)                         | DuckDB query, file reading, database management         |
 | `quarto-authoring` | [posit-dev/skills](https://github.com/posit-dev/skills)                                 | Quarto document authoring                               |
 | `brand-yml`        | [posit-dev/skills](https://github.com/posit-dev/skills)                                 | Brand styling for Shiny/Quarto                          |
@@ -119,7 +122,7 @@ Both Claude Code and Codex CLI share a single instruction file (`AGENTS.md`) dep
 
 Invoke a skill by typing `/skill-name` in Claude Code or Codex (e.g. `/join-tailnet`).
 
-**MCP servers** — Remote HTTP transport. OAuth servers (MotherDuck, Tigris) work on all environments after initial browser auth. GitHub servers use PATs resolved from 1Password at install time (macOS only). `install.sh` registers them for Claude Code:
+**MCP servers** — Remote HTTP transport, driven by `provisioning/mcp.manifest`. OAuth servers (MotherDuck, Tigris, Readwise) work on all environments after initial browser auth. GitHub servers use PATs resolved from 1Password at install time (macOS only). `install.sh` registers them for Claude Code:
 
 | Server        | Purpose                       | Auth  |
 | ------------- | ----------------------------- | ----- |
@@ -127,6 +130,7 @@ Invoke a skill by typing `/skill-name` in Claude Code or Codex (e.g. `/join-tail
 | `tigris`      | Tigris object storage         | OAuth |
 | `github-home` | GitHub API (personal account) | PAT   |
 | `github-work` | GitHub API (work account)     | PAT   |
+| `readwise`    | Readwise Reader               | OAuth |
 
 `klundstedt-mini` also runs a personal **`hub-mcp`** server — unified search over email/iMessage, calendar, and saved web/Reader content from `~/archives/hub` (code in the private `kylelundstedt/personal-mcp` repo, cloned to `~/github/kylelundstedt/personal-mcp`; its `bootstrap.sh` loads the server + ingest LaunchAgents). It binds `127.0.0.1:8765` and is exposed tailnet-only over HTTPS via `tailscale serve`, so it's registered as a local HTTP MCP server rather than provisioned by `install.sh`.
 
@@ -180,11 +184,12 @@ Re-run `install.sh` on a VM only when a pull _adds or removes_ files (new skills
 
 ## Further Reading
 
-- [Secret Management with 1Password](agent_docs/secrets.md) — `op run` pattern, MCP server wrappers
+- [Secret Management with 1Password](agent_docs/secrets.md) — `op run` pattern, credential inventory + rotation runbook
 - [Linux](agent_docs/linux.md) — platform notes, OrbStack, local sprites (Apple Container), Fly.io Sprites, Docker testing, cloud-init
 - [Adding Rules and Skills](agent_docs/agents-advanced.md) — when and how to extend agent configuration beyond `AGENTS.md`
 - [Agent Recommendations](agent_docs/agents-recommendations.md) — dual-agent operating patterns, routing defaults, maintenance checklists
 - [Tigris Backup Runbook](agent_docs/tigris-backup-runbook.md) — what's backed up, credentials, and the disaster-recovery restore procedure
+- [Monitoring](agent_docs/monitoring.md) — healthchecks.io registry, grace rules, and incident post-mortems
 
 ---
 

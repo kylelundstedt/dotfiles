@@ -47,9 +47,8 @@ Pre-requisite dotfiles work (in order):
 - [ ] `ts-switch <clientid>` zsh function in `zsh/.zshrc`: `tailscale switch iv-<clientid> && regen-ssh-config`
 - [ ] `install.sh setup_tailscale` (macOS): support adding multiple `tailscale up` profiles, one per client tailnet
 - [ ] `install.sh setup_git`: emit per-account `Host exe-<clientid>.dev` blocks (with per-account `IdentityFile`) from a `clients.conf` at repo root
-- [ ] `test-install.sh test_hook_registration`: iterate over a list of accounts from `clients.conf`
+- [ ] `test-install.sh test_no_hook`: iterate over a list of accounts from `clients.conf`
 - [ ] `bin/add-client <clientid>` helper: one-shot create of tailnet API key + `tailscale-api` integration + hook registration + 1Password entries + `clients.conf` row
-- [ ] `exe-setup.sh`: honor `TS_HOSTNAME` env-var override (today always uses `$(hostname)`; install.sh already does override) — keeps Tailscale name distinct from exe.dev OS hostname when desired
 - [ ] Earlier items (still relevant): per-tenant Tailscale tailnet + API key + `tailscale-api-<client>` integration, team integrations (`--team`) for client-scoped MCP servers
 
 ## Basic Memory (evaluation)
@@ -60,9 +59,14 @@ Cross-AI / multi-machine persistent memory via Basic Memory (basicmachines-co). 
 - [ ] Trial on one project, evaluate over 1–2 weeks
 - [ ] If kept: install on all machines, document policy distinguishing Basic Memory vs Claude auto-memory vs Codex native memory
 
-## install.sh hygiene
+## install.sh / script hygiene (from the 2026-07-13 repo review)
 
 - [ ] Replace swallowed errors in `setup_agents` (`>/dev/null 2>&1 || true` → explicit `echo "[!] X failed"` on non-zero)
+- [ ] Split `setup_agents` (~350 lines, six concerns) and `setup_git` (git config + two SSH strategies) into focused functions
+- [ ] Adopt `backup/_lib.sh` in `owc8tb-unlock.sh`, `check-key-expiry.sh`, `check-monitoring.sh` (hand-rolled `job_kc`/`job_hc`/mini-guard copies); unify the three manifest-field trim idioms
+- [ ] `settings.json` propagation: install.sh seeds from the example only when absent, so new hooks never reach existing installs — add an idempotent merge (like `overlay_claude_settings`)
+- [ ] Reconcile or retire `upgrade-vm.sh` (automates the pre-stock-exeuntu registry flow; SKILL.md now documents reprovision-in-place as the default)
+- [ ] Align `test-install.sh`'s VERIFY_SCRIPT tool list with `provisioning/tools.manifest` (or annotate it as a deliberate smoke subset)
 
 ---
 

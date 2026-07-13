@@ -41,6 +41,11 @@ If `~/iv-image` doesn't exist yet (older VM), clone it first — see `bootstrap.
 This **wipes the VM's local disk** — it reprovisions, it does not migrate state.
 Use only when Path A can't deliver the change.
 
+> Note: the co-located `upgrade-vm.sh` automates an older registry-image variant
+> of this flow (it defaults to `--image=iv-registry...`, predating the
+> stock-exeuntu model). Prefer the manual steps below; treat the script as
+> legacy pending a rewrite or retirement.
+
 Run sequentially. **One SSH command at a time.**
 
 ### 1. Confirm with the user
@@ -50,15 +55,16 @@ This is destructive. Confirm the VM name and that wiping its disk is acceptable.
 ### 2. Delete the stale Tailscale node
 
 The old VM's tailnet node must be deleted before the new one joins, otherwise the
-new VM gets a `-1` suffix. Use the Tailscale API from the Mac (which has the real
-API credential via 1Password):
+new VM gets a `-1` suffix. Mint a short-lived token from the Tailscale OAuth
+client (1Password; the old static API key is revoked — 2026-07):
 
 ```bash
-TS_API_KEY=$(op read "op://Employee/Tailscale - API Key/credential" --account industryvault.1password.com)
-NODE_ID=$(curl -fsSL -H "Authorization: Bearer $TS_API_KEY" \
+TOKEN=$(curl -fsS -u "$(op read 'op://Employee/Tailscale OAuth Dev/Client ID' --account industryvault.1password.com):$(op read 'op://Employee/Tailscale OAuth Dev/Client secret' --account industryvault.1password.com)" \
+  -d grant_type=client_credentials https://api.tailscale.com/api/v2/oauth/token | jq -r .access_token)
+NODE_ID=$(curl -fsSL -H "Authorization: Bearer $TOKEN" \
   https://api.tailscale.com/api/v2/tailnet/-/devices \
   | jq -r '.devices[] | select(.hostname == "<vm>") | .id')
-curl -fsSL -X DELETE -H "Authorization: Bearer $TS_API_KEY" \
+curl -fsSL -X DELETE -H "Authorization: Bearer $TOKEN" \
   "https://api.tailscale.com/api/v2/device/$NODE_ID"
 ```
 

@@ -2,7 +2,7 @@
 # Test install.sh across VM backends.
 # exe.dev is the primary platform; Apple Container and Sprite paths are
 # back-burnered but kept for occasional validation.
-# Usage: ./test-install.sh [container|sprite|exe|hook|provisioning|all]
+# Usage: ./test-install.sh [container|sprite|exe|hook|overlay|provisioning|all]
 #   container    — Apple Container (back-burnered, kept for validation)
 #   sprite       — Fly.io Sprite (back-burnered, kept for validation)
 #   exe          — exe.dev VM (primary platform)

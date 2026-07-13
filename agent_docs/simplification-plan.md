@@ -260,6 +260,9 @@ Decisions:
 
 ## Findings
 
+> `install.sh:<N>` line references below are as of plan authoring (2026-07-03);
+> the code moved as the units landed. Historical record — don't grep by them.
+
 ### 1. dotfiles ↔ iv-image overlap (the main lever)
 
 Running the full `install.sh` Linux path over `provision-iv.sh` duplicates or

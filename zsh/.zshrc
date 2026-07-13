@@ -82,8 +82,8 @@ command -v carapace >/dev/null && source <(carapace _carapace)
 zstyle ':completion:*:git:*' group-order 'main commands' 'alias commands' 'external commands'
 
 ### 1Password ###
-# GitHub PATs for MCP servers are fetched from 1Password at runtime via wrapper scripts.
-# See: ~/dotfiles/agents/.agents/mcp/bin/
+# MCP servers are remote HTTP endpoints registered by install.sh from
+# provisioning/mcp.manifest — no local wrapper scripts or runtime PAT fetches.
 
 # Added by LM Studio CLI (lms)
 export PATH="$PATH:$HOME/.lmstudio/bin"

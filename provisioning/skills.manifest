@@ -27,5 +27,5 @@ team curl archil-guide https://archil.com/skill.md
 
 personal npx tigrisdata/tigris-agents-plugins
 personal npx marimo-team/marimo-pair
-personal npx kylelundstedt/dotfiles -s sprites-dev
+personal npx kylelundstedt/dotfiles -s sprites-dev join-tailnet upgrade-vm
 # apple-containers is private — installed locally on macOS only, not listed here
