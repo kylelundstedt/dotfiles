@@ -77,6 +77,11 @@ markers). Edit HERE; diff-provisioning.sh flags any copy that drifts. -->
 - Restate this convention in each repo's root `AGENTS.md` so harnesses that don't read this global file (e.g. Shelley) still get it, and tailor the taxonomy to the repo's existing stores.
 - Personal / cross-project memory with no repo home is out of scope here (deferred to a separate network store).
 
+## Delegation & model tiers
+
+- When a plan assigns model tiers to work units (H=cheap, S=mid, ★=strong), delegate the cheap-tier units to subagents at that tier — don't run them inline on the session model. If deviating from an assigned tier, say so up front.
+- A unit is cheap-delegatable only if it has a self-checkable acceptance test; verify a delegate's findings/claims against the files before acting on them.
+
 ## Git
 
 - Do not add "Co-Authored-By" lines to commit messages.
