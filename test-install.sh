@@ -104,10 +104,14 @@ if command -v claude >/dev/null 2>&1; then
     fi
 fi
 
-# Skills directories
-for skill in sprites-dev join-tailnet upgrade-vm mviz find-skills installing-tigris-storage tigris-bucket-management tigris-object-operations tigris-snapshots-forking; do
+# Skills — personal manifest rows only: team skills are macOS/iv-image-vendored
+# and never install on a bare Linux VM. Exact names for the dotfiles-owned row;
+# a glob for third-party rows whose upstream skill names can change without
+# notice (tigrisdata renamed all of theirs, caught 2026-07-14).
+for skill in sprites-dev join-tailnet upgrade-vm marimo-pair; do
     if [ -d "$HOME/.claude/skills/$skill" ]; then echo "OK skill:$skill"; else echo "MISSING skill:$skill"; fi
 done
+if ls -d "$HOME"/.claude/skills/tigris-* >/dev/null 2>&1; then echo "OK skill:tigris-plugins"; else echo "MISSING skill:tigris-plugins"; fi
 VERIFY
 
 parse_results() {
