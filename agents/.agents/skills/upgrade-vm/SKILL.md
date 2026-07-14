@@ -39,6 +39,17 @@ ssh -o ConnectTimeout=30 <vm>.exe.xyz "cat ~/iv-provision.lock"
 
 If `~/iv-image` doesn't exist yet (older VM), clone it first — see `bootstrap.md`.
 
+**Then, if the VM has the personal dotfiles overlay (`~/dotfiles` exists),
+re-run it.** `provision-iv.sh` overwrites `~/.claude/settings.json` with the
+team default, wiping the overlay's spliced hooks (the SessionStart dotfiles
+auto-refresh + the exe.dev SSH guard) — and since the refresh hook lives in
+the clobbered file, it cannot heal itself (observed on all six overlay VMs
+after the 2.5.1 upgrade, 2026-07-14):
+
+```bash
+ssh -o ConnectTimeout=30 <vm>.exe.xyz "cd ~/dotfiles && git pull --ff-only && ./install.sh"
+```
+
 ## Path B — Full destroy + recreate (only when required)
 
 This **wipes the VM's local disk** — it reprovisions, it does not migrate state.
