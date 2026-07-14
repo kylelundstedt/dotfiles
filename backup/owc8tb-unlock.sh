@@ -9,21 +9,20 @@
 # drive's data is independently recoverable from Tigris under a different key, so
 # losing this passphrase does not lose the data.
 set -uo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
 VOL_UUID=704B89D9-5896-4368-B518-D8CBD7EB4A15
 MOUNT=/Volumes/OWC8TB
 KC_SERVICE=owc8tb-encryption
 
-if [[ "$(scutil --get LocalHostName 2>/dev/null)" != "klundstedt-mini" ]]; then
-    echo "not klundstedt-mini; skipping owc8tb-unlock."; exit 0
-fi
+job_require_mini owc8tb-unlock
 
 # Already mounted (incl. while the initial encryption conversion is running)?
 if mount | grep -qF "on $MOUNT ("; then
     exit 0
 fi
 
-pass=$(security find-generic-password -s "$KC_SERVICE" -w 2>/dev/null)
+pass=$(job_kc "$KC_SERVICE")
 if [[ -z "$pass" ]]; then
     echo "FATAL: passphrase not found in keychain (service $KC_SERVICE)"; exit 1
 fi

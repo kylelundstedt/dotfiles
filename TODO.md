@@ -61,13 +61,18 @@ Cross-AI / multi-machine persistent memory via Basic Memory (basicmachines-co). 
 
 ## install.sh / script hygiene (from the 2026-07-13 repo review)
 
-- [ ] **(priority ↑ per 2026-07-13 cross-review)** Replace swallowed errors in `setup_agents` (`>/dev/null 2>&1 || true` → explicit `echo "[!] X failed"` on non-zero); make the MCP/skills counters count successes, not attempts — same dishonest-green class as the sync-repos listing bug
-- [ ] Lightweight CI (GitHub Actions): `bash -n` all scripts, `plutil -lint` plists, manifest parse smoke — the floor of `test-install.sh provisioning` that needs no Keychain/VM
-- [ ] Split `setup_agents` (~350 lines, six concerns) and `setup_git` (git config + two SSH strategies) into focused functions
-- [ ] Adopt `backup/_lib.sh` in `owc8tb-unlock.sh`, `check-key-expiry.sh`, `check-monitoring.sh` (hand-rolled `job_kc`/`job_hc`/mini-guard copies); unify the three manifest-field trim idioms
-- [ ] `settings.json` propagation: install.sh seeds from the example only when absent, so new hooks never reach existing installs — add an idempotent merge (like `overlay_claude_settings`)
+Safe-now items done 2026-07-13 (see CHANGELOG): honest errors + success-counters in `setup_agents`, GitHub Actions CI floor, `_lib.sh` adoption + trim unification, `settings.json` hook propagation, VERIFY_SCRIPT smoke-subset annotation.
+
+- [ ] Split `setup_agents` (~350 lines, six concerns) and `setup_git` (git config + two SSH strategies) into focused functions — **partially blocked**: verify the U7 overlay path afterward, which needs a VM refresh (below)
+
+## Blocked until the iv-image review session lands
+
+Do NOT touch `~/github/kylelundstedt/iv-image`, bump `dotfiles-manifest.pin`, run overlay tests, or refresh any VM until that session finishes — its conclusions may change the image and the vendored manifests.
+
 - [ ] Reconcile or retire `upgrade-vm.sh` (automates the pre-stock-exeuntu registry flow; SKILL.md now documents reprovision-in-place as the default)
-- [ ] Align `test-install.sh`'s VERIFY_SCRIPT tool list with `provisioning/tools.manifest` (or annotate it as a deliberate smoke subset)
+- [ ] Refresh VMs to the post-review image — kgl-dotfiles first (stale at 5d0f389; also exercises the new tailscale already-joined guard in install.sh)
+- [ ] Run `./test-install.sh overlay` (+ `exe`) against the refreshed image
+- [ ] Bump/vendor `dotfiles-manifest.pin` in iv-image if the manifests changed
 
 ---
 

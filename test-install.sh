@@ -59,6 +59,10 @@ read -r -d '' VERIFY_SCRIPT << 'VERIFY' || true
 export PATH=$HOME/.local/bin:$HOME/.atuin/bin:$PATH
 eval "$(fnm env 2>/dev/null)" || true
 
+# Deliberate smoke SUBSET of provisioning/tools.manifest, not the full list —
+# a hand-picked cross-section (curl installers, GitHub-release binaries, uv/fnm
+# managed, agents). Full-list coverage is `./test-install.sh provisioning`
+# (diff-provisioning.sh); keep this line short so remote runs stay readable.
 for cmd in starship uv atuin zoxide direnv fnm bat fzf rg jq yq gh duckdb carapace node claude codex op tailscale; do
     if command -v $cmd >/dev/null 2>&1; then echo "OK $cmd"; else echo "MISSING $cmd"; fi
 done

@@ -1,0 +1,49 @@
+# The no-Keychain/no-VM floor of test-install.sh: syntax, plist validity,
+# manifest shape. The real drift checks (diff-provisioning, check-monitoring)
+# need the local iv-image clone / mini Keychain and stay host-side.
+name: checks
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: bash -n all shell scripts
+        run: |
+          set -e
+          find . -name '*.sh' -not -path './.git/*' -print0 | xargs -0 -I{} bash -n {}
+          echo "all scripts parse"
+
+      - name: validate launchd plists
+        run: |
+          python3 - <<'EOF'
+          import plistlib, glob, sys
+          fails = 0
+          for p in sorted(glob.glob('launchd/Library/LaunchAgents/*.plist')):
+              try:
+                  with open(p, 'rb') as f: plistlib.load(f)
+                  print('OK  ', p)
+              except Exception as e:
+                  print('FAIL', p, e); fails += 1
+          sys.exit(1 if fails else 0)
+          EOF
+
+      - name: manifest shape smoke
+        run: |
+          set -e
+          check_cols() { # file expected-fields (pipe-delimited)
+            awk -v want="$2" -F'|' '!/^[[:space:]]*#/ && NF {
+              if (NF != want) { printf "%s: expected %d fields, got %d: %s\n", FILENAME, want, NF, $0; rc=1 }
+            } END { exit rc }' "$1" && echo "OK   $1"
+          }
+          check_cols provisioning/mcp.manifest 4
+          check_cols provisioning/keys.manifest 5
+          check_cols provisioning/checks.manifest 5
+          # whitespace manifests: layer + at least one more field
+          awk '!/^[[:space:]]*#/ && NF && NF < 2 { print FILENAME": bad row: "$0; rc=1 } END { exit rc }' \
+            provisioning/tools.manifest provisioning/skills.manifest && echo "OK   tools+skills manifests"

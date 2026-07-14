@@ -18,6 +18,8 @@ DOTFILES="$(cd "$(dirname "$0")/.." && pwd)"
 INSTALL_SH="$DOTFILES/install.sh"
 IV_IMAGE_DIR="${IV_IMAGE_DIR:-$HOME/github/kylelundstedt/iv-image}"
 
+source "$DOTFILES/backup/_lib.sh"   # job_trim (canonical manifest-field trim)
+
 FAIL=0
 ok()   { echo "  [ok]   $*"; }
 drift() { echo "  [DRIFT] $*"; FAIL=1; }
@@ -162,8 +164,8 @@ if $have_iv; then
     else
         # Legacy inline setup-mcp.sh: per-row literal checks
         while IFS='|' read -r name layer vm mac; do
-            name="$(echo "$name" | xargs)"; layer="$(echo "$layer" | xargs)"
-            vm="$(echo "$vm" | xargs)"
+            name="$(job_trim "$name")"; layer="$(job_trim "$layer")"
+            vm="$(job_trim "$vm")"
             case "$layer" in
                 team)     grep -qF "$vm" "$setup_mcp" && ok "team mcp $name seeded by iv-image" || drift "team mcp $name vm-url missing from iv-image setup-mcp.sh" ;;
                 personal) grep -qF "\"$name\"" "$setup_mcp" && drift "personal mcp $name is ALSO seeded by iv-image (layer wrong?)" || ok "personal mcp $name not in iv-image" ;;

@@ -4,6 +4,44 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-07-13 — hygiene batch: honest errors, CI floor, \_lib.sh everywhere
+
+The "safe now" half of the review-hygiene TODO — items with no dependency on
+the in-flight iv-image review session (which owns pin bumps, overlay tests, and
+VM refreshes; see the new "Blocked" section in TODO.md).
+
+- **Honest errors in `setup_agents`:** every `>/dev/null 2>&1 || true` around
+  `claude mcp add`/`add-json`, hub-mcp (both harnesses), skills installs, and
+  the 1Password→Keychain provisioning now prints `[!] <what> failed` on
+  non-zero; MCP/skills counters count _successes_ (`N registered, M failed`),
+  and the tigris-creds line calls out a partial provision (`4/5 incomplete`)
+  instead of staying quiet. Same dishonest-green class as the sync-repos
+  listing bug. Verified with the stub harness (stdin-eating `claude`/`npx`
+  stubs + CMDLOG): all-success, injected-failure, and Linux scenarios.
+- **Regression found by verification, fixed:** `job_kc` propagated `security`'s
+  exit 44 when a Keychain item is absent, which killed `set -e` callers —
+  the refactored `check-key-expiry.sh` died silently before printing anything.
+  `job_kc` now never fails (documented contract: "empty if absent").
+- **CI floor** (`.github/workflows/checks.yml`): `bash -n` every script,
+  plistlib-validate the LaunchAgents, manifest shape smoke (field counts per
+  manifest). Deliberately the no-Keychain/no-VM subset — real drift checks
+  stay host-side in `test-install.sh provisioning`.
+- **`_lib.sh` adoption:** `owc8tb-unlock.sh`, `check-key-expiry.sh`,
+  `check-monitoring.sh`, `diff-provisioning.sh` now source `backup/_lib.sh`
+  (`job_kc`/`job_hc*`/new `job_require_mini`/`job_trim`) instead of hand-rolled
+  copies; trim idioms unified on `job_trim` (install.sh keeps `mtrim`
+  deliberately — must stay self-contained for curl|bash bootstrap).
+- **settings.json propagation:** new `sync_claude_settings_hooks` in install.sh
+  merges the SessionStart refresh hook + PreToolUse SSH guard from
+  `settings.json.example` into an _existing_ live settings.json (seeding was
+  only-if-absent, so new hooks never reached existing installs). Idempotent;
+  personal Macs only (IV VMs keep the U7 overlay path).
+- test-install.sh's VERIFY_SCRIPT tool list annotated as a deliberate smoke
+  subset of `provisioning/tools.manifest`.
+- Also committed separately (`5061e12`): Linux `setup_tailscale` already-joined
+  guard — re-running install.sh on a live VM no longer re-auths (which would
+  have replaced the VM's own tailnet node).
+
 ## 2026-07-13 — post-plan repo review (3-way audit + fixes)
 
 Fanned three reviewers over docs, scripts, and packages; verified every finding

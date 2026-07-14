@@ -17,6 +17,7 @@
 #   --dry-run  report only; skip healthcheck pings
 # Exit 1 when any key is expired or within the warning window, else 0.
 set -euo pipefail
+source "$(cd "$(dirname "$0")/.." && pwd)/backup/_lib.sh"
 
 WARN_DAYS=35
 MANIFEST="$(cd "$(dirname "$0")" && pwd)/keys.manifest"
@@ -31,12 +32,9 @@ while [[ $# -gt 0 ]]; do
 done
 [[ -f "$MANIFEST" ]] || { echo "check-key-expiry: manifest not found: $MANIFEST" >&2; exit 2; }
 
-hc() {
-    $DRY_RUN && return 0
-    local u
-    u=$(security find-generic-password -s "key-expiry:healthcheck-url" -w 2>/dev/null) || return 0
-    [ -n "$u" ] && curl -fsS -m 10 --retry 3 "${u}${1:-}" "${@:2}" >/dev/null 2>&1 || true
-}
+# Monitoring semantics from _lib.sh; --dry-run gates the pings locally.
+job_hc_init "key-expiry:healthcheck-url"
+hc() { $DRY_RUN && return 0; job_hc "$@"; }
 
 # BSD (macOS) date first, GNU fallback
 to_epoch() { date -j -f "%Y-%m-%d" "$1" +%s 2>/dev/null || date -d "$1" +%s; }
@@ -46,7 +44,7 @@ warnings=()
 unknowns=()
 
 while IFS='|' read -r name type expires opref fanout; do
-    name="$(echo "$name" | xargs)"; expires="$(echo "$expires" | xargs)"
+    name="$(job_trim "$name")"; expires="$(job_trim "$expires")"
     [[ -z "$name" ]] && continue
     case "$expires" in
         none)    echo "  [ok]      $name — non-expiring" ;;

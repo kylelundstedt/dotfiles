@@ -7,9 +7,10 @@
 # Needs the read-write API key in the login Keychain (healthchecks:api-key,
 # mini-only); exits 0 with a skip message elsewhere. Exit 1 on drift.
 set -uo pipefail
+source "$(cd "$(dirname "$0")/.." && pwd)/backup/_lib.sh"
 
 MANIFEST="$(cd "$(dirname "$0")" && pwd)/checks.manifest"
-KEY=$(security find-generic-password -s "healthchecks:api-key" -w 2>/dev/null)
+KEY=$(job_kc "healthchecks:api-key")
 if [[ -z "$KEY" ]]; then
     echo "  [skip] healthchecks:api-key not in Keychain — cannot verify check configs"
     exit 0
@@ -24,11 +25,9 @@ FAIL=0
 ok()    { echo "  [ok]   $*"; }
 drift() { echo "  [DRIFT] $*"; FAIL=1; }
 
-trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; printf '%s' "${s%"${s##*[![:space:]]}"}"; }
-
 seen_names=()
 while IFS='|' read -r name sched tz grace job; do
-    name=$(trim "$name"); sched=$(trim "$sched"); tz=$(trim "$tz"); grace=$(trim "$grace")
+    name=$(job_trim "$name"); sched=$(job_trim "$sched"); tz=$(job_trim "$tz"); grace=$(job_trim "$grace")
     [[ -z "$name" ]] && continue
     seen_names+=("$name")
     row=$(jq -c --arg n "$name" '.checks[] | select(.name == $n)' <<<"$API_JSON")

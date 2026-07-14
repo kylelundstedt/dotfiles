@@ -8,12 +8,10 @@
 # launchd job runs unattended. Mini-only (guarded by hostname).
 set -uo pipefail
 
-# --- Mini-only: this backs up THIS machine's home; must not run elsewhere ---
-if [[ "$(scutil --get LocalHostName 2>/dev/null)" != "klundstedt-mini" ]]; then
-    echo "not klundstedt-mini; skipping tigris-backup."; exit 0
-fi
-
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+
+# Mini-only: this backs up THIS machine's home; must not run elsewhere.
+job_require_mini tigris-backup
 
 LOCKDIR=/tmp/tigris-backup.lock
 LAST_RUN=/tmp/tigris-backup.lastrun

@@ -16,7 +16,23 @@
 # See agent_docs/monitoring.md for the registry + rules.
 
 # job_kc <service> — read a secret from the login Keychain (empty if absent).
-job_kc() { security find-generic-password -s "$1" -w 2>/dev/null; }
+# Never fails: absent items must not kill `set -e` callers (check-key-expiry
+# died on exit 44 here, 2026-07-13) — callers test for an empty result instead.
+job_kc() { security find-generic-password -s "$1" -w 2>/dev/null || true; }
+
+# job_require_mini <job-name> — mini-only capability guard: exit 0 quietly on
+# any other host (these jobs act on this machine's disks/archives/keychain).
+job_require_mini() {
+    if [[ "$(scutil --get LocalHostName 2>/dev/null)" != "klundstedt-mini" ]]; then
+        echo "not klundstedt-mini; skipping ${1:-job}."; exit 0
+    fi
+}
+
+# job_trim <string> — strip leading/trailing whitespace (pipe-manifest fields).
+# Canonical trim for the provisioning scripts; install.sh keeps its own copy
+# (mtrim) DELIBERATELY — the installer must stay self-contained for the
+# curl|bash bootstrap phase, where no repo file exists to source yet.
+job_trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; printf '%s' "${s%"${s##*[![:space:]]}"}"; }
 
 # job_hc_init <keychain-service> — resolve this job's healthchecks.io ping URL.
 # No-op pinger if the item is absent (logging still works, alerting doesn't).

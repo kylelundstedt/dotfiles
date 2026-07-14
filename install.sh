@@ -769,6 +769,29 @@ overlay_claude_settings() {
     echo "  [+] SessionStart refresh-env hook spliced into team settings.json"
 }
 
+# --- sync_claude_settings_hooks ---
+# The live agents/.claude/settings.json is gitignored (Claude Code mutates it
+# at runtime) and was seeded from the example only when ABSENT — so hooks
+# added to the example later never reached existing installs (bit us with the
+# SSH guard, 2026-07-13). Splice each known hook from the example if missing;
+# the example stays the single source. Not on IV VMs (iv-image owns
+# ~/.claude/settings.json there; overlay_claude_settings handles that path).
+sync_claude_settings_hooks() {
+    [[ "$IS_IV_VM" == true ]] && return 0
+    local f="$DOTFILES_DIR/agents/.claude/settings.json"
+    local ex="$DOTFILES_DIR/agents/.claude/settings.json.example"
+    [[ -f "$f" && -f "$ex" ]] || return 0
+    command -v jq >/dev/null 2>&1 || return 0
+    if ! grep -q "refresh-env.sh" "$f"; then
+        jq --slurpfile ex "$ex" '.hooks.SessionStart = ((.hooks.SessionStart // []) + $ex[0].hooks.SessionStart)' "$f" > "$f.tmp" \
+            && mv "$f.tmp" "$f" && echo "  [+] settings.json: SessionStart hook synced from example"
+    fi
+    if ! grep -q "exe.dev SSH guard" "$f"; then
+        jq --slurpfile ex "$ex" '.hooks.PreToolUse = ((.hooks.PreToolUse // []) + $ex[0].hooks.PreToolUse)' "$f" > "$f.tmp" \
+            && mv "$f.tmp" "$f" && echo "  [+] settings.json: PreToolUse SSH guard synced from example"
+    fi
+}
+
 # --- run_stow ---
 run_stow() {
     if [[ "$SKIP_STOW" == true ]]; then
@@ -788,6 +811,7 @@ run_stow() {
         cp "${claude_settings}.example" "$claude_settings"
         echo "  Seeded agents/.claude/settings.json from example"
     fi
+    sync_claude_settings_hooks
 
     # Always stow these
     local packages=("git" "zsh" "starship" "agents")
@@ -1017,7 +1041,11 @@ setup_agents() {
         # tunnel (not always-on). On macOS the mac column is a direct URL, or
         # pat:<1p-account>:<op-ref> = the GitHub Copilot MCP endpoint with a
         # Bearer PAT read from 1Password at install time.
-        local m_name m_layer m_vm m_mac m_acct m_opref m_tok m_n=0
+        # Counters count SUCCESSES; every failure gets a visible [!] line —
+        # a fresh machine must not finish looking configured while agent
+        # capabilities silently failed (2026-07-13 review, same class as the
+        # sync-repos listing bug).
+        local m_name m_layer m_vm m_mac m_acct m_opref m_tok m_n=0 m_fail=0
         if [[ ! -f "$mcp_manifest" ]]; then
             echo "  [!] $mcp_manifest missing — skipping MCP registration"
         elif [[ "$OS" == "linux" ]]; then
@@ -1026,13 +1054,16 @@ setup_agents() {
                 [[ -z "$m_name" || -z "$m_vm" || "$m_vm" == "-" ]] && continue
                 # IV VMs: team rows already seeded by iv-image — personal only
                 [[ "$IS_IV_VM" == true && "$m_layer" == "team" ]] && continue
-                claude mcp add --transport http --scope user "$m_name" "$m_vm" >/dev/null 2>&1 || true
-                m_n=$((m_n+1))
+                if claude mcp add --transport http --scope user "$m_name" "$m_vm" >/dev/null 2>&1; then
+                    m_n=$((m_n+1))
+                else
+                    echo "  [!] claude mcp add $m_name failed"; m_fail=$((m_fail+1))
+                fi
             done 9< <(manifest_rows "$mcp_manifest")
             if [[ "$IS_IV_VM" == true ]]; then
-                echo "  [+] MCP servers ($m_n personal rows; team rows left to iv-image)"
+                echo "  [+] MCP servers ($m_n personal rows registered, $m_fail failed; team rows left to iv-image)"
             else
-                echo "  [+] MCP servers ($m_n registered from mcp.manifest)"
+                echo "  [+] MCP servers ($m_n registered from mcp.manifest, $m_fail failed)"
             fi
         else
             # macOS: direct/OAuth URLs; pat: rows need 1Password
@@ -1047,15 +1078,27 @@ setup_agents() {
                     m_acct="${m_mac#pat:}"; m_acct="${m_acct%%:*}"
                     m_opref="${m_mac#pat:*:}"
                     m_tok=$(op read "$m_opref" --account "$m_acct" 2>/dev/null) || true
-                    [[ -n "$m_tok" ]] && claude mcp add-json --scope user "$m_name" \
-                        "{\"type\":\"http\",\"url\":\"https://api.githubcopilot.com/mcp/\",\"headers\":{\"Authorization\":\"Bearer $m_tok\"}}" >/dev/null 2>&1 || true
+                    if [[ -z "$m_tok" ]]; then
+                        echo "  [!] $m_name: 1Password read failed/empty ($m_opref)"; m_fail=$((m_fail+1))
+                    elif claude mcp add-json --scope user "$m_name" \
+                        "{\"type\":\"http\",\"url\":\"https://api.githubcopilot.com/mcp/\",\"headers\":{\"Authorization\":\"Bearer $m_tok\"}}" >/dev/null 2>&1; then
+                        m_n=$((m_n+1))
+                    else
+                        echo "  [!] claude mcp add-json $m_name failed"; m_fail=$((m_fail+1))
+                    fi
                 else
-                    claude mcp add --transport http --scope user "$m_name" "$m_mac" >/dev/null 2>&1 || true
+                    if claude mcp add --transport http --scope user "$m_name" "$m_mac" >/dev/null 2>&1; then
+                        m_n=$((m_n+1))
+                    else
+                        echo "  [!] claude mcp add $m_name failed"; m_fail=$((m_fail+1))
+                    fi
                 fi
             done 9< <(manifest_rows "$mcp_manifest")
+            echo "  [+] MCP servers ($m_n registered from mcp.manifest, $m_fail failed)"
             if [[ -n "$hub_url" ]]; then
                 claude mcp add --transport http --scope user hub-mcp "$hub_url" >/dev/null 2>&1 \
-                    && echo "  [+] hub-mcp ($hub_url)" || true
+                    && echo "  [+] hub-mcp ($hub_url)" \
+                    || echo "  [!] claude mcp add hub-mcp failed ($hub_url)"
             fi
             if [[ "$op_configured" == true ]]; then
                 local pat_work
@@ -1070,9 +1113,19 @@ setup_agents() {
                 # tool to read it back non-interactively from the launchd job.
                 local pat_ivcmg kc_added=0
                 pat_ivcmg=$(op read "op://Employee/GitHub PAT IV-CMG/token" --account industryvault.1password.com 2>/dev/null) || true
-                [[ -n "$pat_work" ]]  && security add-generic-password -a "$USER" -s "sync-repos:IndustryVault" -T /usr/bin/security -U -w "$pat_work"  2>/dev/null && kc_added=$((kc_added+1)) || true
-                [[ -n "$pat_ivcmg" ]] && security add-generic-password -a "$USER" -s "sync-repos:iv-cmg"        -T /usr/bin/security -U -w "$pat_ivcmg" 2>/dev/null && kc_added=$((kc_added+1)) || true
-                [[ "$kc_added" -gt 0 ]] && echo "  [+] sync-repos org PATs → Keychain ($kc_added)"
+                if [[ -n "$pat_work" ]]; then
+                    security add-generic-password -a "$USER" -s "sync-repos:IndustryVault" -T /usr/bin/security -U -w "$pat_work" 2>/dev/null && kc_added=$((kc_added+1)) \
+                        || echo "  [!] Keychain write failed: sync-repos:IndustryVault"
+                else
+                    echo "  [!] 1Password read failed/empty: GitHub PAT IV (sync-repos:IndustryVault not provisioned)"
+                fi
+                if [[ -n "$pat_ivcmg" ]]; then
+                    security add-generic-password -a "$USER" -s "sync-repos:iv-cmg" -T /usr/bin/security -U -w "$pat_ivcmg" 2>/dev/null && kc_added=$((kc_added+1)) \
+                        || echo "  [!] Keychain write failed: sync-repos:iv-cmg"
+                else
+                    echo "  [!] 1Password read failed/empty: GitHub PAT IV-CMG (sync-repos:iv-cmg not provisioned)"
+                fi
+                [[ "$kc_added" -gt 0 ]] && echo "  [+] sync-repos org PATs → Keychain ($kc_added/2)"
 
                 # tigris-backup (klundstedt-mini only): provision the nightly
                 # backup's rclone key + crypt password/salt + healthcheck URL into
@@ -1092,19 +1145,33 @@ setup_agents() {
                     [[ -n "$tb_cpw"    ]] && security add-generic-password -a "$USER" -s "tigris-backup:crypt-password" -T /usr/bin/security -U -w "$tb_cpw"    2>/dev/null && tb_n=$((tb_n+1)) || true
                     [[ -n "$tb_csalt"  ]] && security add-generic-password -a "$USER" -s "tigris-backup:crypt-salt"     -T /usr/bin/security -U -w "$tb_csalt"  2>/dev/null && tb_n=$((tb_n+1)) || true
                     [[ -n "$tb_hc"     ]] && security add-generic-password -a "$USER" -s "tigris-backup:healthcheck-url" -T /usr/bin/security -U -w "$tb_hc"    2>/dev/null && tb_n=$((tb_n+1)) || true
-                    [[ "$tb_n" -gt 0 ]] && echo "  [+] tigris-backup creds → Keychain ($tb_n/5)"
+                    if [[ "$tb_n" -eq 5 ]]; then
+                        echo "  [+] tigris-backup creds → Keychain (5/5)"
+                    else
+                        echo "  [!] tigris-backup creds → Keychain incomplete ($tb_n/5 — check 1Password reads above)"
+                    fi
                     # Encrypted external drive (OWC8TB) passphrase — used by
                     # owc8tb-unlock.sh to auto-mount the drive after a reboot so
                     # the nightly can read the archive sources + Photos library.
                     local owc_pw
                     owc_pw=$(op read "op://Personal/OWC8TB disk encryption/password" --account "$tb_acc" 2>/dev/null) || true
-                    [[ -n "$owc_pw" ]] && security add-generic-password -a "$USER" -s "owc8tb-encryption" -T /usr/bin/security -U -w "$owc_pw" 2>/dev/null \
-                        && echo "  [+] OWC8TB disk passphrase → Keychain" || true
+                    if [[ -n "$owc_pw" ]]; then
+                        security add-generic-password -a "$USER" -s "owc8tb-encryption" -T /usr/bin/security -U -w "$owc_pw" 2>/dev/null \
+                            && echo "  [+] OWC8TB disk passphrase → Keychain" \
+                            || echo "  [!] Keychain write failed: owc8tb-encryption"
+                    else
+                        echo "  [!] 1Password read failed/empty: OWC8TB disk encryption"
+                    fi
                     # sync-repos dead-man's-switch ping URL (mini-only heartbeat)
                     local sr_hc
                     sr_hc=$(op read "op://Personal/sync-repos-healthcheck/password" --account "$tb_acc" 2>/dev/null) || true
-                    [[ -n "$sr_hc" ]] && security add-generic-password -a "$USER" -s "sync-repos:healthcheck-url" -T /usr/bin/security -U -w "$sr_hc" 2>/dev/null \
-                        && echo "  [+] sync-repos healthcheck → Keychain" || true
+                    if [[ -n "$sr_hc" ]]; then
+                        security add-generic-password -a "$USER" -s "sync-repos:healthcheck-url" -T /usr/bin/security -U -w "$sr_hc" 2>/dev/null \
+                            && echo "  [+] sync-repos healthcheck → Keychain" \
+                            || echo "  [!] Keychain write failed: sync-repos:healthcheck-url"
+                    else
+                        echo "  [!] 1Password read failed/empty: sync-repos-healthcheck"
+                    fi
                 fi
             else
                 echo "  Skipping Keychain credential provisioning (1Password not configured)"
@@ -1150,7 +1217,8 @@ setup_agents() {
         # personal-mcp local hub — no OAuth, so no browser needed (add even headless).
         if [[ -n "$hub_url" ]] && ! codex mcp get hub-mcp >/dev/null 2>&1; then
             codex mcp add hub-mcp --url "$hub_url" >/dev/null 2>&1 \
-                && echo "  [+] codex mcp: hub-mcp" || true
+                && echo "  [+] codex mcp: hub-mcp" \
+                || echo "  [!] codex mcp add hub-mcp failed ($hub_url)"
         fi
 
         # GitHub MCP servers deferred. Codex disallows inline bearer tokens
@@ -1158,8 +1226,6 @@ setup_agents() {
         # needs a codex wrapper that sources PATs via 'op run' at exec time.
         # See TODO.md "Secrets on remote VMs".
     fi
-
-    echo "  [+] MCP servers configured"
 
     # gh CLI auth (separate from MCP PATs).
     # Interactive macOS prefers browser OAuth so gh gets its own scoped token
@@ -1196,28 +1262,36 @@ setup_agents() {
     local skills_manifest="$DOTFILES_DIR/provisioning/skills.manifest"
     if command -v npx >/dev/null 2>&1 && [[ -f "$skills_manifest" ]]; then
         echo "  Installing agent skills (skills.manifest)..."
-        local s_layer s_method s_args s_name s_url
+        local s_layer s_method s_args s_name s_url s_ok=0 s_fail=0
         while read -u 9 -r s_layer s_method s_args; do
             [[ "$s_layer" == "team" && "$OS" != "macos" ]] && continue
             case "$s_method" in
                 npx)
                     # $s_args is intentionally word-split (repo + optional -s flags)
                     # shellcheck disable=SC2086
-                    npx -y skills add -g -y $s_args >/dev/null 2>&1 || true
+                    if npx -y skills add -g -y $s_args >/dev/null 2>&1; then
+                        s_ok=$((s_ok+1))
+                    else
+                        echo "  [!] skill install failed: npx skills add $s_args"; s_fail=$((s_fail+1))
+                    fi
                     ;;
                 curl)
                     # args = "<name> <url>" — no GitHub repo, download skill file directly
                     read -r s_name s_url <<< "$s_args"
                     mkdir -p "$HOME/.agents/skills/$s_name"
-                    curl -fsSL "$s_url" -o "$HOME/.agents/skills/$s_name/SKILL.md" 2>/dev/null || true
+                    if curl -fsSL "$s_url" -o "$HOME/.agents/skills/$s_name/SKILL.md" 2>/dev/null; then
+                        s_ok=$((s_ok+1))
+                    else
+                        echo "  [!] skill download failed: $s_name ($s_url)"; s_fail=$((s_fail+1))
+                    fi
                     for agent_dir in "$HOME/.claude/skills" "$HOME/.codex/skills"; do
                         [ -d "$agent_dir" ] && ln -sf "../../.agents/skills/$s_name" "$agent_dir/$s_name" 2>/dev/null || true
                     done
                     ;;
-                *)  echo "  [!] skills.manifest: unknown method '$s_method' for '$s_args'" ;;
+                *)  echo "  [!] skills.manifest: unknown method '$s_method' for '$s_args'"; s_fail=$((s_fail+1)) ;;
             esac
         done 9< <(manifest_rows "$skills_manifest")
-        echo "  [+] Skills installed"
+        echo "  [+] Skills ($s_ok installed, $s_fail failed)"
     else
         echo "  [!] npx or skills.manifest missing, skipping skill installation"
     fi
