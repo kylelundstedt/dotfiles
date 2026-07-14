@@ -22,13 +22,16 @@ The user provides the **VM name** and optionally a **target tag/sha** of the
 **One SSH command at a time** — never parallel SSH to `*.exe.xyz` or `exe.dev`.
 
 ```bash
-ssh -o ConnectTimeout=30 <vm>.exe.xyz "cd ~/iv-image && git fetch --tags --quiet \
-  && git checkout <tag-or-sha-or-branch> && git pull --ff-only --quiet 2>/dev/null; \
-  ~/iv-image/provision-iv.sh"
+ssh -o ConnectTimeout=30 <vm>.exe.xyz "cd ~/iv-image \
+  && git fetch --tags --quiet \
+  && git checkout --detach <tag-or-sha> \
+  && ~/iv-image/provision-iv.sh \
+  && ~/iv-image/tests/smoke-provision.sh ~/iv-image"
 ```
 
-This re-pins tools and re-installs the vendored skills + agent config, and
-rewrites `~/iv-provision.lock`. Verify:
+(`smoke-provision.sh` ships with iv-image ≥ 2.5.0; on older checkouts skip that
+last step.) This re-pins tools and re-installs the vendored skills + agent
+config, and rewrites `~/iv-provision.lock`. Verify:
 
 ```bash
 ssh -o ConnectTimeout=30 <vm>.exe.xyz "cat ~/iv-provision.lock"
@@ -41,37 +44,36 @@ If `~/iv-image` doesn't exist yet (older VM), clone it first — see `bootstrap.
 This **wipes the VM's local disk** — it reprovisions, it does not migrate state.
 Use only when Path A can't deliver the change.
 
-> Note: the co-located `upgrade-vm.sh` automates an older registry-image variant
-> of this flow (it defaults to `--image=iv-registry...`, predating the
-> stock-exeuntu model). Prefer the manual steps below; treat the script as
-> legacy pending a rewrite or retirement.
-
 Run sequentially. **One SSH command at a time.**
 
 ### 1. Confirm with the user
 
 This is destructive. Confirm the VM name and that wiping its disk is acceptable.
 
-### 2. Delete the stale Tailscale node
+### 2. Destroy the old VM
 
-The old VM's tailnet node must be deleted before the new one joins, otherwise the
-new VM gets a `-1` suffix. Mint a short-lived token from the Tailscale OAuth
-client (1Password; the old static API key is revoked — 2026-07):
+Destroy the old VM before deleting its tailnet node — the stale node can still
+be located by hostname afterward, and it must be gone before the new VM joins.
+
+```bash
+ssh -o ConnectTimeout=30 exe.dev rm <vm>
+```
+
+### 3. Delete the stale Tailscale node
+
+Otherwise the new VM gets a `-1` suffix. Mint a short-lived token from the
+Tailscale OAuth client (1Password; the old static API key is revoked — 2026-07):
 
 ```bash
 TOKEN=$(curl -fsS -u "$(op read 'op://Employee/Tailscale OAuth Dev/Client ID' --account industryvault.1password.com):$(op read 'op://Employee/Tailscale OAuth Dev/Client secret' --account industryvault.1password.com)" \
   -d grant_type=client_credentials https://api.tailscale.com/api/v2/oauth/token | jq -r .access_token)
 NODE_ID=$(curl -fsSL -H "Authorization: Bearer $TOKEN" \
   https://api.tailscale.com/api/v2/tailnet/-/devices \
-  | jq -r '.devices[] | select(.hostname == "<vm>") | .id')
+  | jq -er '[.devices[] | select(.hostname == "<vm>") | .id]
+            | if length == 1 then .[0] else error("expected exactly one matching node") end')
 curl -fsSL -X DELETE -H "Authorization: Bearer $TOKEN" \
   "https://api.tailscale.com/api/v2/device/$NODE_ID"
-```
-
-### 3. Destroy the old VM
-
-```bash
-ssh -o ConnectTimeout=30 exe.dev rm <vm>
+unset TOKEN
 ```
 
 ### 4. Remove stale SSH state
