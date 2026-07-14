@@ -4,6 +4,43 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-07-14 — post-iv-image follow-through (2.5.0) + /dev/fd procsub bug
+
+The blocked-on-iv-image items, unblocked by the 2.5.0 release:
+
+- **Pin verified current** — 2.5.0 didn't touch the vendored manifests or
+  shared AGENTS.md; `diff-provisioning.sh` dual-mode clean, no bump needed.
+- **`upgrade-vm.sh` retired** (automated the pre-stock-exeuntu registry flow);
+  SKILL.md aligned with the 2.5.0 flow: pinned `--detach` checkout +
+  `smoke-provision.sh` in Path A, destroy-VM-before-node-delete ordering and
+  exactly-one-hostname-match node query in Path B. Kept the OAuth two-step —
+  iv-image's team copy of this skill still references the revoked static API
+  key (flagged upstream via TODO).
+- **kgl-dotfiles refreshed in place** (5d0f389 → 34560a3). Honest counters,
+  the `[!]` gh-unauthenticated line, and the settings-hook sync all visible in
+  the live run. The tailscale section took the pre-existing "Already
+  connected" early path; the new deeper guard covers the
+  rebooted-daemon-but-joined case.
+- **Overlay test 20/20 against 2.5.0** (throwaway IV VM).
+- **Bare-VM bug found by `test-install.sh exe`:** exe.dev's `ubuntu:24.04`
+  image has no `/dev/fd` symlink (`/proc/self/fd` exists; bash hardcodes
+  `/dev/fd` for process substitution), so every `<(...)` dies with
+  "/dev/fd/63: No such file or directory" — the fd-9 manifest loops had never
+  run on that image (the pattern postdates the last exe run). Fixed by
+  switching all four loops to `9<<< "$(...)"` here-strings (which use
+  pipes/temp files, not /dev/fd), with a blank-first-field guard for the
+  empty-substitution edge case. Reproduced and verified on throwaway VMs;
+  harness re-run clean.
+- **Test-expectation staleness, also caught by the exe run:** the verify list
+  expected team skills (mviz, find-skills) on a bare Linux VM — they're
+  macOS/iv-image-only by design — and named four tigris skills that upstream
+  (`tigrisdata/tigris-agents-plugins`) has since renamed. Now: personal rows
+  only, exact names for the dotfiles-owned row, glob for third-party rows.
+  And exe.dev's `defaults read` of an unset key now prints `(not set)` with
+  rc=0 (was: empty), which `test_no_hook` misread as a registered hook.
+- Final board: exe 35/35 VM-side + hook smoke green; ghost tailnet nodes from
+  the test runs cleaned via the OAuth flow (test teardown gap noted in TODO).
+
 ## 2026-07-13 — hygiene batch: honest errors, CI floor, \_lib.sh everywhere
 
 The "safe now" half of the review-hygiene TODO — items with no dependency on

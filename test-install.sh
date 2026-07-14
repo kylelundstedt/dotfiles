@@ -300,7 +300,9 @@ test_no_hook() {
     echo "=== Smoke: exe.dev has no auto-join setup-script hook ==="
     local registered
     registered=$(ssh -o ConnectTimeout=10 -o BatchMode=yes exe.dev "defaults read dev.exe new.setup-script" 2>/dev/null || echo "")
-    if [[ -z "$registered" ]]; then
+    # exe.dev now prints the literal "(not set)" (rc=0) for an unset key
+    # (2026-07-14); older CLI printed nothing.
+    if [[ -z "$registered" || "$registered" == "(not set)" ]]; then
         log_pass "no new.setup-script hook registered (on-demand join only)"
     else
         log_fail "a setup-script hook is registered ('$registered') — VMs will auto-run it at boot. Clear it: ssh exe.dev \"defaults delete dev.exe new.setup-script\""

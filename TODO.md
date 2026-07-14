@@ -65,14 +65,12 @@ Safe-now items done 2026-07-13 (see CHANGELOG): honest errors + success-counters
 
 - [ ] Split `setup_agents` (~350 lines, six concerns) and `setup_git` (git config + two SSH strategies) into focused functions — **partially blocked**: verify the U7 overlay path afterward, which needs a VM refresh (below)
 
-## Blocked until the iv-image review session lands
+## Post-iv-image follow-through (iv-image 2.5.0)
 
-Do NOT touch `~/github/kylelundstedt/iv-image`, bump `dotfiles-manifest.pin`, run overlay tests, or refresh any VM until that session finishes — its conclusions may change the image and the vendored manifests.
+Done 2026-07-14 (see CHANGELOG): pin verified current (no drift, no bump); `upgrade-vm.sh` retired + SKILL.md aligned with 2.5.0; kgl-dotfiles refreshed in place; overlay test 20/20 vs 2.5.0; exe test 35/35 VM-side after fixing the `/dev/fd` procsub bug + stale verify expectations + `(not set)` hook parsing.
 
-- [ ] Reconcile or retire `upgrade-vm.sh` (automates the pre-stock-exeuntu registry flow; SKILL.md now documents reprovision-in-place as the default)
-- [ ] Refresh VMs to the post-review image — kgl-dotfiles first (stale at 5d0f389; also exercises the new tailscale already-joined guard in install.sh)
-- [ ] Run `./test-install.sh overlay` (+ `exe`) against the refreshed image
-- [ ] Bump/vendor `dotfiles-manifest.pin` in iv-image if the manifests changed
+- [ ] iv-image's team `upgrade-vm` skill (2.5.0) still mints from the revoked static Tailscale API key (`op://Employee/Tailscale - API Key/credential`) — Path B will 401; needs the OAuth two-step like the dotfiles copy (fix in iv-image)
+- [ ] test_exe leaves the test VM's tailnet node behind (`tst-install-exe` ghost after every run; self-heals on the next same-name run via install.sh's mint-path cleanup, but lingers between runs) — consider deleting the node in teardown via the OAuth mint the test already does
 
 ---
 
