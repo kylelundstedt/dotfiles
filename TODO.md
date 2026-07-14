@@ -69,7 +69,7 @@ Safe-now items done 2026-07-13 (see CHANGELOG): honest errors + success-counters
 
 Done 2026-07-14 (see CHANGELOG): pin verified current (no drift, no bump); `upgrade-vm.sh` retired + SKILL.md aligned with 2.5.0; kgl-dotfiles refreshed in place; overlay test 20/20 vs 2.5.0; exe test 35/35 VM-side after fixing the `/dev/fd` procsub bug + stale verify expectations + `(not set)` hook parsing; iv-image's team upgrade-vm skill switched off the revoked static Tailscale key to the OAuth mint (iv-image#4, merged).
 
-- [ ] test_exe leaves the test VM's tailnet node behind (`tst-install-exe` ghost after every run; self-heals on the next same-name run via install.sh's mint-path cleanup, but lingers between runs) — consider deleting the node in teardown via the OAuth mint the test already does
+All test teardowns (exe, overlay, container, sprite) now delete the test VM's tailnet node(s) via `ts_rm_node` — sweeps `-N` suffixed ghosts too (2026-07-14; verified live: one run cleaned four nodes, 36/36).
 
 ---
 

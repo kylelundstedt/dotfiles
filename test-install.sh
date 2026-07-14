@@ -54,6 +54,25 @@ export GITHUB_TOKEN
 log_pass() { echo "  PASS: $1"; PASS=$((PASS + 1)); }
 log_fail() { echo "  FAIL: $1"; FAIL=$((FAIL + 1)); }
 
+# Delete the test VM's tailnet node(s) at teardown. install.sh joins the VM
+# during the test, and a leftover node makes the NEXT run's join take a -1/-2
+# suffix (observed 2026-07-14: three tst-install-exe ghosts). Sweeps suffixed
+# variants too. Best-effort: needs the OAuth token minted above — absent when
+# TS_AUTHKEY came from the environment.
+ts_rm_node() { # hostname
+    [ -n "${_ts_tok:-}" ] || { echo "  (tailnet node cleanup skipped — no OAuth token)"; return 0; }
+    local ids id
+    ids=$(curl -fsS -m 15 -H "Authorization: Bearer $_ts_tok" \
+        https://api.tailscale.com/api/v2/tailnet/-/devices 2>/dev/null \
+        | jq -r --arg h "$1" '.devices[] | select(.hostname | test("^" + $h + "(-[0-9]+)?$")) | .id' 2>/dev/null)
+    for id in $ids; do
+        curl -fsS -m 15 -X DELETE -H "Authorization: Bearer $_ts_tok" \
+            "https://api.tailscale.com/api/v2/device/$id" >/dev/null 2>&1 \
+            && echo "  Tailnet node cleaned up ($1: $id)" \
+            || echo "  WARNING: tailnet node delete failed ($1: $id)"
+    done
+}
+
 # Verification script injected into remote environments
 read -r -d '' VERIFY_SCRIPT << 'VERIFY' || true
 export PATH=$HOME/.local/bin:$HOME/.atuin/bin:$PATH
@@ -155,6 +174,7 @@ test_container() {
     " || {
         log_fail "container: install.sh"
         container stop "$name" 2>/dev/null; container rm "$name" 2>/dev/null || true
+        ts_rm_node "$name"
         return
     }
     log_pass "container: install.sh"
@@ -166,6 +186,7 @@ test_container() {
     echo ""
     echo "--- Tearing down container ---"
     container stop "$name" 2>/dev/null; container rm "$name" 2>/dev/null || true
+    ts_rm_node "$name"
 }
 
 # --- Sprite (back-burnered, kept for validation) ---
@@ -198,6 +219,7 @@ test_sprite() {
     " || {
         log_fail "sprite: install.sh"
         sprite destroy -s "$name" --force 2>/dev/null || true
+        ts_rm_node "$name"
         return
     }
     log_pass "sprite: install.sh"
@@ -209,6 +231,7 @@ test_sprite() {
     echo ""
     echo "--- Tearing down sprite ---"
     sprite destroy -s "$name" --force 2>/dev/null || true
+    ts_rm_node "$name"
 }
 
 # --- exe.dev VM (default user, sudo available) ---
@@ -276,6 +299,7 @@ test_exe() {
     " || {
         log_fail "exe: install.sh"
         exe_api "rm $name" >/dev/null || true
+        ts_rm_node "$name"
         rm -rf "$ssh_mux_dir"
         return
     }
@@ -288,6 +312,7 @@ test_exe() {
     echo ""
     echo "--- Tearing down exe.dev VM ---"
     exe_api "rm $name" >/dev/null || true
+    ts_rm_node "$name"
     rm -rf "$ssh_mux_dir"
 }
 
@@ -353,6 +378,7 @@ test_overlay() {
     else
         log_fail "overlay: iv-image provisioning failed"
         ssh -o ConnectTimeout=30 exe.dev "rm $vm" >/dev/null 2>&1 || true
+        ts_rm_node "$vm"
         return
     fi
     echo "--- running dotfiles install.sh (overlay path) ---"
@@ -387,6 +413,7 @@ OVERLAY_VERIFY
 )"
     echo "--- tearing down ---"
     ssh -o ConnectTimeout=30 exe.dev "rm $vm" >/dev/null 2>&1 && echo "  VM deleted"
+    ts_rm_node "$vm"
 }
 
 # --- Dispatch ---
