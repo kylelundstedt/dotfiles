@@ -1386,6 +1386,17 @@ setup_tailscale() {
             fi
         fi
 
+        # Already joined? Reapply prefs and STOP — the mint path below also
+        # deletes same-hostname tailnet nodes (ghost cleanup for fresh boots),
+        # which on a re-run would delete this VM's own LIVE node mid-install
+        # (dropping any tailnet SSH session driving the install) and rejoin
+        # it as ephemeral. First boot was the only path this ever needed.
+        if [[ "$(tailscale status --json 2>/dev/null | jq -r '.BackendState // empty')" == "Running" ]]; then
+            echo "  Already authenticated (node untouched)"
+            $SUDO tailscale set --ssh --accept-dns --accept-routes 2>/dev/null || true
+            return 0
+        fi
+
         # On exe.dev VMs, the tailscale-api integration proxy is reachable
         # and can generate auth keys without any secrets on disk. Use it
         # when TS_AUTHKEY wasn't provided explicitly.
