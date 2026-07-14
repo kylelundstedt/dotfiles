@@ -71,6 +71,8 @@ Done 2026-07-14 (see CHANGELOG): pin verified current (no drift, no bump); `upgr
 
 All test teardowns (exe, overlay, container, sprite) now delete the test VM's tailnet node(s) via `ts_rm_node` — sweeps `-N` suffixed ghosts too (2026-07-14; verified live: one run cleaned four nodes, 36/36).
 
+- [ ] iv-image reprovision clobbers the dotfiles overlay's settings splices: `provision-iv.sh:175` unconditionally installs the team `settings.json`, wiping the spliced SessionStart refresh + PreToolUse SSH-guard hooks (observed on all 6 overlay VMs after the 2.5.1 upgrade, 2026-07-14; re-spliced by re-running the overlay). Fix candidates: upgrade-vm skill Path A gains a "re-run `~/dotfiles/install.sh` if the VM has a personal overlay" step, or provision-iv.sh merges instead of overwrites.
+
 ---
 
 Completed work has moved to [CHANGELOG.md](CHANGELOG.md).
