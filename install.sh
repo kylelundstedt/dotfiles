@@ -901,9 +901,13 @@ run_stow() {
 # --- provisioning manifest helpers ---
 # The skill/MCP sets are declared in provisioning/*.manifest (single source of
 # truth shared with iv-image — see agent_docs/simplification-plan.md, decision 3).
-# Manifest read-loops feed on fd 9 (read -u 9 ... done 9< <(...)), NOT stdin:
-# child commands (npx/claude/codex/op) read stdin and silently eat the
-# remaining rows otherwise.
+# Manifest read-loops feed on fd 9 (read -u 9 ... done 9<<< "$(...)"), NOT
+# stdin: child commands (npx/claude/codex/op) read stdin and silently eat the
+# remaining rows otherwise. Here-strings, NOT process substitution <(...) —
+# exe.dev's bare ubuntu:24.04 image has no /dev/fd symlink, so every bash
+# procsub there dies with "/dev/fd/63: No such file or directory" (2026-07-14).
+# Caveat: an empty command substitution still yields ONE empty read, so every
+# loop body must skip blank first fields.
 manifest_rows() { grep -vE '^[[:space:]]*#|^[[:space:]]*$' "$1"; }
 # Trim leading/trailing whitespace from a pipe-manifest field.
 mtrim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; printf '%s' "${s%"${s##*[![:space:]]}"}"; }
@@ -1059,7 +1063,7 @@ setup_agents() {
                 else
                     echo "  [!] claude mcp add $m_name failed"; m_fail=$((m_fail+1))
                 fi
-            done 9< <(manifest_rows "$mcp_manifest")
+            done 9<<< "$(manifest_rows "$mcp_manifest")"
             if [[ "$IS_IV_VM" == true ]]; then
                 echo "  [+] MCP servers ($m_n personal rows registered, $m_fail failed; team rows left to iv-image)"
             else
@@ -1093,7 +1097,7 @@ setup_agents() {
                         echo "  [!] claude mcp add $m_name failed"; m_fail=$((m_fail+1))
                     fi
                 fi
-            done 9< <(manifest_rows "$mcp_manifest")
+            done 9<<< "$(manifest_rows "$mcp_manifest")"
             echo "  [+] MCP servers ($m_n registered from mcp.manifest, $m_fail failed)"
             if [[ -n "$hub_url" ]]; then
                 claude mcp add --transport http --scope user hub-mcp "$hub_url" >/dev/null 2>&1 \
@@ -1209,7 +1213,7 @@ setup_agents() {
                         && echo "  [+] codex mcp: $c_name" \
                         || echo "  [!] codex mcp add $c_name failed"
                 fi
-            done 9< <(manifest_rows "$mcp_manifest")
+            done 9<<< "$(manifest_rows "$mcp_manifest")"
         else
             echo "  Skipping Codex MCP servers (OAuth needs a local browser)"
         fi
@@ -1264,6 +1268,7 @@ setup_agents() {
         echo "  Installing agent skills (skills.manifest)..."
         local s_layer s_method s_args s_name s_url s_ok=0 s_fail=0
         while read -u 9 -r s_layer s_method s_args; do
+            [[ -z "$s_layer" ]] && continue
             [[ "$s_layer" == "team" && "$OS" != "macos" ]] && continue
             case "$s_method" in
                 npx)
@@ -1290,7 +1295,7 @@ setup_agents() {
                     ;;
                 *)  echo "  [!] skills.manifest: unknown method '$s_method' for '$s_args'"; s_fail=$((s_fail+1)) ;;
             esac
-        done 9< <(manifest_rows "$skills_manifest")
+        done 9<<< "$(manifest_rows "$skills_manifest")"
         echo "  [+] Skills ($s_ok installed, $s_fail failed)"
     else
         echo "  [!] npx or skills.manifest missing, skipping skill installation"
