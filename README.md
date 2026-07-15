@@ -12,7 +12,14 @@ One command to set up a fully configured development environment on macOS or Lin
 
 **Dev tools** — Git with 1Password SSH signing, Tigris CLI for object storage, DuckDB, Python via [uv](https://docs.astral.sh/uv/)
 
-**Remote development** — Primary platform is [exe.dev](https://exe.dev): stock VMs get the team baseline from the `iv-image` provisioning script (pinned tools, team agent config, team MCP servers, vendored skills — sourced from this repo's `provisioning/` manifests at a pinned commit). On such VMs `install.sh` detects the IV layer (`~/iv-provision.lock`) and acts as a **thin personal overlay**: it adds only the personal delta (shell, personal CLI tools, personal MCP servers, personal AGENTS.md sections) and never touches what the image laid down. On bare VMs and Macs it does the full install. Zed's [remote development](https://zed.dev/docs/remote-development) connects over SSH. Tailscale provides stable hostnames, and SSH agent forwarding from the Mac's 1Password agent enables git clone/push and commit signing — no tokens needed on the VMs.
+**Ops for the always-on Mac mini** — nightly encrypted backup to Tigris (`backup/`), scheduled repo sync and credential-expiry alarms (`launchd/`), and a healthchecks.io monitoring registry with automated drift checks (`provisioning/`)
+
+**Remote development** — Primary platform is [exe.dev](https://exe.dev) VMs, edited from the Mac via Zed [remote development](https://zed.dev/docs/remote-development) over SSH. Tailscale gives every machine a stable hostname, and SSH agent forwarding from the Mac's 1Password agent handles git push and commit signing — no tokens ever live on a VM.
+
+**Two kinds of machines, one installer** — `install.sh` behaves differently depending on what it finds:
+
+- **Macs and personal VMs**: full install — everything listed above.
+- **IV work VMs**: these are first provisioned with a _team_ baseline (pinned tools, team agent config and skills) by the separate [iv-image](https://github.com/kylelundstedt/iv-image) repo, which vendors its tool/skill/MCP lists _from this repo's_ `provisioning/` manifests at a pinned commit. On such a VM (detected via `~/iv-provision.lock`), `install.sh` runs as a **thin personal overlay**: it adds only the personal extras — shell config, personal CLI tools, personal MCP servers, personal `AGENTS.md` sections — and never touches the team layer.
 
 ---
 
@@ -105,7 +112,7 @@ Both Claude Code and Codex CLI share a single instruction file (`AGENTS.md`) dep
 | Skill              | Source                                                                                  | Purpose                                                 |
 | ------------------ | --------------------------------------------------------------------------------------- | ------------------------------------------------------- |
 | `join-tailnet`     | This repo                                                                               | Join an exe.dev VM to the Tailscale tailnet on demand   |
-| `upgrade-vm`       | This repo                                                                               | Upgrade an exe.dev VM to a newer image version          |
+| `upgrade-vm`       | This repo                                                                               | Re-provision an IV exe.dev VM at a newer iv-image tag   |
 | `apple-containers` | This repo                                                                               | Apple Container VM lifecycle on macOS (back-burnered)   |
 | `sprites-dev`      | This repo                                                                               | Manage remote Sprites (Fly.io microVMs) — back-burnered |
 | `mviz`             | [matsonj/mviz](https://github.com/matsonj/mviz)                                         | Chart and report builder                                |

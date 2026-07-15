@@ -12,16 +12,16 @@ What stays here is the MCP _client_ registration (`install.sh`).
 
 Strategy: no plaintext secrets on VM disk. Each secret uses the narrowest delivery mechanism available.
 
-| Secret                       | Mechanism                                                             | Status            |
-| ---------------------------- | --------------------------------------------------------------------- | ----------------- |
-| GitHub clone/push            | exe.dev GitHub integration                                            | Done              |
-| Tailscale auth key           | OAuth client behind exe.dev proxy → 1h token → ephemeral key per join | Done (2026-07-13) |
-| Tailscale ghost node cleanup | Setup script via same HTTP proxy                                      | Done (2026-05-23) |
-| Git commit signing           | SSH agent forwarding via Tailscale                                    | Done              |
-| MCP MotherDuck               | exe.dev HTTP proxy integration (`motherduck-mcp`)                     | Done (2026-05-23) |
-| MCP OAuth (Tigris, Readwise) | `LocalForward 8765` on `*.exe.xyz`; browser dance                     | Done (2026-05-17) |
-| GitHub MCP PATs on VMs       | exe.dev HTTP proxy integration (`github-mcp-home`, `github-mcp-work`) | Done (2026-05-23) |
-| Per-project app secrets      | 1P service account + `op run --env-file`                              | Not started       |
+| Secret                       | Mechanism                                                                | Status            |
+| ---------------------------- | ------------------------------------------------------------------------ | ----------------- |
+| GitHub clone/push            | exe.dev GitHub integration                                               | Done              |
+| Tailscale auth key           | OAuth client behind exe.dev proxy → 1h token → ephemeral key per join    | Done (2026-07-13) |
+| Tailscale ghost node cleanup | install.sh mint path (first join) + test-install teardown (`ts_rm_node`) | Done (2026-07-14) |
+| Git commit signing           | SSH agent forwarding via Tailscale                                       | Done              |
+| MCP MotherDuck               | exe.dev HTTP proxy integration (`motherduck-mcp`)                        | Done (2026-05-23) |
+| MCP OAuth (Tigris, Readwise) | `LocalForward 8765` on `*.exe.xyz`; browser dance                        | Done (2026-05-17) |
+| GitHub MCP PATs on VMs       | exe.dev HTTP proxy integration (`github-mcp-home`, `github-mcp-work`)    | Done (2026-05-23) |
+| Per-project app secrets      | 1P service account + `op run --env-file`                                 | Not started       |
 
 ### To do
 
@@ -63,15 +63,9 @@ Cross-AI / multi-machine persistent memory via Basic Memory (basicmachines-co). 
 
 Safe-now items done 2026-07-13 (see CHANGELOG): honest errors + success-counters in `setup_agents`, GitHub Actions CI floor, `_lib.sh` adoption + trim unification, `settings.json` hook propagation, VERIFY_SCRIPT smoke-subset annotation.
 
-- [ ] Split `setup_agents` (~350 lines, six concerns) and `setup_git` (git config + two SSH strategies) into focused functions — **partially blocked**: verify the U7 overlay path afterward, which needs a VM refresh (below)
-
-## Post-iv-image follow-through (iv-image 2.5.0)
-
-Done 2026-07-14 (see CHANGELOG): pin verified current (no drift, no bump); `upgrade-vm.sh` retired + SKILL.md aligned with 2.5.0; kgl-dotfiles refreshed in place; overlay test 20/20 vs 2.5.0; exe test 35/35 VM-side after fixing the `/dev/fd` procsub bug + stale verify expectations + `(not set)` hook parsing; iv-image's team upgrade-vm skill switched off the revoked static Tailscale key to the OAuth mint (iv-image#4, merged).
-
-All test teardowns (exe, overlay, container, sprite) now delete the test VM's tailnet node(s) via `ts_rm_node` — sweeps `-N` suffixed ghosts too (2026-07-14; verified live: one run cleaned four nodes, 36/36).
-
-iv-image reprovision clobbers the overlay's settings splices (`provision-iv.sh:175` installs the team `settings.json` unconditionally; observed on all 6 overlay VMs after the 2.5.1 upgrade) — addressed 2026-07-14: upgrade-vm Path A now ends with a "re-run the dotfiles overlay if `~/dotfiles` exists" step, in both the dotfiles skill (`d676fc4`) and iv-image's team copy (`bef5099`). A merge-instead-of-overwrite in provision-iv.sh remains a possible deeper fix.
+- [ ] Split `setup_agents` (~350 lines, six concerns) and `setup_git` (git config + two SSH strategies) into focused functions — unblocked 2026-07-14: verify with `./test-install.sh overlay` + `exe` afterward (both green against iv-image 2.5.1)
+- [ ] Run `./install.sh` on klundstedt-mbp (U3 leftover — the mbp hasn't had a full run since the simplification plan; picks up the settings-hook sync and honest counters)
+- [ ] Consider merge-instead-of-overwrite for `~/.claude/settings.json` in iv-image's provision-iv.sh — deeper fix for the overlay-clobber issue; the upgrade-vm skill's "re-run the overlay" step (2026-07-14) covers it procedurally for now
 
 ---
 

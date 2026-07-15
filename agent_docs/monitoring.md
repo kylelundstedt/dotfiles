@@ -40,6 +40,24 @@ runs, locks, dated logs) live in `backup/_lib.sh`, sourced by
 tigris-backup.sh, sync-repos.sh, and restore-drill.sh — the rules above are
 library properties, not per-script conventions.
 
+## Scope: this registry covers the klundstedt-mini project only
+
+The manifest + drift check govern the checks in the **klundstedt-mini**
+healthchecks.io project — the jobs owned by this repo and personal-mcp.
+Monitoring boundaries follow repo/VM boundaries (decided 2026-07-14): a
+service with its own repo on its own VM owns its own check in its own
+project, configured and documented there. Known out-of-registry monitoring:
+
+- **rss-feed** (`kylelundstedt/rss-feed`, rss-feed VM) — a systemd timer runs
+  `healthcheck.sh` every ~16 min, validates every generated feed, and pings a
+  check in a separate healthchecks.io project (URL in
+  `~/.config/rss-feed/healthchecks.env` on the VM).
+
+`check-monitoring.sh`'s reverse pass ("every live check must be in the
+manifest") only sees the mini project, so out-of-registry checks never
+false-positive here — but their schedule/grace drift is each repo's own
+responsibility.
+
 ## Incident notes
 
 - 2026-07-04..09: sync-repos + tigris-backup flapping — three stacked causes

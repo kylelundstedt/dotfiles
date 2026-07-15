@@ -4,6 +4,42 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-07-14 — iv-image 2.5.1, fleet upgrade, VM retirements, teardown fix
+
+Continuation of the follow-through below, same day:
+
+- **iv-image#4 merged + 2.5.1 tagged** (validation ritual run first): the team
+  upgrade-vm skill now mints Tailscale API access from the OAuth client — its
+  2.5.0 text still read the revoked static API key, so Path B would have 401'd.
+- **All 7 IV VMs upgraded in place to 2.5.1** (Path A; iv-home and qbench-srv
+  predated the script model — repo integration attached, cloned at the tag).
+  iv-registry's doc site re-rendered.
+- **Overlay VMs refreshed to master** (6 VMs). Every one had lost its
+  SessionStart/SSH-guard hook splices — root cause: `provision-iv.sh:175`
+  installs the team `settings.json` unconditionally, so **any iv-image
+  reprovision clobbers the overlay's splices**, and the refresh hook can't
+  heal itself from inside the clobbered file. Addressed procedurally:
+  upgrade-vm Path A now ends with "re-run the dotfiles overlay if `~/dotfiles`
+  exists" in both the dotfiles skill (`d676fc4`) and iv-image's team copy
+  (`bef5099`); a merge-instead-of-overwrite in provision-iv.sh stays in TODO
+  as the deeper fix. Side effect noted: the run joined iv-registry to the
+  tailnet (it wasn't a member; install.sh's normal Linux behavior).
+- **Test teardown ghost-node fix**: every VM-creating test (exe, overlay,
+  container, sprite) joins the tailnet during install but only destroyed the
+  VM — each run left a ghost node and the next join took a `-1`/`-2` suffix
+  (three tst-install-exe ghosts + test-iv-overlay observed). `ts_rm_node`
+  reuses the OAuth token minted for TS_AUTHKEY, sweeps `^name(-N)?$`, and is
+  wired into all eight teardown paths. Verified live: one exe run went 36/36
+  and its teardown cleaned four nodes.
+- **iv-registry and qbench-srv retired** (VMs + tailnet nodes deleted; local
+  SSH state cleaned). iv-registry's only remaining jobs were the hosted doc
+  site (dropped — docs readable in-repo; `provision-docsite` on any IV VM
+  re-hosts) and a zombie `registry:2` container with no consumers. qbench-srv
+  was fully idle. iv-image docs updated (`f3a45ed`). Reviewed and KEPT:
+  iv-home (closed-door corporate repo served read-only, tailnet-only) and
+  rss-feed (Go feed service for Reeder with its own healthcheck timer — its
+  check lives in a separate healthchecks.io project, see monitoring.md).
+
 ## 2026-07-14 — post-iv-image follow-through (2.5.0) + /dev/fd procsub bug
 
 The blocked-on-iv-image items, unblocked by the 2.5.0 release:
