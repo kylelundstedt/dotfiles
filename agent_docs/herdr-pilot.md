@@ -24,7 +24,9 @@ terminal-native agents multiplexed by [herdr](https://herdr.dev) and reached fro
   machine that can ever send iMessage / run LM Studio). Named sessions per project:
   `herdr --remote klundstedt-mini --session dotfiles` vs `--session personal-mcp`.
 - **Client tabs fan out**: one terminal tab per project per `herdr --remote <host>`. Local
-  keybindings apply on remote attaches.
+  keybindings apply on remote attaches. On macOS the client is **Ghostty** (already
+  stow-managed here), not Zed's embedded terminal — running herdr inside Zed would re-couple
+  agents to the editor, which is the coupling this pilot removes. Zed stays editor-only.
 - **Phone: Moshi has ONE profile** → mosh to the mini; jump onward with `herdr --remote <vm>`
   from there. `herdr agent attach <name>` is the right grain for a phone screen.
 - **Reach VMs by tailnet name only** (after `/join-tailnet`), never `*.exe.xyz` (SYN-drop
