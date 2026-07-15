@@ -776,6 +776,9 @@ overlay_claude_settings() {
 # SSH guard, 2026-07-13). Splice each known hook from the example if missing;
 # the example stays the single source. Not on IV VMs (iv-image owns
 # ~/.claude/settings.json there; overlay_claude_settings handles that path).
+# INVARIANT: call this only from run_stow, BEFORE the stow step — a spliced
+# hook may reference a stow-deployed script (refresh-env.sh does), so the
+# splice must never run on a path where stowing doesn't follow it.
 sync_claude_settings_hooks() {
     [[ "$IS_IV_VM" == true ]] && return 0
     local f="$DOTFILES_DIR/agents/.claude/settings.json"
