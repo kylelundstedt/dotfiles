@@ -313,6 +313,14 @@ install_cli_tools() {
         linux-aarch64) fnm_asset="fnm-arm64" ;;
         linux-x86_64)  fnm_asset="fnm-linux" ;;
     esac
+    # herdr assets are bare version-less binaries: herdr-{macos,linux}-{aarch64,x86_64}
+    local herdr_asset
+    case "$OS-$arch" in
+        macos-arm64)   herdr_asset="herdr-macos-aarch64" ;;
+        macos-x86_64)  herdr_asset="herdr-macos-x86_64" ;;
+        linux-aarch64) herdr_asset="herdr-linux-aarch64" ;;
+        linux-x86_64)  herdr_asset="herdr-linux-x86_64" ;;
+    esac
 
     # Curl install scripts
     if want starship; then
@@ -391,6 +399,10 @@ install_cli_tools() {
         (install_github_binary "stephenleo/cship" "cship-${target_triple}" "cship" "cship-${target_triple}") &
         pids+=($!)
     else echo "  [=] cship"; fi
+    if want herdr; then
+        (install_release_asset "ogulcancelik/herdr" "$herdr_asset" "herdr" "$herdr_asset") &
+        pids+=($!)
+    else echo "  [=] herdr"; fi
     # quarto compares the installed version dir against latest, so it's already
     # upgrade-aware; want() just lets --upgrade force the API check even when present.
     if want quarto; then

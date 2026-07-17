@@ -1,6 +1,8 @@
 # `brew bundle --file ~/dotfiles/homebrew/Brewfile`
-# Casks and Mac App Store apps only — CLI tools installed via curl/GitHub releases in install.sh
+# Casks and Mac App Store apps — CLI tools installed via curl/GitHub releases in install.sh
+# (formula exceptions: mas, mosh)
 brew "mas"  # needed by brew bundle for mas entries
+brew "mosh"  # mosh server for phone access (Moshi on iOS → mini); see agent_docs/herdr-pilot.md
 cask "1password"
 cask "1password-cli"
 # cask "nikitabobko/tap/aerospace"

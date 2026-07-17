@@ -4,6 +4,26 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-07-17 — herdr provisioned by default (dotfiles + iv-image); mosh on the mini
+
+- **herdr into both tool layers**, superseding the pilot's self-bootstrap-only
+  gate (decided before the week-of-use test): `team herdr` row in
+  `provisioning/tools.manifest`; floating install in `install.sh` via
+  `install_release_asset` (assets are bare version-less binaries
+  `herdr-{macos,linux}-{aarch64,x86_64}`, so the /latest/download/ path avoids
+  the unauthenticated API rate limit); pinned 0.7.4 in iv-image
+  `provision-iv.sh` with per-arch SHA-256s **computed locally at pin time —
+  upstream publishes no checksum files**, so every version bump must
+  re-download and re-pin. iv-image tests extended (pin presence + smoke).
+  Existing VMs pick it up on their next `/upgrade-vm` reprovision; until then
+  `herdr --remote` self-bootstrap covers them. Released as **iv-image 2.6.0**
+  after the full ritual: local suite + disposable-VM provision/smoke at the
+  tagged commit (amd64 live-tested; the arm64 SHA pin is locally computed
+  only, exercised on first arm64 provision).
+- **mosh added to the Brewfile** (formula exception alongside `mas`) as the
+  mosh server for Moshi (iOS) → mini; installed on the mini along with herdr.
+  Remaining pilot work (Moshi profile, week of real use) stays in TODO.
+
 ## 2026-07-14 — iv-image 2.5.1, fleet upgrade, VM retirements, teardown fix
 
 Continuation of the follow-through below, same day:

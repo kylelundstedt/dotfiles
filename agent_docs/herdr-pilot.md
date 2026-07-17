@@ -30,8 +30,10 @@ terminal-native agents multiplexed by [herdr](https://herdr.dev) and reached fro
 - **Phone: Moshi has ONE profile** → mosh to the mini; jump onward with `herdr --remote <vm>`
   from there. `herdr agent attach <name>` is the right grain for a phone screen.
 - **Reach VMs by tailnet name only** (after `/join-tailnet`), never `*.exe.xyz` (SYN-drop
-  lockout rules). First `herdr --remote <vm>` self-bootstraps the binary to `~/.local/bin` —
-  no iv-image change needed for the pilot.
+  lockout rules). herdr is provisioned by default (decided 2026-07-17, ahead of the original
+  post-pilot gate): pinned in iv-image `provision-iv.sh` for VMs, floating in dotfiles
+  `install.sh` for Macs (`team` row in `provisioning/tools.manifest`). VMs not yet
+  reprovisioned still get the binary via `herdr --remote <vm>` self-bootstrap.
 
 ## Boundaries (decided in the same discussion)
 
@@ -48,15 +50,20 @@ terminal-native agents multiplexed by [herdr](https://herdr.dev) and reached fro
 
 ## Pilot checklist
 
-- [ ] mini: `brew install mosh`; install herdr (mini + mbp) — add to the dotfiles tools layer
+- [x] mini: `brew install mosh`; install herdr (mini + mbp) — added to the dotfiles tools
+      layer + Brewfile 2026-07-17; installed on the mini (mbp gets both on its pending
+      `install.sh --apps` run)
 - [ ] Moshi on iPhone/iPad: one profile → klundstedt-mini over Tailscale
 - [ ] Verify on a throwaway session: detach/reattach, VM suspend/resume survival, `--takeover`
       semantics when Mac + phone attach to the same session
 - [ ] Run one real project per machine for a week (dotfiles on mini, one IV repo on its VM)
 - [ ] Success test: the Zed↔Shelley context-switch discomfort disappears; work started at the
       desk continues from the phone
-- [ ] Then decide: herdr into iv-image tool layer (zero-prompt provisioning) or keep
-      self-bootstrap; retire Shelley-specific conventions where they no longer pay
+- [x] Then decide: herdr into iv-image tool layer (zero-prompt provisioning) or keep
+      self-bootstrap — decided early (2026-07-17, before the week of use): pinned into
+      `provision-iv.sh` with locally computed SHA-256s (upstream ships no checksums)
+- [ ] Retire Shelley-specific conventions where they no longer pay (still gated on the
+      pilot passing)
 
 ## Non-goals
 

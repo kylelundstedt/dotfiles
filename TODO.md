@@ -6,7 +6,7 @@ Open work only, grouped by when it can happen. Completed work →
 
 ## Actionable now
 
-- [ ] Start the herdr + Moshi pilot: mosh + herdr into the tools layer (mini + mbp), Moshi profile → mini, one week of real use — plan and checklist in [agent_docs/herdr-pilot.md](agent_docs/herdr-pilot.md)
+- [ ] Run the herdr + Moshi pilot: Moshi profile → mini, throwaway-session semantics check, one week of real use — tooling is in place (herdr in dotfiles + iv-image layers, mosh in Brewfile, both installed on the mini 2026-07-17); plan and checklist in [agent_docs/herdr-pilot.md](agent_docs/herdr-pilot.md)
 - [ ] Run `./install.sh` on klundstedt-mbp (no full run since the simplification plan)
 - [ ] Split `setup_agents` and `setup_git` into focused functions; verify with `./test-install.sh overlay` + `exe`
 - [ ] Tailscale admin console: tighten `tag:dev` SSH users (drop `root`/`autogroup:nonroot` → `exedev`); consider `*:22` instead of `"ip": ["*"]` in the network grant
