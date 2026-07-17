@@ -976,10 +976,12 @@ setup_agents() {
             esac
             if [[ -n "$codex_arch" ]]; then
                 echo "  Installing Codex CLI (native binary)..."
+                # || true: install_github_binary prints its own [!] on failure;
+                # unguarded, its non-zero return would abort the script (set -e).
                 install_github_binary "openai/codex" \
                     "codex-${codex_arch}-unknown-linux-musl\\.tar\\.gz" \
                     "codex" \
-                    "codex-${codex_arch}-unknown-linux-musl"
+                    "codex-${codex_arch}-unknown-linux-musl" || true
             fi
         elif command -v npm >/dev/null 2>&1; then
             echo "  Installing Codex CLI (npm fallback)..."
