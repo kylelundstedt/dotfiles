@@ -4,6 +4,23 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-07-17 — embeddings dead-man's-switch (LM Studio outage post-mortem)
+
+- **LM Studio's API server was down 2026-07-14..17 with every check green** —
+  the app relaunches at login after a reboot but its server toggle doesn't, so
+  semantic_search failed for 2.5 days while the nightly embed steps silently
+  skipped (they treat embeddings as best-effort). The mcp-server liveness
+  probe counted any HTTP response as healthy and never looked at the
+  dependency. Fix in personal-mcp: `healthcheck-mcp.sh` now probes
+  `localhost:1234` every 15 min, self-heals via idempotent `lms server start`
+  (also covers reboots via the plist's existing RunAtLoad), and pings a new
+  **`personal-mcp: embeddings`** check (period 900s, grace 1800s) — created
+  via the API, URL in Keychain (`personal-mcp:embeddings-healthcheck-url`),
+  registered here in `provisioning/checks.manifest` (drift check green).
+  Self-heal verified by stopping the server and watching the probe restore it.
+  Lesson added to `agent_docs/monitoring.md`: a liveness probe must cover the
+  service's dependencies; best-effort degradation needs its own check.
+
 ## 2026-07-17 — herdr provisioned by default (dotfiles + iv-image); mosh on the mini
 
 - **herdr into both tool layers**, superseding the pilot's self-bootstrap-only

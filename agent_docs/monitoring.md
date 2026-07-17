@@ -25,6 +25,12 @@ Grace sizing rules (each learned the hard way):
   it read-only) conflict on the DuckDB lock — the 03:30/04:00 stagger is
   load-bearing. Kickstarting both at once (2026-07-13) failed the web job
   and pinged /fail. One at a time, in schedule order.
+- **A liveness probe must cover the service's dependencies, not just its
+  port.** The mcp-server check counted any HTTP response as healthy while
+  LM Studio's embedding endpoint (localhost:1234) was down for 2.5 days —
+  semantic_search dead, nightly embed steps silently skipping ("best-effort"),
+  every check green. Best-effort degradation needs its own check
+  (`personal-mcp: embeddings`) or it is invisible.
 
 ## Registry
 
@@ -68,3 +74,8 @@ responsibility.
   created as `* 4 * * *` (every minute of the 4 o'clock hour) instead of
   `0 4 * * *`. tigris-backup separately red on evicted iCloud app-container
   files (`iCloud~*` now excluded from the backup wholesale).
+- 2026-07-14..17: LM Studio's API server didn't come back after a reboot
+  (the app relaunches at login, its server toggle doesn't) — semantic_search
+  down 2.5 days, zero alerts. Fix: `healthcheck-mcp.sh` now probes
+  localhost:1234 every 15 min, self-heals via `lms server start`, and pings
+  the new `personal-mcp: embeddings` check (period 900s, grace 1800s).
