@@ -53,7 +53,14 @@ terminal-native agents multiplexed by [herdr](https://herdr.dev) and reached fro
 - [x] mini: `brew install mosh`; install herdr (mini + mbp) — added to the dotfiles tools
       layer + Brewfile 2026-07-17; installed on the mini (mbp gets both on its pending
       `install.sh --apps` run)
-- [ ] Moshi on iPhone/iPad: one profile → klundstedt-mini over Tailscale
+- [ ] Moshi on iPhone/iPad: one profile → klundstedt-mini over Tailscale. Mini side verified
+      ready 2026-07-17: mosh-server at `/opt/homebrew/bin/mosh-server` (give Moshi that path —
+      brew's dir may be missing from non-login PATH), firewall off, tailscaled up with
+      `RunSSH=true`, target `klundstedt-mini.dojo-sun.ts.net`. Phone side blocked on
+      reconnecting the iPhone's Tailscale app (offline since ~2025-11). ACL SSH rule for
+      untagged-device → mini could not be verified from here (OAuth token lacks acl scope);
+      first Moshi connect is the test — if denied, add an ssh rule
+      `src autogroup:member → dst autogroup:self, users [klundstedt]` in the admin console.
 - [ ] Verify on a throwaway session: detach/reattach, VM suspend/resume survival, `--takeover`
       semantics when Mac + phone attach to the same session
 - [ ] Run one real project per machine for a week (dotfiles on mini, one IV repo on its VM)
