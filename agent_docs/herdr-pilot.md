@@ -53,14 +53,20 @@ terminal-native agents multiplexed by [herdr](https://herdr.dev) and reached fro
 - [x] mini: `brew install mosh`; install herdr (mini + mbp) — added to the dotfiles tools
       layer + Brewfile 2026-07-17; installed on the mini (mbp gets both on its pending
       `install.sh --apps` run)
-- [ ] Moshi on iPhone/iPad: one profile → klundstedt-mini over Tailscale. Mini side verified
-      ready 2026-07-17: mosh-server at `/opt/homebrew/bin/mosh-server` (give Moshi that path —
-      brew's dir may be missing from non-login PATH), firewall off, tailscaled up with
-      `RunSSH=true`, target `klundstedt-mini.dojo-sun.ts.net`. Phone side blocked on
-      reconnecting the iPhone's Tailscale app (offline since ~2025-11). ACL SSH rule for
-      untagged-device → mini could not be verified from here (OAuth token lacks acl scope);
-      first Moshi connect is the test — if denied, add an ssh rule
-      `src autogroup:member → dst autogroup:self, users [klundstedt]` in the admin console.
+- [ ] Moshi on iPhone/iPad: one profile → klundstedt-mini over Tailscale.
+      **Gotcha found 2026-07-17: Tailscale SSH cannot bootstrap mosh** (tailscaled grabs
+      port 22; its exec sessions never launch mosh-server — reproduced from iv-docs, and
+      documented at getmoshi.app/guides/tailscale). Keeping Tailscale SSH on 22 (the
+      identity-based-SSH design stands); mosh instead bootstraps via a second sshd on
+      **port 2222**, tailnet-IP-bound, pubkey-only, trusting only
+      `~/.ssh/authorized_keys_moshi` — files + installer in `ssh/sshd-moshi/`
+      (`sudo install-sshd-moshi.sh`, mini-only, re-runnable). Moshi profile: host
+      `klundstedt-mini.dojo-sun.ts.net`, port `2222`, user `klundstedt`, key generated
+      on-device in Moshi (private key never leaves the phone; pubkey appended to
+      `authorized_keys_moshi`, dated comment, one line per device = per-device revocation),
+      mosh-server path `/opt/homebrew/bin/mosh-server`. Same-day hardening: the three stale
+      `authorized_keys` entries (2022-era + kyle-imac; private halves in no current store)
+      replaced with the 1P `iv-klundstedt-2024-01` pubkey as the Macs' key-auth fallback.
 - [ ] Verify on a throwaway session: detach/reattach, VM suspend/resume survival, `--takeover`
       semantics when Mac + phone attach to the same session
 - [ ] Run one real project per machine for a week (dotfiles on mini, one IV repo on its VM)
