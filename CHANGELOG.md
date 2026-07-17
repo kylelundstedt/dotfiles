@@ -20,6 +20,14 @@ that commit messages don't always capture. Newest first. Open work lives in
   after the full ritual: local suite + disposable-VM provision/smoke at the
   tagged commit (amd64 live-tested; the arm64 SHA pin is locally computed
   only, exercised on first arm64 provision).
+- **Fleet upgraded to 2.6.0 same day** (Path A, all 5 `#iv` VMs: iv-home,
+  iv-docs, iv-ave-adapters, iv-gitlake, iv-gitlake-examples) — smoke-healthy,
+  `herdr_version=0.7.4` in every lock, overlay re-run after reprovision on
+  the 4 VMs that have one (iv-home has no `~/dotfiles`). Gotcha: iv-home's
+  first `git fetch` through the repo-integration proxy returned "Repository
+  not found" despite the integration being attached; the bare
+  `info/refs` probe then returned 200 and the retry succeeded — looks like
+  transient integration-proxy flakiness, retry before re-attaching.
 - **mosh added to the Brewfile** (formula exception alongside `mas`) as the
   mosh server for Moshi (iOS) → mini; installed on the mini along with herdr.
   Remaining pilot work (Moshi profile, week of real use) stays in TODO.
