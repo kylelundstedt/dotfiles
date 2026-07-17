@@ -190,11 +190,14 @@ install_github_binary() {
         fi
         [[ $attempt -eq 1 ]] && sleep $((RANDOM % 5 + 2))
     done
+    # `|| true`: with no match (e.g. rate-limited response) the grep pipeline
+    # fails, and under set -euo pipefail the failed assignment would abort the
+    # whole script before the empty-check below can report why.
     asset_url=$(echo "$api_response" \
         | grep -oE "\"browser_download_url\": \"[^\"]+\"" \
         | grep -E "$pattern" \
         | head -1 \
-        | sed 's/"browser_download_url": "//;s/"//')
+        | sed 's/"browser_download_url": "//;s/"//' || true)
     if [[ -z "$asset_url" ]]; then
         # Distinguish rate-limit from a genuine missing asset so it's not a silent skip.
         if echo "$api_response" | grep -q "API rate limit exceeded"; then
@@ -223,13 +226,13 @@ install_quarto() {
     [[ -n "${GITHUB_TOKEN:-}" ]] && opts+=(-H "Authorization: token $GITHUB_TOKEN")
     local resp version url
     resp=$(curl "${opts[@]}" "$api" 2>/dev/null) || { echo "  [!] quarto: API fetch failed"; return 1; }
-    version=$(echo "$resp" | grep -oE '"tag_name": "v[^"]+"' | head -1 | sed 's/.*"v\([^"]*\)".*/\1/')
+    version=$(echo "$resp" | grep -oE '"tag_name": "v[^"]+"' | head -1 | sed 's/.*"v\([^"]*\)".*/\1/' || true)
     [[ -z "$version" ]] && { echo "  [!] quarto: no version in release"; return 1; }
     url=$(echo "$resp" \
         | grep -oE "\"browser_download_url\": \"[^\"]+\"" \
         | grep -F "quarto-${version}-${quarto_arch}.tar.gz" \
         | head -1 \
-        | sed 's/"browser_download_url": "//;s/"//')
+        | sed 's/"browser_download_url": "//;s/"//' || true)
     [[ -z "$url" ]] && { echo "  [!] quarto: no asset for $quarto_arch"; return 1; }
 
     local dest="$HOME/.local/share/quarto"
@@ -1616,7 +1619,7 @@ install_apps() {
             [[ $attempt -eq 1 ]] && sleep $((RANDOM % 5 + 2))
         done
         if [[ -n "$release_json" ]]; then
-            latest_version=$(echo "$release_json" | grep -oE '"tag_name": "[^"]+"' | head -1 | sed 's/"tag_name": "//;s/"//')
+            latest_version=$(echo "$release_json" | grep -oE '"tag_name": "[^"]+"' | head -1 | sed 's/"tag_name": "//;s/"//' || true)
             if [[ "$installed_version" == "$latest_version" ]]; then
                 echo "  Up to date ($installed_version)"
             else
@@ -1652,7 +1655,7 @@ install_apps() {
             [[ $attempt -eq 1 ]] && sleep $((RANDOM % 5 + 2))
         done
         if [[ -n "$release_json" ]]; then
-            latest_version=$(echo "$release_json" | grep -oE '"tag_name": "[^"]+"' | head -1 | sed 's/"tag_name": "//;s/"//')
+            latest_version=$(echo "$release_json" | grep -oE '"tag_name": "[^"]+"' | head -1 | sed 's/"tag_name": "//;s/"//' || true)
             local pkg_url="https://github.com/apple/container/releases/download/${latest_version}/container-${latest_version}-installer-signed.pkg"
             if curl -fSL "$pkg_url" -o /tmp/container.pkg 2>/dev/null; then
                 sudo installer -pkg /tmp/container.pkg -target / && container_changed=true || echo "  [!] Install failed"
