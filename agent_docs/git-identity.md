@@ -171,6 +171,15 @@ destructive:
 
 ## Transition plan (staged; nothing destructive without the Phase 1 gate)
 
+**Status (2026-07-18): Phase 0–2 DONE.** Branch merged to master; `github-ro`
+readonly still pending exe.dev enablement (Phase 0 residual). Identity deployed +
+verified (real repo → personal, fake/real work-org → work) on both Macs and all
+7 tailnet-reachable VMs — `iv-docs`, `iv-ave-adapters`, `kgl-thoughts`,
+`iv-gitlake`, `iv-gitlake-examples`, `rss-feed`, `iv-home` (dotfiles installed
+there this pass). `github-kylelundstedt-dotfiles` attached to all of them (+
+`auto:all`). Not covered: `kgl-dotfiles` (not tailnet-joined). Phase 3
+(delete/recreate) remains optional.
+
 **Phase 0 — prep (non-destructive, reversible).** Staged on branch
 `plan/git-identity` (master/live config untouched until merged).
 - Rework `git/.gitconfig` to the `hasconfig`-by-org model (case-correct globs).
