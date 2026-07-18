@@ -708,19 +708,38 @@ EOF
             echo "  [+] Wrote git/.gitconfig_local"
         fi
     elif [[ "$OS" == "linux" ]]; then
-        # Non-interactive Linux VM — use personal identity as default.
-        # Work repos under ~/github/<org>/ pick up .gitconfig_work
-        # via includeIf in .gitconfig (stowed); personal override for
-        # ~/github/kylelundstedt/.
+        # Non-interactive Linux VM — personal identity is the default fallback.
+        # Per-repo identity comes from the hasconfig-by-owner-org includeIf rules
+        # in .gitconfig (stowed), which resolve regardless of clone path.
         cat > "$git_config_local" <<'EOF'
 [user]
 name = Kyle G. Lundstedt
 email = kyle@lundstedt.us
 EOF
-        mkdir -p "$HOME/github/kylelundstedt"
         echo "  [+] Wrote git/.gitconfig_local (default: personal)"
     else
         echo "  Skipping git user setup (non-interactive). Run install.sh interactively to configure."
+    fi
+
+    # Identity fragments for the hasconfig-by-owner-org includeIf rules in
+    # .gitconfig. Gitignored (hold the emails — kept out of the public repo);
+    # generated here on every platform, before the stow step symlinks them.
+    # See agent_docs/git-identity.md.
+    if [[ ! -s "$DOTFILES_DIR/git/.gitconfig_personal" ]]; then
+        cat > "$DOTFILES_DIR/git/.gitconfig_personal" <<'EOF'
+[user]
+    name = Kyle G. Lundstedt
+    email = kyle@lundstedt.us
+EOF
+        echo "  [+] Wrote git/.gitconfig_personal"
+    fi
+    if [[ ! -s "$DOTFILES_DIR/git/.gitconfig_work" ]]; then
+        cat > "$DOTFILES_DIR/git/.gitconfig_work" <<'EOF'
+[user]
+    name = Kyle G. Lundstedt
+    email = klundstedt@industryvault.com
+EOF
+        echo "  [+] Wrote git/.gitconfig_work"
     fi
 
     # Commit signing is enabled at login time by .zshrc when SSH agent is forwarded
