@@ -48,6 +48,16 @@ herdr server.
 - **Phone = Moshi, ONE profile.** mosh to the mini (its single always-on landing host), then
   jump onward with `herdr --remote <vm>` or attach to a mini-local session.
   `herdr agent attach <name>` is the right grain for a phone screen.
+- **Phone — web alternative: [collie](https://github.com/AltanS/collie)** (community plugin).
+  A tailnet-only PWA (Bun bridge + `systemd --user`, `tailscale serve` on :8787) that surfaces
+  a host's herdr agents in a phone browser with push notifications — the "web UI to *local*
+  agents" that Shelley's cloud UI structurally can't be (Shelley can't reach tailnet-only
+  `hub-mcp`). Same slot as the ttyd browser-view under Boundaries, purpose-built. **Trust:**
+  it is "remote shell access to your machine by design" — `tailscale serve` only (never
+  `funnel`); set `COLLIE_TRUSTED_USER` + `COLLIE_PUBLIC_HOSTS` immediately after start.
+- **Review sidebar: [herdr-reviewr](https://github.com/persiyanov/herdr-reviewr)** (community
+  plugin) — comment on an agent's diff and send it back; read-only PR/checks view. Both are
+  `herdr-plugin`-topic plugins with **no review queue** — vet before trusting.
 
 ### Reaching VMs
 
