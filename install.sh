@@ -569,6 +569,14 @@ Host *.exe.xyz
 # An always-on LocalForward here collides across multiplexed *.exe.xyz
 # masters (2nd host: "port 8765 already in use" -> broken control master).
 
+# Personal always-on Mac mini: log in as klundstedt. The mini is a tag:dev
+# device, so without this it matches the *.ts.net exec block below and defaults
+# to User exedev (the exe.dev-VM identity). Must precede that match
+# (first-match-wins for User); both patterns cover the name before and after
+# CanonicalizeHostname rewrites it to the FQDN.
+Host klundstedt-mini klundstedt-mini.*
+  User klundstedt
+
 # exe.dev VMs reached by Tailscale name: detected dynamically by tag,
 # so new VMs Just Work without re-running install.sh.
 # Host keys skipped — WireGuard already authenticates the peer.
