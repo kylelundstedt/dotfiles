@@ -38,7 +38,7 @@ Durable agent memory lives in this repo as committed files, not in any harness's
 | `agent_docs/`     | Reference docs for this repo — agent setup plans, platform notes, secret management (not stowed)       |
 | `aws/`            | AWS CLI configuration (Linux)                                                                          |
 | `ghostty/`        | Ghostty terminal configuration (macOS)                                                                 |
-| `herdr/`          | herdr terminal agent-multiplexer config (macOS) — see `agent_docs/herdr-pilot.md`                      |
+| `herdr/`          | herdr config + `herdr-layout` helper (macOS + VMs) — see `agent_docs/herdr-pilot.md`                   |
 | `git/`            | Git configuration with OS-specific includes                                                            |
 | `homebrew/`       | Brewfile for macOS casks and Mac App Store apps (CLI tools installed directly in install.sh)           |
 | `launchd/`        | LaunchAgents for macOS — scheduled jobs: repo sync, Tigris backup, key-expiry check (stowed)           |

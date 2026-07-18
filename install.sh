@@ -858,12 +858,12 @@ run_stow() {
     fi
     sync_claude_settings_hooks
 
-    # Always stow these
-    local packages=("git" "zsh" "starship" "agents")
+    # Always stow these (herdr: config + herdr-layout helper — herdr runs on VMs too)
+    local packages=("git" "zsh" "starship" "agents" "herdr")
 
     # Platform-specific
     if [[ "$OS" == "macos" ]]; then
-        packages+=("1Password" "ghostty" "herdr" "launchd" "zed" "homebrew")
+        packages+=("1Password" "ghostty" "launchd" "zed" "homebrew")
     else
         packages+=("aws")
     fi

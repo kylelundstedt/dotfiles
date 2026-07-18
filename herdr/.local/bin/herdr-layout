@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# herdr-layout — stamp a standard NAMED agent layout onto the LOCAL herdr server.
+#
+# Run it on the host whose herdr server you want the layout on — the mini or a
+# VM — from inside a herdr session (or with one running). It starts two named
+# agents (claude on top, codex below) rooted in the host's project repo, plus an
+# optional right-hand shell pane (yazi if installed).
+#
+# Why the names matter: herdr sessions PERSIST, so you build a layout once and
+# both the desk and the phone re-attach to the same running agents. On the desk
+# you see the split layout; over Moshi on a phone you attach to ONE agent
+# full-screen with `herdr agent attach <name>` (the small screen doesn't want
+# the multi-pane view). Building a VM's layout from the phone: mosh to the mini,
+# then `ssh <vm> herdr-layout`, then `herdr --remote <vm>` and attach by name.
+#
+# Usage: herdr-layout [name-prefix]     # default prefix = the project repo name
+
+set -euo pipefail
+
+command -v herdr >/dev/null 2>&1 || { echo "herdr-layout: herdr not on PATH" >&2; exit 1; }
+
+# Project dir: the current git repo if we're in one; else the repo in $HOME that
+# isn't dotfiles/iv-image; else $HOME.
+proj_dir=""
+if top=$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null); then
+  proj_dir="$top"
+else
+  for d in "$HOME"/*/; do
+    d=${d%/}
+    case "$(basename "$d")" in dotfiles | iv-image) continue ;; esac
+    [ -d "$d/.git" ] && { proj_dir="$d"; break; }
+  done
+fi
+proj_dir="${proj_dir:-$HOME}"
+prefix="${1:-$(basename "$proj_dir")}"
+
+# Idempotent: don't double-build if the agents already exist.
+if herdr agent list 2>/dev/null | grep -q "${prefix}-claude"; then
+  echo "herdr-layout: '${prefix}-claude' already exists — attach: herdr agent attach ${prefix}-claude" >&2
+  exit 0
+fi
+
+echo "herdr-layout: building '${prefix}' rooted at ${proj_dir}"
+
+# claude in the main pane, rooted in the project…
+herdr agent start "${prefix}-claude" --cwd "$proj_dir" -- claude
+# …codex stacked below it.
+herdr agent start "${prefix}-codex" --cwd "$proj_dir" --split down -- codex
+# Optional right-hand shell pane (run yazi/lazygit/etc. there). Best-effort:
+# a failure here must not fail the whole layout.
+if command -v yazi >/dev/null 2>&1; then
+  herdr pane split --direction right --cwd "$proj_dir" --no-focus 2>/dev/null || true
+fi
+
+cat <<EOF
+herdr-layout: done.
+  agents : ${prefix}-claude, ${prefix}-codex
+  desk   : the split layout is in the herdr sidebar
+  phone  : herdr agent attach ${prefix}-claude   (or ${prefix}-codex)
+EOF
