@@ -17,23 +17,45 @@ terminal-native agents multiplexed by [herdr](https://herdr.dev) and reached fro
 
 ## Topology (decided)
 
-- **One herdr server per machine where a repo lives**; agents run in panes next to their code.
-  Do NOT use one hub session with ssh panes into VMs — herdr's agent-state sidebar can't see
-  agents on the far side of an ssh pane.
-- **klundstedt-mini = primary host** (always-on + monitored; hub-mcp at localhost; the only
-  machine that can ever send iMessage / run LM Studio). Named sessions per project:
-  `herdr --remote klundstedt-mini --session dotfiles` vs `--session personal-mcp`.
-- **Client tabs fan out**: one terminal tab per project per `herdr --remote <host>`. Local
-  keybindings apply on remote attaches. On macOS the client is **Ghostty** (already
-  stow-managed here), not Zed's embedded terminal — running herdr inside Zed would re-couple
-  agents to the editor, which is the coupling this pilot removes. Zed stays editor-only.
-- **Phone: Moshi has ONE profile** → mosh to the mini; jump onward with `herdr --remote <vm>`
-  from there. `herdr agent attach <name>` is the right grain for a phone screen.
-- **Reach VMs by tailnet name only** (after `/join-tailnet`), never `*.exe.xyz` (SYN-drop
-  lockout rules). herdr is provisioned by default (decided 2026-07-17, ahead of the original
-  post-pilot gate): pinned in iv-image `provision-iv.sh` for VMs, floating in dotfiles
-  `install.sh` for Macs (`team` row in `provisioning/tools.manifest`). VMs not yet
-  reprovisioned still get the binary via `herdr --remote <vm>` self-bootstrap.
+Two layers — **servers** (where herdr and the agents run) and **clients** (where you attach
+from). The confusion to avoid: treating a remote repo-machine as an ssh target rather than a
+herdr server.
+
+### Servers — one per machine where a repo lives
+
+- A herdr server runs on each machine hosting a repo: `klundstedt-mini` (repos: dotfiles,
+  personal-mcp) and each exe.dev VM (its own repo). Agents run in panes **on that machine,
+  next to their code**; clients attach to view them.
+- **Do NOT collapse this into one hub session with ssh panes into the other machines** —
+  herdr's agent-state sidebar is blind to agents on the far side of a raw ssh pane. Reach a
+  remote with `herdr --remote <host>`, which attaches to *that host's herdr server* (the
+  sidebar sees its agents); an ssh pane does not, and is the anti-pattern.
+- `klundstedt-mini` is the **always-on** server (monitored; hub-mcp at localhost; the only
+  machine that can ever send iMessage / run LM Studio). Its repos live in named per-project
+  sessions: `--session dotfiles`, `--session personal-mcp`. It is also the phone's landing
+  host (below). That — always-on server + phone landing — is all "primary" means; it is
+  **not** a hub that other machines' agents route through.
+
+### Clients — where you attach from
+
+- **Desk = `klundstedt-mbp`, client only** (no herdr server runs here). One Ghostty tab per
+  project, each attaching to the server where that repo lives:
+  `herdr --remote klundstedt-mini --session dotfiles`, `herdr --remote <vm>` for an IV repo.
+  Because the agents live on the always-on servers, work survives the laptop sleeping. Local
+  keybindings apply on remote attach. Use **Ghostty** (already stow-managed here), not Zed's
+  embedded terminal — herdr inside Zed re-couples agents to the editor, the coupling this
+  pilot removes. Zed stays editor-only.
+- **Phone = Moshi, ONE profile.** mosh to the mini (its single always-on landing host), then
+  jump onward with `herdr --remote <vm>` or attach to a mini-local session.
+  `herdr agent attach <name>` is the right grain for a phone screen.
+
+### Reaching VMs
+
+- Tailnet name only (after `/join-tailnet`), never `*.exe.xyz` (SYN-drop lockout rules).
+- herdr is provisioned by default (decided 2026-07-17, ahead of the original post-pilot gate):
+  pinned in iv-image `provision-iv.sh` for VMs, floating in dotfiles `install.sh` for Macs
+  (`team` row in `provisioning/tools.manifest`). VMs not yet reprovisioned still get the
+  binary via `herdr --remote <vm>` self-bootstrap.
 
 ## Boundaries (decided in the same discussion)
 

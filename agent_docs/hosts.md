@@ -51,9 +51,13 @@ hosts none of the mini's operational duties.
   here.
 - **`hub-mcp` client, not server:** `install.sh` registers the MCP *client*
   pointed at the mini's tailnet URL; the server itself never runs here.
-- **Verification split:** dotfiles-side edits happen here; anything that needs
-  the live `~/archives` or LM Studio must be verified on the mini over the
-  tailnet.
+- **herdr client-only (pilot):** runs no herdr server — you attach via Ghostty
+  tabs to the servers on the mini + VMs, so the agent sessions (dotfiles,
+  personal-mcp) live on the always-on mini and survive the laptop sleeping. See
+  [herdr-pilot.md](herdr-pilot.md).
+- **Verification split:** interactive editing and one-off dev happen here;
+  anything that needs the live `~/archives` or LM Studio is verified on the mini
+  over the tailnet.
 
 ### Shared
 
