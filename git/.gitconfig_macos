@@ -4,9 +4,13 @@ editor = zed --wait
 [hub]
 protocol = ssh
 
-# Rewrite HTTPS GitHub URLs to SSH so 1Password handles auth
+# Push to GitHub over SSH so 1Password handles auth — but ONLY pushes.
+# Plain `insteadOf` rewrites *all* ops and turns anonymous HTTPS clones of public
+# repos into SSH, which then fail whenever no SSH agent is available (brew taps,
+# `go get`, CI, any non-interactive context — hit 2026-07-18 with `brew tap`).
+# `pushInsteadOf` leaves fetches/clones on HTTPS and only rewrites pushes.
 [url "git@github.com:"]
-    insteadOf = https://github.com/
+    pushInsteadOf = https://github.com/
 
 [gpg]
 format = ssh
