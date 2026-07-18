@@ -9,6 +9,8 @@ Open work only, grouped by when it can happen. Completed work →
 - [ ] Run the herdr + Moshi pilot: Moshi profile → mini, throwaway-session semantics check, one week of real use — tooling is in place (herdr in dotfiles + iv-image layers, mosh in Brewfile, both installed on the mini 2026-07-17); plan and checklist in [agent_docs/herdr-pilot.md](agent_docs/herdr-pilot.md)
 - [ ] Split `setup_agents` and `setup_git` into focused functions; verify with `./test-install.sh overlay` + `exe`
 - [ ] Tailscale admin console: tighten `tag:dev` SSH users (drop `root`/`autogroup:nonroot` → `exedev`); consider `*:22` instead of `"ip": ["*"]` in the network grant
+- [ ] Request `github-ro` from exe.dev (Discord https://discord.gg/jc9WQUfaxf), then `integrations edit github-kylelundstedt-{dotfiles,iv-image} --readonly` — least privilege on VMs (they consume, not develop, those repos); details in [agent_docs/git-identity.md](agent_docs/git-identity.md)
+- [ ] `kgl-dotfiles` VM — running but not tailnet-joined and purpose unrecorded; investigate (`ssh exe.dev`) or retire
 
 ## Waiting on a trigger
 
