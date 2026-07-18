@@ -19,6 +19,7 @@ always-on rules live in `AGENTS.md`.
 | File                        | Purpose                                                                        |
 | --------------------------- | ------------------------------------------------------------------------------ |
 | `hosts.md`                  | Where this runs — the two Macs (mini vs mbp) and the Linux VM fleet + testing  |
+| `git-identity.md`           | Repo layout + commit identity across macOS & exe.dev VMs (hasconfig-by-org); transition plan |
 | `agents-recommendations.md` | Operating patterns, dual-agent workflows, task routing, maintenance checklists |
 | `repo-boundaries.md`        | Decision: what belongs in dotfiles, split criteria, multi-tenant trigger       |
 | `tigris-backup-runbook.md`  | klundstedt-mini → Tigris encrypted backup runbook                              |
