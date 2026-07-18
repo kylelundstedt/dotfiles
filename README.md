@@ -72,6 +72,7 @@ Configuration is managed with [GNU Stow](http://www.gnu.org/software/stow/), whi
 | `agent_docs/`     | Reference docs for this repo — agent setup plans, platform notes, secret management                               | N/A (not stowed)                      | Both     |
 | `aws/`            | Optional AWS CLI configuration, only useful if you install/use AWS CLI separately                                 | `~/.aws/`                             | Linux    |
 | `ghostty/`        | Ghostty terminal configuration                                                                                    | `~/.config/ghostty/`                  | macOS    |
+| `herdr/`          | herdr terminal agent-multiplexer config                                                                           | `~/.config/herdr/`                    | macOS    |
 | `git/`            | Git configuration with OS-specific includes                                                                       | `~/`                                  | Both     |
 | `homebrew/`       | Brewfile for macOS casks and Mac App Store apps                                                                   | `~/`                                  | macOS    |
 | `launchd/`        | LaunchAgents — scheduled jobs (repo sync; Tigris backup; key-expiry check)                                        | `~/Library/LaunchAgents/`             | macOS    |

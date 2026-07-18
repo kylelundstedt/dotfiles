@@ -836,7 +836,7 @@ run_stow() {
 
     # Platform-specific
     if [[ "$OS" == "macos" ]]; then
-        packages+=("1Password" "ghostty" "launchd" "zed" "homebrew")
+        packages+=("1Password" "ghostty" "herdr" "launchd" "zed" "homebrew")
     else
         packages+=("aws")
     fi
