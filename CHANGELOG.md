@@ -205,8 +205,7 @@ against the files before acting (`17dedd0`).
 
 ## 2026-07-03..13 — simplification plan (all 12 units)
 
-Full record: [agent_docs/simplification-plan.md](agent_docs/simplification-plan.md)
-(review, four core decisions, per-unit execution notes). The shape of it: dotfiles
+Four core decisions, twelve execution units. The shape of it: dotfiles
 declares, iv-image pins, personal-mcp serves.
 
 - **Provisioning became declarative (U2/U3/U4/U5).** New `provisioning/` dir:

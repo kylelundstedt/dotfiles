@@ -918,7 +918,7 @@ run_stow() {
 # --- setup_agents ---
 # --- provisioning manifest helpers ---
 # The skill/MCP sets are declared in provisioning/*.manifest (single source of
-# truth shared with iv-image — see agent_docs/simplification-plan.md, decision 3).
+# truth shared with iv-image — see the simplification-plan entry in CHANGELOG.md).
 # Manifest read-loops feed on fd 9 (read -u 9 ... done 9<<< "$(...)"), NOT
 # stdin: child commands (npx/claude/codex/op) read stdin and silently eat the
 # remaining rows otherwise. Here-strings, NOT process substitution <(...) —

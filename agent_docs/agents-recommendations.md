@@ -2,8 +2,6 @@
 
 How to operate Claude Code and Codex together effectively.
 
-See also: `agent_docs/agents-advanced.md` (adding rules and skills).
-
 ## Dual-Agent Patterns
 
 ### Draft and Cold Review
