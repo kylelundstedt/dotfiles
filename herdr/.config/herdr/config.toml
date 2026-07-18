@@ -1,8 +1,25 @@
 # herdr — https://herdr.dev
 # Only deltas from the default live here; run `herdr --default-config` for the
 # full commented template. Apply changes to a running server with
-# `herdr server reload-config`.
+# `herdr server reload-config`. Note: herdr writes a few keys here itself
+# (onboarding, theme) — those are durable settings, not per-session churn.
+
+onboarding = false
 
 [ui]
 # Stamp detected/reported agent labels onto split-pane borders.
 show_agent_labels_on_pane_borders = true
+
+[theme]
+# solarized: balanced, luminance-distinct palette that reads well for red-green
+# color vision deficiency. (vesper is the near-monochrome ultra-safe fallback.)
+# The in-app picker rewrites this key; or edit here + `herdr server reload-config`.
+name = "solarized"
+
+# Red-green colorblind-safe: remap herdr's semantic red/green UI tokens to an
+# orange/blue pair (same strategy as the GitHub Dark Colorblind palette used in
+# Ghostty), so working/blocked and add/remove cues never depend on telling red
+# from green.
+[theme.custom]
+red = "#e8912d"
+green = "#539bf5"
