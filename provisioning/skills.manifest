@@ -22,6 +22,10 @@ team npx duckdb/duckdb-skills
 team npx motherduckdb/agent-skills
 team npx posit-dev/skills -s quarto-authoring brand-yml
 team npx marimo-team/skills -s marimo-notebook marimo-batch
+# herdr: teaches agents to drive herdr from inside a herdr pane (inspect/split
+# panes, run without stealing focus, start helper agents). No-ops unless
+# HERDR_ENV=1. Team: agents run in herdr on VMs too (iv-image re-vendors it).
+team npx ogulcancelik/herdr -s herdr
 # archil-guide has no GitHub repo — fetched directly
 team curl archil-guide https://archil.com/skill.md
 
