@@ -118,14 +118,31 @@ project repo. Then every VM's three repos arrive the same way.
 
 Benefits beyond uniformity:
 
-- **Auth:** the proxy authenticates *pull and push*. Today `~/dotfiles` on a VM
-  has a plain `github.com` HTTPS remote — read-only without creds. Via the
-  integration, push Just Works.
+- **Auth:** the proxy authenticates git operations with no PAT on the VM. Also
+  works for `gh`: `GH_HOST=github.int.exe.xyz gh repo view kylelundstedt/dotfiles`
+  (the CLI hits the same proxy — no `gh auth login` on the VM).
 - The proxy remote (`…/kylelundstedt/dotfiles.git`) still matches the personal
   `hasconfig` rule — consistent.
 - `install.sh`'s `curl | bash` bootstrap stays as the entry for **non-exe.dev**
   machines; on exe.dev the integration pre-clones dotfiles and you run
   `~/dotfiles/install.sh` (it already handles running from inside the repo).
+
+### Access posture — dotfiles + iv-image should be READONLY on VMs
+
+They're *consumed* on VMs (cloned, provisioned from), never developed there —
+you edit dotfiles from the Mac and iv-image via PR. So least privilege says
+`--readonly` (allows clone/fetch/read + `gh` read; blocks push/write-API/LFS-
+upload), rather than granting standing write to your dotfiles repo from every
+VM. Project repos stay read+write (that's where they're developed) — and there
+`--act-as-user` is a nice-to-have (attributes VM pushes to your GitHub account
+instead of the exe.dev bot; **mutually exclusive with `--readonly`**).
+
+**Blocked as of 2026-07-18:** `integrations edit <name> --readonly` returns
+`--readonly is not enabled for this account` — the feature is gated behind
+exe.dev's `github-ro` flag. **Action: request `github-ro` enablement from
+exe.dev**, then `integrations edit github-kylelundstedt-{dotfiles,iv-image}
+--readonly` (propagates to running VMs in ~1 min). Until then both are the
+default read+write.
 
 ## Cleanups this unlocks
 
