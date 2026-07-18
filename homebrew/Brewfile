@@ -54,7 +54,7 @@ cask "rustdesk", args: { appdir: "/Applications" }
 # cask "rstudio"
 cask "slack", args: { appdir: "/Applications" }
 # cask "snowflake-snowsql", args: { appdir: "/Applications" }
-# cask "sublime-text", args: { appdir: "/Applications" }  # Removed - migrated to VS Code
+# cask "sublime-text", args: { appdir: "/Applications" }  # Removed - using Zed
 # cask "tableplus"
 # cask "tabula"
 # cask "warp"
