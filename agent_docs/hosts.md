@@ -1,15 +1,17 @@
-# Machines
+# Hosts
 
-The two personal Macs this repo runs on, and what each is responsible for.
-Both stow the same dotfiles via `install.sh`; the differences below are the
-load-bearing ones a runbook or an agent needs to know before acting. The
-tailnet is `dojo-sun.ts.net`.
+Where this repo runs, and what each host is responsible for. Two stable macOS
+machines with distinct roles, plus the ephemeral Linux VM fleet. The tailnet is
+`dojo-sun.ts.net`.
 
-The exe.dev VM fleet is out of scope here — its lifecycle lives in the
-`exe-dev` / `join-tailnet` / `upgrade-vm` skills, and VMs are tag-scoped, not
-per-host.
+## macOS
 
-## `klundstedt-mini` — always-on Mac mini
+Both Macs stow the same dotfiles via `install.sh` — the macOS path is identical,
+and host-specific behavior is gated at runtime on `scutil --get LocalHostName`.
+The differences below are the load-bearing ones a runbook or an agent needs to
+know before acting.
+
+### `klundstedt-mini` — always-on Mac mini
 
 The operational host. Everything scheduled, backed up, or served runs here.
 
@@ -38,7 +40,7 @@ The operational host. Everything scheduled, backed up, or served runs here.
   covers this host's scheduled jobs.
 - **External disk:** `OWC8TB` (encrypted; unlocked by `backup/owc8tb-unlock.sh`).
 
-## `klundstedt-mbp` — dev laptop
+### `klundstedt-mbp` — dev laptop
 
 The interactive development machine. Runs the full macOS `install.sh` path but
 hosts none of the mini's operational duties.
@@ -53,9 +55,44 @@ hosts none of the mini's operational duties.
   the live `~/archives` or LM Studio must be verified on the mini over the
   tailnet.
 
-## Shared
+### Shared
 
 Both personal Macs register the personal-only MCP servers (`github-home`,
 `tigris`, `readwise`) and the `hub-mcp` client (mini → `localhost`, mbp →
-tailnet URL). The `install.sh` macOS path is identical; host-specific behavior
-is gated at runtime on `scutil --get LocalHostName`.
+tailnet URL).
+
+## Linux — exe.dev VMs
+
+Unlike the Macs, the Linux side has no per-host identity: it's a fleet of
+ephemeral VMs, tag-scoped rather than named. Lifecycle (create, join tailnet,
+upgrade) lives in the `exe-dev` / `join-tailnet` / `upgrade-vm` skills, not
+here.
+
+### Platform notes
+
+- Primary Linux target is exe.dev VMs running `boldsoftware/exeuntu` (Ubuntu
+  24.04 + kitchen-sink tools).
+- Apple Containers and Sprites are alternative platforms, not actively
+  maintained (see `TODO.md`).
+- `install.sh` skips tools already present on the image (`need` checks) to
+  avoid redundant downloads. On IV VMs it runs as a thin personal overlay on
+  top of iv-image's `provision-iv.sh` (see [repo-boundaries.md](repo-boundaries.md)).
+- Shell change targets zsh; in non-interactive mode it may be skipped without
+  sudo/root.
+
+### Testing on Linux
+
+Use the included test script, which tests across Apple Container, Sprite, and
+exe.dev:
+
+```bash
+./test-install.sh
+```
+
+For a quick one-off Docker test:
+
+```bash
+docker run --rm -it ghcr.io/astral-sh/uv:python3.12-bookworm bash -c \
+  "apt-get update && apt-get install -y sudo zsh && \
+   curl -fsSL https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/install.sh | bash; exec zsh -l"
+```
