@@ -49,7 +49,10 @@ herdr server.
   pilot removes. Zed stays editor-only.
 - **Phone = Moshi, ONE profile.** mosh to the mini (its single always-on landing host), then
   jump onward with `herdr --remote <vm>` or attach to a mini-local session.
-  `herdr agent attach <name>` is the right grain for a phone screen.
+  `herdr agent attach <name>` is the right grain for a phone screen. **Layout:** build with
+  `herdr-layout <name> --phone` (dotfiles helper) — it puts claude/codex in **separate tabs**
+  (Moshi swipes between full-screen agents); a side-by-side split is unusable on a phone.
+  Plain `herdr-layout <name>` keeps the desk split (claude top / codex bottom). yazi dropped.
 - **Phone — web alternative: [collie](https://github.com/AltanS/collie)** (community plugin).
   A tailnet-only PWA (Bun bridge + `systemd --user`, `tailscale serve` on :8787) that surfaces
   a host's herdr agents in a phone browser with push notifications — the "web UI to *local*
