@@ -6,7 +6,7 @@ Open work only, grouped by when it can happen. Completed work →
 
 ## Actionable now
 
-- [ ] Run the herdr + Moshi pilot: Moshi profile → mini, throwaway-session semantics check, one week of real use — tooling is in place (herdr in dotfiles + iv-image layers, mosh in Brewfile, both installed on the mini 2026-07-17); plan and checklist in [agent_docs/herdr-pilot.md](agent_docs/herdr-pilot.md)
+- [ ] herdr + Moshi pilot — **phone path proven 2026-07-18** (Moshi iPhone → mini via `sshd:2222` → herdr; `herdr-layout` helper deployed fleet-wide). Remaining: detach/reattach + `--takeover` semantics check, one week of real use, then retire Shelley carve-outs. Plugin options surfaced (collie phone web-PWA, herdr-reviewr, moshi-hook notifications) — see [agent_docs/herdr-pilot.md](agent_docs/herdr-pilot.md)
 - [ ] Split `setup_agents` and `setup_git` into focused functions; verify with `./test-install.sh overlay` + `exe`
 - [ ] Tailscale admin console: tighten `tag:dev` SSH users (drop `root`/`autogroup:nonroot` → `exedev`); consider `*:22` instead of `"ip": ["*"]` in the network grant
 - [ ] Request `github-ro` from exe.dev (Discord https://discord.gg/jc9WQUfaxf), then `integrations edit github-kylelundstedt-{dotfiles,iv-image} --readonly` — least privilege on VMs (they consume, not develop, those repos); details in [agent_docs/git-identity.md](agent_docs/git-identity.md)

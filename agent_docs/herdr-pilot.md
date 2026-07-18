@@ -1,7 +1,9 @@
 # herdr + Moshi pilot — one agent workflow across machines
 
-Status: **pilot, not yet started** (planned 2026-07-14, in a personal-mcp session; this doc is
-canonical). Replaces the split "Zed agent panel on Mac + exe.dev/Shelley on mobile" with
+Status: **pilot in progress** (planned 2026-07-14; this doc is canonical). Phone path proven
+end-to-end 2026-07-18 — Moshi iPhone → mini via `sshd:2222` → herdr, with the `herdr-layout`
+helper deployed fleet-wide; remaining: the week-of-real-use success test (checklist below).
+Replaces the split "Zed agent panel on Mac + exe.dev/Shelley on mobile" with
 terminal-native agents multiplexed by [herdr](https://herdr.dev) and reached from iOS via
 [Moshi](https://getmoshi.app). Zed stays as editor; Shelley stays for ephemeral VM work.
 
@@ -86,20 +88,37 @@ herdr server.
       herdr to the dotfiles tools layer (`install.sh` + `provisioning/tools.manifest`, NOT
       the Brewfile) 2026-07-17; installed on the mini (mbp gets herdr on any `install.sh`
       run, mosh on an `install.sh --apps` run)
-- [ ] Moshi on iPhone/iPad: one profile → klundstedt-mini over Tailscale.
-      **Gotcha found 2026-07-17: Tailscale SSH cannot bootstrap mosh** (tailscaled grabs
-      port 22; its exec sessions never launch mosh-server — reproduced from iv-docs, and
-      documented at getmoshi.app/guides/tailscale). Keeping Tailscale SSH on 22 (the
-      identity-based-SSH design stands); mosh instead bootstraps via a second sshd on
-      **port 2222**, tailnet-IP-bound, pubkey-only, trusting only
+- [x] **Moshi iPhone → klundstedt-mini over Tailscale — CONNECTED end-to-end 2026-07-18.**
+      **Gotcha (2026-07-17): Tailscale SSH cannot bootstrap mosh** (tailscaled grabs port 22;
+      its exec sessions never launch mosh-server — getmoshi.app/guides/tailscale). So mosh
+      bootstraps via a second sshd on **port 2222**, bound to the mini's Tailscale IP
+      (`100.123.154.23`), pubkey-only, `AllowUsers klundstedt`, trusting only
       `~/.ssh/authorized_keys_moshi` — files + installer in `ssh/sshd-moshi/`
-      (`sudo install-sshd-moshi.sh`, mini-only, re-runnable). Moshi profile: host
-      `klundstedt-mini.dojo-sun.ts.net`, port `2222`, user `klundstedt`, key generated
-      on-device in Moshi (private key never leaves the phone; pubkey appended to
-      `authorized_keys_moshi`, dated comment, one line per device = per-device revocation),
-      mosh-server path `/opt/homebrew/bin/mosh-server`. Same-day hardening: the three stale
-      `authorized_keys` entries (2022-era + kyle-imac; private halves in no current store)
-      replaced with the 1P `iv-klundstedt-2024-01` pubkey as the Macs' key-auth fallback.
+      (`sudo install-sshd-moshi.sh`, mini-only, re-runnable; verified running + listening).
+      `authorized_keys_moshi` holds the 1P `iv-klundstedt-2024-01` Macs-fallback key + the
+      on-device Moshi phone key (dated comment per device = per-device revocation).
+      **Moshi connection fields (confirmed live):** Host = the MagicDNS name
+      `klundstedt-mini.dojo-sun.ts.net` (Moshi's "most durable choice"; resolves to the bound
+      IP), Port `2222`, Username `klundstedt`, **Authentication = Key File** (the sshd is
+      pubkey-only → Password auth fails; the "leave empty for Tailscale SSH" hint is for
+      port-22 connections, not this), **Connection = Mosh** (this reveals the **Mosh path**
+      field) → `/opt/homebrew/bin/mosh-server`.
+      **mosh-server-PATH gotcha:** mosh invokes mosh-server through a *non-login* shell that
+      lacks `/opt/homebrew/bin`, so the explicit Mosh-path is load-bearing. The *interactive*
+      shell mosh then spawns is a full login zsh (`herdr`/`herdr-layout` on PATH) — **no
+      `chsh` needed** (login shell already `/bin/zsh`). When restoring an empty herdr session,
+      spawn the login shell (`herdr agent start … -- zsh -l`), never `-- bash`, or attaches
+      land in bash.
+      **iOS DNS gotcha (2026-07-18):** a third-party DNS profile (**NextDNS**) preempts
+      Tailscale MagicDNS → `*.ts.net` names won't resolve ("server can't be found"). Fix:
+      remove the standalone NextDNS iOS profile (Settings → DNS → Automatic); to keep
+      filtering, set NextDNS as the tailnet's **global nameserver** in the admin console
+      instead. Also: iOS nodes have `keyExpiryDisabled`, so a long-offline phone isn't
+      expired — it just needs its Tailscale VPN actually re-established (VPN-config / On-Demand
+      / conflicting-VPN, not tags/ACL).
+      **Cost:** Moshi's *Herdr panel* is metered (10 free uses, then paid Unlock); the plain
+      mosh terminal session is free. "1 not installed" on the connection = Moshi's `moshi-hook`
+      notification helper (optional — install for agent-needs-you push alerts).
 - [ ] Verify on a throwaway session: detach/reattach, VM suspend/resume survival, `--takeover`
       semantics when Mac + phone attach to the same session
 - [ ] Run one real project per machine for a week (dotfiles on mini, one IV repo on its VM)
