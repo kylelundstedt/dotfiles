@@ -1,25 +1,35 @@
 #!/usr/bin/env bash
 # herdr-layout — stamp a standard NAMED layout onto the LOCAL herdr server.
 #
-# Run it on the host whose herdr server you want the layout on (the mini or a
-# VM), against a running herdr session. It builds a clean 3-pane workspace
-# rooted in the host's project repo and closes any leftover shell pane:
-#     <prefix>-claude (top-left) | <prefix>-codex (bottom-left) | yazi (right)
-# If yazi isn't installed it's just the two stacked agents.
+# Two modes:
+#   herdr-layout [name]            desk  — claude (top) + codex (bottom), one split
+#   herdr-layout [name] --phone    phone — claude + codex in SEPARATE TABS, so each
+#                                   is full-screen and you swipe between them (a
+#                                   side-by-side split is unusable on a phone)
 #
-# Why the names matter: herdr sessions PERSIST — build a layout once and both
-# the desk and the phone re-attach to the same agents. On a phone over Moshi you
-# attach ONE agent full-screen: `herdr agent attach <prefix>-claude`. Build a
-# VM's layout from the phone by mosh'ing to the mini, `ssh <vm> herdr-layout`,
-# then `herdr --remote <vm>` and attach by name.
+# Run on the host whose herdr server you want the layout on (mini or a VM),
+# against a running herdr session. Named agents so a phone can attach one
+# full-screen with `herdr agent attach <name>`. herdr sessions persist — build
+# once, attach from the desk or the phone.
 #
-# Usage: herdr-layout [name-prefix]     # default prefix = the project repo name
+# Usage: herdr-layout [name-prefix] [--phone]
 
 set -uo pipefail
 
 command -v herdr >/dev/null 2>&1 || { echo "herdr-layout: herdr not on PATH" >&2; exit 1; }
 
-_pane_ids() { grep -o '"pane_id":"[^"]*"' | cut -d'"' -f4; }
+phone=false
+prefix=""
+for a in "$@"; do
+  case "$a" in
+    --phone) phone=true ;;
+    -*) echo "herdr-layout: unknown flag '$a'" >&2; exit 1 ;;
+    *) prefix="$a" ;;
+  esac
+done
+
+# extract a JSON string field (e.g. pane_id, tab_id) from herdr's output
+_field() { grep -o "\"$1\":\"[^\"]*\"" | cut -d'"' -f4; }
 
 # Project dir: current git repo, else the repo in $HOME that isn't
 # dotfiles/iv-image, else $HOME.
@@ -34,7 +44,7 @@ else
   done
 fi
 proj_dir="${proj_dir:-$HOME}"
-prefix="${1:-$(basename "$proj_dir")}"
+prefix="${prefix:-$(basename "$proj_dir")}"
 
 # Idempotent: bail if the layout is already there.
 if herdr agent list 2>/dev/null | grep -q "\"${prefix}-claude\""; then
@@ -42,32 +52,34 @@ if herdr agent list 2>/dev/null | grep -q "\"${prefix}-claude\""; then
   exit 0
 fi
 
-echo "herdr-layout: building '${prefix}' rooted at ${proj_dir}"
+# Pre-existing (leftover shell) panes — closed at the end for a clean layout.
+pre=$(herdr pane list 2>/dev/null | _field pane_id)
 
-# Pre-existing panes (leftover shells) — closed at the end so only the layout remains.
-pre=$(herdr pane list 2>/dev/null | _pane_ids)
-
-# claude in the main pane…
-herdr agent start "${prefix}-claude" --cwd "$proj_dir" -- claude >/dev/null
-# …yazi in a right-hand column (--no-focus keeps claude focused so codex splits
-# claude, giving a full-height right column)…
-if command -v yazi >/dev/null 2>&1; then
-  yp=$(herdr pane split --direction right --cwd "$proj_dir" --no-focus 2>/dev/null | _pane_ids | head -1)
-  if [ -n "${yp:-}" ]; then
-    herdr pane send-text "$yp" "yazi" >/dev/null 2>&1
-    herdr pane send-keys "$yp" Enter >/dev/null 2>&1
+if $phone; then
+  echo "herdr-layout: building '${prefix}' (phone / tabs) at ${proj_dir}"
+  # claude in the current tab; label that tab so Moshi's tab-switcher is readable
+  ctab=$(herdr agent start "${prefix}-claude" --cwd "$proj_dir" -- claude | _field tab_id | head -1)
+  [ -n "${ctab:-}" ] && herdr tab rename "$ctab" "${prefix}-claude" >/dev/null 2>&1
+  # codex in its own tab
+  ntab=$(herdr tab create --cwd "$proj_dir" --label "${prefix}-codex" --no-focus 2>/dev/null | _field tab_id | head -1)
+  if [ -n "${ntab:-}" ]; then
+    herdr agent start "${prefix}-codex" --tab "$ntab" --cwd "$proj_dir" -- codex >/dev/null
+  else
+    herdr agent start "${prefix}-codex" --cwd "$proj_dir" -- codex >/dev/null # fallback: new pane
   fi
+  hint="two tabs — swipe between ${prefix}-claude / ${prefix}-codex (each full-screen)"
+else
+  echo "herdr-layout: building '${prefix}' (desk / split) at ${proj_dir}"
+  herdr agent start "${prefix}-claude" --cwd "$proj_dir" -- claude >/dev/null
+  herdr agent start "${prefix}-codex" --cwd "$proj_dir" --split down -- codex >/dev/null
+  hint="claude (top) / codex (bottom) split"
 fi
-# …codex stacked below claude.
-herdr agent start "${prefix}-codex" --cwd "$proj_dir" --split down -- codex >/dev/null
 
-# Drop the leftover shell pane(s) for a clean layout.
+# Drop the leftover shell pane(s).
 for p in $pre; do herdr pane close "$p" >/dev/null 2>&1 || true; done
 
-yazi_note=""
-command -v yazi >/dev/null 2>&1 && yazi_note="  |  yazi (right)"
 cat <<EOF
-herdr-layout: done — clean layout for '${prefix}'.
-  agents : ${prefix}-claude, ${prefix}-codex${yazi_note}
-  phone  : herdr agent attach ${prefix}-claude   (or ${prefix}-codex)
+herdr-layout: done — ${prefix} (${hint}).
+  agents: ${prefix}-claude, ${prefix}-codex
+  phone : herdr agent attach ${prefix}-claude   (or ${prefix}-codex)
 EOF
