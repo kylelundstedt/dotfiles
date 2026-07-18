@@ -1,3 +1,4 @@
-theme=GitHub-Dark-Colorblind
+theme = GitHub Dark Colorblind
 split-divider-color = #ffffff
 unfocused-split-opacity = 0.7
+desktop-notifications = true
