@@ -50,9 +50,10 @@ terminal-native agents multiplexed by [herdr](https://herdr.dev) and reached fro
 
 ## Pilot checklist
 
-- [x] mini: `brew install mosh`; install herdr (mini + mbp) — added to the dotfiles tools
-      layer + Brewfile 2026-07-17; installed on the mini (mbp gets both on its pending
-      `install.sh --apps` run)
+- [x] mini: `brew install mosh`; install herdr (mini + mbp) — mosh added to the Brewfile,
+      herdr to the dotfiles tools layer (`install.sh` + `provisioning/tools.manifest`, NOT
+      the Brewfile) 2026-07-17; installed on the mini (mbp gets herdr on any `install.sh`
+      run, mosh on an `install.sh --apps` run)
 - [ ] Moshi on iPhone/iPad: one profile → klundstedt-mini over Tailscale.
       **Gotcha found 2026-07-17: Tailscale SSH cannot bootstrap mosh** (tailscaled grabs
       port 22; its exec sessions never launch mosh-server — reproduced from iv-docs, and
