@@ -78,7 +78,6 @@ Configuration is managed with [GNU Stow](http://www.gnu.org/software/stow/), whi
 | `provisioning/`   | Declarative manifests (skills, MCP, tools, keys, checks) + drift checks vs install.sh, iv-image, healthchecks.io  | N/A (not stowed)                      | Both     |
 | `ssh/`            | SSH client configuration                                                                                          | `~/.ssh/`                             | Both     |
 | `starship/`       | Starship prompt configuration                                                                                     | `~/.config/`                          | Both     |
-| `vscode/`         | VS Code IDE settings & keybindings                                                                                | `~/Library/Application Support/Code/` | macOS    |
 | `sync-repos.sh`   | Clones/fetches all GitHub repos for personal and work accounts                                                    | N/A (standalone script)               | Both     |
 | `backup/`         | Nightly encrypted backup of home + external data to Tigris (`tigris-backup.sh` + excludes) — klundstedt-mini only | N/A (run in place)                    | macOS    |
 | `test-install.sh` | Tests install.sh (Apple Container, Sprite, exe.dev) + local `provisioning`/`hook` checks + the IV `overlay` mode  | N/A (standalone script)               | macOS    |
