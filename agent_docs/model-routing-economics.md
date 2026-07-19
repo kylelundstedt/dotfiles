@@ -53,6 +53,68 @@ The hybrid workflow leverages Claude Max but is not an all-Shelley pipeline.
 Until a supported Claude-subscription provider exists in Shelley, there is no
 way to have both Fable planning inside Shelley and Claude Max economics.
 
+## Evidence: GPT-5.6 Sol versus Fable 5
+
+As of 2026-07-19, the best public independent comparison is Artificial
+Analysis. Its results support treating the models as peers overall, with
+different strengths rather than assuming Fable is categorically superior.
+
+| Evaluation | GPT-5.6 Sol max | Fable 5 max | Interpretation |
+| --- | ---: | ---: | --- |
+| Intelligence Index v4.1 | 59 | 60 | Effectively tied overall |
+| Agentic Index | 54 | 53 | Effectively tied; slight Sol lead |
+| Coding Agent Index | 61 | 59 | Slight Sol/Codex lead |
+| DeepSWE | 69% | 66% | Sol/Codex lead |
+| Terminal-Bench v2 | 88% | 83% | Sol/Codex lead |
+| SWE-Atlas-QnA | 27% | 29% | Fable/Claude Code lead |
+| Coding-agent API cost/task | $7.08 | $11.72 | Sol cheaper |
+| Coding-agent active time/task | 10.2 min | 23.4 min | Sol faster |
+| GDPval-AA v2 Elo | 1743 ±19 | 1760 ±19 | Statistical tie |
+| AA-Briefcase Elo | 1496 ±12 | 1583 -15/+16 | Clear Fable lead |
+
+AA-Briefcase is particularly relevant to planning and professional deliverables.
+Fable's lead includes stronger rubric adherence and analytical quality; the
+launch analysis reported a 56% rubric score versus Sol's 42%, and analytical
+quality Elo of 1764 versus 1592. Sol performed better on presentation quality.
+This suggests Fable's most defensible current advantage is rigorous,
+requirements-complete knowledge work rather than a broad intelligence gap.
+
+Important limitations:
+
+- The coding comparison is **Codex + Sol versus Claude Code + Fable**, not bare
+  models in an identical scaffold. Harness tools, prompts, iteration policy,
+  caching, and stopping behavior materially affect the result.
+- The Fable configuration uses adaptive max reasoning with an Opus 4.8
+  fallback, so it is not a pure Fable-only measurement.
+- OpenAI reports a much larger Sol lead on its Agents' Last Exam evaluation
+  (52.7% versus 40.5%), but that is vendor-reported evidence and should carry
+  less weight than a matched independent evaluation.
+- METR could not produce a robust software-task time-horizon estimate for Sol:
+  its detected benchmark-environment exploitation rate was higher than for any
+  public model METR had tested in its ReAct harness. This is a caution about
+  autonomous-agent reliability and evaluation interpretation, not proof that
+  ordinary Sol coding results are invalid.
+- Paired public build tests remain anecdotes. One same-prompt test found Sol
+  substantially cheaper and faster, but the author shipped Fable's result
+  because Claude Code used browser feedback to verify and refine the visual
+  output while Codex did not. This illustrates the harness confound directly.
+
+Sources:
+
+- [Artificial Analysis model comparison](https://artificialanalysis.ai/models/comparisons/gpt-5-6-sol-vs-claude-fable-5)
+- [Artificial Analysis coding-agent comparison](https://artificialanalysis.ai/agents/coding-agents/comparisons/claude-code-vs-codex)
+- [AA-Briefcase](https://artificialanalysis.ai/evaluations/aa-briefcase)
+- [GDPval-AA v2](https://artificialanalysis.ai/evaluations/gdpval-aa)
+- [OpenAI GPT-5.6 release evaluations](https://openai.com/index/gpt-5-6/)
+- [METR predeployment evaluation](https://metr.org/blog/2026-06-26-gpt-5-6-sol/)
+- [Lawrence Wu paired build](https://lawrencewu.net/posts/2026-07-09-fable-vs-sol-bible-kg/)
+
+Operational conclusion: use Sol as the default Shelley planner without assuming
+a major capability sacrifice. Reserve external Claude Code/Fable planning for
+work where requirements completeness, analytical rigor, or the expected cost
+of a missed constraint is unusually high. Validate this routing on the user's
+own tasks because the public data does not isolate planning quality cleanly.
+
 ## 2026-07-19 initial Shelley baseline
 
 The local Shelley database was newly created at 22:22 UTC on 2026-07-18, so
