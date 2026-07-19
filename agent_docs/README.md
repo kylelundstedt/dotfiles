@@ -16,17 +16,19 @@ memory store. Three stores, cleanly split:
 On-demand workflows live in skills (`agents/.agents/skills/`), not here;
 always-on rules live in `AGENTS.md`.
 
-| File                        | Purpose                                                                        |
-| --------------------------- | ------------------------------------------------------------------------------ |
-| `hosts.md`                  | Where this runs — the two Macs (mini vs mbp) and the Linux VM fleet + testing  |
-| `exe-dev-web.md`            | exe.dev app/Shelley endpoint model + 2026-07-19 fleet web audit                |
-| `git-identity.md`           | Repo layout + commit identity across macOS & exe.dev VMs (hasconfig-by-org); transition plan |
-| `agents-recommendations.md` | Operating patterns, dual-agent workflows, task routing, maintenance checklists |
-| `model-routing-economics.md` | Subscription strategy, model routing, and Shelley cost-evaluation method       |
-| `repo-boundaries.md`        | Decision: what belongs in dotfiles, split criteria, multi-tenant trigger       |
-| `tigris-backup-runbook.md`  | klundstedt-mini → Tigris encrypted backup runbook                              |
-| `monitoring.md`             | healthchecks.io registry — job↔check schedule pairs, grace rules, incidents    |
-| `secrets.md`                | Secret management — exe.dev integrations, 1Password patterns, MCP server auth  |
-| `multi-tenant.md`           | Future multi-tenant plan (gated on first paying client) — decisions, checklist |
-| `herdr-pilot.md`            | herdr + Moshi agent-workflow pilot — topology decisions, boundaries, checklist |
-| `shelley-sovreignty.md`     | Shelley assessment + target architecture for sovereign operating memory        |
+| File                         | Purpose                                                                                      |
+| ---------------------------- | -------------------------------------------------------------------------------------------- |
+| `hosts.md`                   | Where this runs — the two Macs (mini vs mbp) and the Linux VM fleet + testing                |
+| `exe-dev-web.md`             | exe.dev app/Shelley endpoint model + 2026-07-19 fleet web audit                              |
+| `git-identity.md`            | Repo layout + commit identity across macOS & exe.dev VMs (hasconfig-by-org); transition plan |
+| `agents-recommendations.md`  | Operating patterns, dual-agent workflows, task routing, maintenance checklists               |
+| `model-routing-economics.md` | Subscription strategy, model routing, and Shelley cost-evaluation method                     |
+| `repo-boundaries.md`         | Decision: what belongs in dotfiles, split criteria, multi-tenant trigger                     |
+| `tigris-backup-runbook.md`   | klundstedt-mini → Tigris encrypted backup runbook                                            |
+| `apple-container-vms.md`     | Creating & using Apple Container VMs (exe.dev-equivalent, machine mode + Shelley)            |
+| `llm-gateway.md`             | Self-hosted Claude/Codex subscription LLM gateway on the mini — current form + target VM     |
+| `monitoring.md`              | healthchecks.io registry — job↔check schedule pairs, grace rules, incidents                  |
+| `secrets.md`                 | Secret management — exe.dev integrations, 1Password patterns, MCP server auth                |
+| `multi-tenant.md`            | Future multi-tenant plan (gated on first paying client) — decisions, checklist               |
+| `herdr-pilot.md`             | herdr + Moshi agent-workflow pilot — topology decisions, boundaries, checklist               |
+| `shelley-sovreignty.md`      | Shelley assessment + target architecture for sovereign operating memory                      |
