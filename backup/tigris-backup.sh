@@ -1,21 +1,43 @@
 #!/usr/bin/env bash
-# Nightly encrypted incremental backup of klundstedt-mini -> Tigris.
+# Encrypted incremental backup of klundstedt-mini -> Tigris.
 #   home + photos                              -> klundstedt-mini-backup  (IA)
 #   aws-s3 + box + iphone-backup + messages-store -> klundstedt-mini-archive (GLACIER_IR)
 # Both buckets: client-side rclone crypt (Tigris holds ciphertext only) +
 # soft-delete (30-day retention) for recoverable deletes/overwrites.
 # Creds come from the macOS login Keychain (service "tigris-backup:*"), so the
-# launchd job runs unattended. Mini-only (guarded by hostname).
+# launchd jobs run unattended. Mini-only (guarded by hostname).
 set -uo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
+MODE=${1:-daily}
+case "$MODE" in
+    daily)
+        JOB_NAME=tigris-backup
+        HC_SERVICE=tigris-backup:healthcheck-url
+        LAST_RUN=/tmp/tigris-backup.lastrun
+        MIN_INTERVAL=$((20 * 3600))
+        RUN_LIMIT=$((2 * 3600))
+        MODE_FLAGS=(--update --use-server-modtime)
+        ;;
+    reconcile)
+        JOB_NAME=tigris-backup-reconcile
+        HC_SERVICE=tigris-backup-reconcile:healthcheck-url
+        LAST_RUN=/tmp/tigris-backup-reconcile.lastrun
+        MIN_INTERVAL=$((6 * 24 * 3600))
+        RUN_LIMIT=$((18 * 3600))
+        MODE_FLAGS=()
+        ;;
+    *)
+        echo "usage: $0 [daily|reconcile]" >&2
+        exit 2
+        ;;
+esac
+
 # Mini-only: this backs up THIS machine's home; must not run elsewhere.
-job_require_mini tigris-backup
+job_require_mini "$JOB_NAME"
 
 LOCKDIR=/tmp/tigris-backup.lock
-LAST_RUN=/tmp/tigris-backup.lastrun
-MIN_INTERVAL=$((20 * 3600))
 FILTER="$HOME/dotfiles/backup/tigris-backup-filter.txt"
 EXT=/Volumes/OWC8TB
 # Max personal Photos originals allowed missing-from-disk before we refuse to
@@ -25,20 +47,38 @@ PHOTOS_MISSING_MAX=0
 
 # Monitoring + skip/lock/log semantics come from _lib.sh (the skip pings
 # success by construction — see the lib header for why that's load-bearing).
-job_hc_init "tigris-backup:healthcheck-url"
+job_hc_init "$HC_SERVICE"
 
 job_stale_skip "$LAST_RUN" "$MIN_INTERVAL" && { echo "ran ${JOB_STALE_AGE_H}h ago; skip"; exit 0; }
-# Don't collide with an in-progress rclone (e.g. the initial push).
-if pgrep -f "rclone (copy|sync)" >/dev/null 2>&1; then echo "rclone already running; skip"; exit 0; fi
+preflight_fail() {
+    local reason="$1"
+    echo "$reason"
+    job_hc /fail --data-raw "$JOB_NAME $(scutil --get LocalHostName 2>/dev/null) $(date '+%F %T') $reason"
+    exit 1
+}
+# Don't collide with another backup or an unrelated rclone transfer. A lock
+# collision is a failed scheduled run, not a successful skip.
+if pgrep -f "rclone (copy|sync)" >/dev/null 2>&1; then preflight_fail "rclone already running"; fi
 # Single instance.
-job_lock "$LOCKDIR" || { echo "another tigris-backup running; exit"; exit 0; }
-trap 'rmdir "$LOCKDIR" 2>/dev/null' EXIT
+job_lock "$LOCKDIR" || preflight_fail "another tigris-backup mode is running"
 
-job_log "$HOME/Library/Logs/tigris-backup"
+job_log "$HOME/Library/Logs/$JOB_NAME"
 
-tigris_rclone_env || exit 1
+HC_STARTED=0
+HC_FINISHED=0
+backup_exit() {
+    local rc=$?
+    rmdir "$LOCKDIR" 2>/dev/null || true
+    if (( HC_STARTED && ! HC_FINISHED )); then
+        job_hc /fail --data-raw "$JOB_NAME $(scutil --get LocalHostName 2>/dev/null) $(date '+%F %T') aborted (rc=$rc)"
+    fi
+    return "$rc"
+}
+trap backup_exit EXIT
 
 job_hc /start
+HC_STARTED=1
+tigris_rclone_env || exit 1
 FAILURES=()
 
 # The archive sources + Photos live on the encrypted external drive, which comes
@@ -54,16 +94,38 @@ if ! mount | grep -qF "on $EXT ("; then
     FAILURES+=("external-drive-unmounted")
 fi
 
-# --max-delete aborts a sync that would remove an abnormal number of files
-# (guards against a missing/empty source wiping the backup).
-FLAGS="--fast-list --transfers 8 --checkers 16 --retries 5 --low-level-retries 10 --max-delete 5000 --stats 5m"
+# Daily mode uses the S3 upload time for comparisons, avoiding one HEAD request
+# per existing object. Weekly reconcile mode omits those flags and reads rclone's
+# exact source mtime metadata. --max-delete guards against a missing/empty source.
+FLAGS=(--fast-list --transfers 8 --checkers 16 --retries 5 --low-level-retries 10
+       --max-delete 5000 --stats 5m --stats-log-level NOTICE --stats-one-line)
+ABORT_REMAINING=0
+# Keep the whole run inside its check's grace window. Each phase gets only the
+# time remaining in the run-wide budget, so phase limits cannot stack.
+RUN_DEADLINE=$(( $(date +%s) + RUN_LIMIT ))
 
 sync_one() { # label src dest [extra...]
     local label="$1" src="$2" dest="$3"; shift 3
+    if (( ABORT_REMAINING )); then echo "SKIP $label: an earlier phase exceeded its duration limit"; return 0; fi
     if [[ ! -d "$src" ]]; then echo "SKIP $label: source missing ($src)"; return 0; fi
+    local remaining=$(( RUN_DEADLINE - $(date +%s) ))
+    if (( remaining <= 0 )); then
+        echo "WARN $label: run-wide deadline reached"
+        FAILURES+=("$label(deadline)")
+        ABORT_REMAINING=1
+        return 0
+    fi
     echo "$(date '+%F %T') sync $label: $src -> $dest"
-    caffeinate -i rclone sync "$src" "$dest" $FLAGS "$@"; local rc=$?
-    if [[ $rc -ne 0 ]]; then echo "WARN $label sync rc=$rc"; FAILURES+=("$label(rc=$rc)"); fi
+    caffeinate -i rclone sync "$src" "$dest" "${FLAGS[@]}" "${MODE_FLAGS[@]}" \
+        --max-duration "${remaining}s" "$@"; local rc=$?
+    if [[ $rc -ne 0 ]]; then
+        echo "WARN $label sync rc=$rc"
+        FAILURES+=("$label(rc=$rc)")
+        if [[ $rc -eq 10 ]]; then
+            echo "ABORT remaining phases: $label exceeded the run-wide duration limit"
+            ABORT_REMAINING=1
+        fi
+    fi
 }
 
 # Flush WAL into the main file so rclone copies a consistent single-file snapshot
@@ -94,10 +156,18 @@ checkpoint_sqlite() { # path
 photos_originals_complete() {
     local uvx; uvx=$(command -v uvx || echo "$HOME/.local/bin/uvx")
     [[ -x "$uvx" ]] || { echo "WARN photos-gate: uvx not found; skipping completeness check"; return 0; }
-    local missing
-    missing=$("$uvx" osxphotos query --missing --not-syndicated --not-shared --count 2>/dev/null)
+    local missing output
+    # osxphotos 0.76.1 fails under Homebrew Python 3.14 in a pyobjc dependency
+    # (type | None); pin uvx to the verified 3.12 runtime.
+    if ! output=$("$uvx" --python 3.12 osxphotos query --library "$EXT/Photos Library.photoslibrary" \
+        --missing --not-syndicated --not-shared --count --mute 2>&1); then
+        echo "WARN photos-gate: osxphotos check failed: $(printf '%s\n' "$output" | tail -1)"
+        return 0
+    fi
+    missing=$(printf '%s\n' "$output" | tail -1)
     if ! [[ "$missing" =~ ^[0-9]+$ ]]; then
-        echo "WARN photos-gate: osxphotos check failed; backing up library as-is"; return 0
+        echo "WARN photos-gate: unexpected osxphotos output: $(printf '%s\n' "$output" | tail -1); backing up library as-is"
+        return 0
     fi
     if (( missing > PHOTOS_MISSING_MAX )); then
         echo "photos-gate: $missing personal originals NOT on disk (> $PHOTOS_MISSING_MAX)"; return 1
@@ -105,7 +175,7 @@ photos_originals_complete() {
     echo "photos-gate: all personal originals present ($missing missing, threshold $PHOTOS_MISSING_MAX)"; return 0
 }
 
-echo "=== $(date '+%F %T') tigris-backup START ==="
+echo "=== $(date '+%F %T') $JOB_NAME START (mode=$MODE) ==="
 if command -v sqlite3 >/dev/null 2>&1; then
     checkpoint_sqlite "$HOME/archives/email/msgvault.db"
     checkpoint_sqlite "$HOME/archives/email/vectors.db"
@@ -136,8 +206,11 @@ sync_one msgatt "$EXT/messages-store"             arch:messages-store --s3-stora
 if [[ ${#FAILURES[@]} -eq 0 ]]; then
     job_mark_done "$LAST_RUN"   # only mark success when every phase succeeded
     job_hc                       # success ping -> resets the dead-man's-switch
-    echo "=== $(date '+%F %T') tigris-backup DONE (all phases OK) ==="
+    HC_FINISHED=1
+    echo "=== $(date '+%F %T') $JOB_NAME DONE (all phases OK) ==="
 else
-    echo "=== $(date '+%F %T') tigris-backup DONE WITH FAILURES: ${FAILURES[*]} ==="
-    job_hc /fail --data-raw "tigris-backup $(scutil --get LocalHostName 2>/dev/null) $(date '+%F %T') failed: ${FAILURES[*]}"
+    echo "=== $(date '+%F %T') $JOB_NAME DONE WITH FAILURES: ${FAILURES[*]} ==="
+    job_hc /fail --data-raw "$JOB_NAME $(scutil --get LocalHostName 2>/dev/null) $(date '+%F %T') failed: ${FAILURES[*]}"
+    HC_FINISHED=1
+    exit 1
 fi

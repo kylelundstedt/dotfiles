@@ -13,8 +13,10 @@ every single day.
 
 Grace sizing rules (each learned the hard way):
 
-- Grace must exceed the job's **run duration** when the job pings `/start`
-  (tigris-backup runs ~2.5h).
+- Grace must exceed the job's **run duration** when the job pings `/start`.
+- Long-running phases need their own duration limit below the check's grace;
+  otherwise a live but pathologically slow process can remain STARTED until the
+  check goes DOWN without ever reporting `/fail`.
 - A check's alert window must exceed the job's **cadence** when runs can
   skip (the monthly key-expiry check warns at 35d, not 14d).
 - Staleness-skipping jobs must **ping success on skip** (sync-repos,
@@ -31,6 +33,9 @@ Grace sizing rules (each learned the hard way):
   semantic_search dead, nightly embed steps silently skipping ("best-effort"),
   every check green. Best-effort degradation needs its own check
   (`personal-mcp: embeddings`) or it is invisible.
+- **Don't edit a running shell script in place.** Bash can read script input
+  incrementally; replacing the file while a long-running command is active can
+  make the existing process resume at an invalid offset and fail to parse.
 
 ## Registry
 
@@ -79,3 +84,11 @@ responsibility.
   down 2.5 days, zero alerts. Fix: `healthcheck-mcp.sh` now probes
   localhost:1234 every 15 min, self-heals via `lms server start`, and pings
   the new `personal-mcp: embeddings` check (period 900s, grace 1800s).
+- 2026-07-19: tigris-backup's Photos sync spent 8h+ checking roughly 100k
+  objects because S3 modification-time comparisons require a HEAD per object
+  and Tigris responses were abnormally slow. The transfer itself had finished;
+  no 429/503/retry evidence identified the provider-side cause. Split the job
+  into a daily server-modtime sync (no per-object HEAD) and a separately
+  monitored weekly exact reconciliation. Both have run-wide deadlines below
+  their check grace. Also fixed the osxphotos completeness gate, which had
+  parsed status text instead of the final numeric count.

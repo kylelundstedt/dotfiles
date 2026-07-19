@@ -36,15 +36,17 @@ backup is worthless if you can't decrypt it. Keep the credentials below in
 
 ## Credentials (all in 1Password, `industryvault` account)
 
-| Purpose                                             | 1Password item (vault)                       | Fields                                               |
-| --------------------------------------------------- | -------------------------------------------- | ---------------------------------------------------- |
-| Crypt password (decrypts everything — **critical**) | `Tigris mini-backup rclone crypt` (Personal) | `password`, `salt`                                   |
-| Dedicated rclone key (Editor on both buckets)       | `Tigris mini-backup rclone key` (Personal)   | `access_key_id`, `password` (=secret)                |
-| Tigris admin (create buckets/keys)                  | `Tigris - klundstedt Work` (Personal)        | `access_key_id`, `secret_access_key`, `endpoint_url` |
+| Purpose                                             | 1Password item (vault)                       | Fields                                                                     |
+| --------------------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------- |
+| Crypt password (decrypts everything — **critical**) | `Tigris mini-backup rclone crypt` (Personal) | `password`, `salt`                                                         |
+| Dedicated rclone key (Editor on both buckets)       | `Tigris mini-backup rclone key` (Personal)   | `access_key_id`, `password` (=secret), daily + reconcile Healthchecks URLs |
+| Tigris admin (create buckets/keys)                  | `Tigris - klundstedt Work` (Personal)        | `access_key_id`, `secret_access_key`, `endpoint_url`                       |
 
 On the mini these are mirrored into the **login Keychain** for the unattended
 job: `tigris-backup:crypt-password`, `tigris-backup:crypt-salt`,
-`tigris-backup:s3-key-id`, `tigris-backup:s3-secret`
+`tigris-backup:s3-key-id`, `tigris-backup:s3-secret`,
+`tigris-backup:healthcheck-url`, and
+`tigris-backup-reconcile:healthcheck-url`
 (read with `security find-generic-password -s <name> -w`).
 
 Endpoint: `https://t3.storage.dev` · region `auto`.
@@ -116,24 +118,40 @@ cryptcheck, and the GLACIER_IR archive fetch. The drill now FAILS (not INFO)
 if an archive object isn't directly retrievable, since post-re-tier that's a
 regression.
 
-## The nightly job
+## Scheduled jobs
 
 - `backup/tigris-backup.sh` → launchd `com.kylelundstedt.tigris-backup`,
-  **daily 04:30** (last in the cascade: msgvault 03:00, web-archive-refresh
+  mode `daily`, **daily 04:30** (last in the cascade: msgvault 03:00, web-archive-refresh
   03:30, rebuild-hub 04:00 — so it never copies `hub.duckdb` mid-rewrite).
   Mini-only (hostname guard). Creds from the login Keychain (runs
   unattended). Staleness skip (<20h since last clean run) pings the
   healthcheck success — see `agent_docs/monitoring.md`.
-- SQLite-checkpoints `msgvault.db`/`vectors.db`, then incremental `rclone sync`
-  of: home, photos (→ backup bucket) and aws-s3, box, iphone-backup,
-  messages-store (→ archive bucket). Recovery is via bucket soft-delete (30 days),
-  not snapshots.
+- `com.kylelundstedt.tigris-backup-reconcile` runs mode `reconcile` **Sunday
+  06:00**, after the daily job, with a separate Healthchecks check, success
+  timestamp, and log directory.
+- Both modes checkpoint `msgvault.db`/`vectors.db`, then incrementally
+  `rclone sync`: home, photos (→ backup bucket) and aws-s3, box, iphone-backup,
+  messages-store (→ archive bucket). Recovery is via bucket soft-delete (30
+  days), not snapshots.
+- Daily mode adds `--update --use-server-modtime`. S3 listings return upload
+  time but not rclone's custom source-mtime metadata, so this avoids one HEAD
+  request per existing object while still traversing the complete namespace
+  and propagating deletions. Ordinary new/changed files are captured daily;
+  an existing file changed with an old or preserved mtime can be missed until
+  the weekly pass.
+- Reconcile mode performs the exact default size+source-mtime comparison. It
+  pays the per-object HEAD cost and catches the daily mode's timestamp edge
+  cases. The encrypted remotes expose no hashes, so `--checksum` cannot replace
+  this exact pass; `--size-only` would miss same-size changes.
 - Guards: unlock/mount the external drive (fail the run if it can't — see below),
-  skip if another rclone is running, `--max-delete 5000` backstop, lock + 20h
-  staleness. `lastrun` is written **only on full success** (a failed phase does
-  not mark the run successful).
-- Logs: `~/Library/Logs/tigris-backup/<date>.log` (30-day retention; the launchd
-  `/tmp/tigris-backup.log` is just the latest and is wiped on reboot).
+  fail if another rclone/backup mode is running, `--max-delete 5000` backstop,
+  shared lock, and independent staleness guards (20h daily / 6d reconcile).
+  Run-wide deadlines are 2h daily and 18h reconcile; each phase receives only
+  the remaining budget. `lastrun` is written **only on full success**.
+- Logs: `~/Library/Logs/tigris-backup/<date>.log` and
+  `~/Library/Logs/tigris-backup-reconcile/<date>.log` (30-day retention; `/tmp`
+  launchd logs are only the latest and are wiped on reboot). Rclone emits
+  one-line progress stats every five minutes at NOTICE level.
 
 ## Encrypted external drive (OWC8TB)
 
@@ -163,15 +181,17 @@ passphrase there preserves "stolen external drive alone = undecryptable."
 
 ## Monitoring (dead-man's-switch)
 
-- healthchecks.io check pings `/start` at begin, **success only when every phase
-  passed**, and `/fail` (with a summary) on any failure. It alerts if the daily
-  success ping doesn't arrive — so it catches **both** failures **and the job not
-  running at all** (crash, mac off, launchd skip).
-- Ping URL is in the **login Keychain** (`tigris-backup:healthcheck-url`) and in
-  1Password (`Tigris mini-backup rclone key` → `healthcheck_url`). If unset,
-  pings are silently skipped (backup still runs).
-- Check config: cron `30 4 * * *`, grace **8h**. Re-provision the Keychain item
-  from 1Password on a rebuild (along with the `tigris-backup:*` cred items).
+- Each healthchecks.io check pings `/start` at begin, **success only when every
+  phase passed**, and `/fail` (with a summary) on any failure. Missing runs,
+  lock/rclone collisions, duration exhaustion, and abnormal exits are failures.
+- Daily ping URL: login Keychain `tigris-backup:healthcheck-url`; 1Password field
+  `healthcheck_url`. Check config: cron `30 4 * * *`, grace **3h**.
+- Reconcile ping URL: login Keychain
+  `tigris-backup-reconcile:healthcheck-url`; 1Password field
+  `reconcile_healthcheck_url`. Check config: cron `0 6 * * 0`, grace **20h**.
+- Both URL fields live on `Tigris mini-backup rclone key`. If unset, pings are
+  silently skipped while the backup still runs. `install.sh` re-provisions
+  both Keychain items from 1Password on a rebuild.
 
 ## CLI gotcha (tigris 3.x)
 

@@ -3,29 +3,29 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.kylelundstedt.tigris-backup</string>
+    <string>com.kylelundstedt.tigris-backup-reconcile</string>
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
         <string>-l</string>
         <string>-c</string>
-        <string>$HOME/dotfiles/backup/tigris-backup.sh daily</string>
+        <string>$HOME/dotfiles/backup/tigris-backup.sh reconcile</string>
     </array>
-    <!-- 04:30, not 04:00: rebuild-hub (personal-mcp repo) rewrites
-         ~/archives/hub/hub.duckdb at 04:00 — the old shared slot had the
-         backup copying the file mid-rewrite. Cascade: msgvault 03:00,
-         web-archive-refresh 03:30, rebuild-hub 04:00, backup 04:30. -->
+    <!-- Sunday 06:00, after the daily 04:30 fast sync. This exact weekly pass
+         reads per-object rclone mtimes and has its own long-grace check. -->
     <key>StartCalendarInterval</key>
     <dict>
+        <key>Weekday</key>
+        <integer>0</integer>
         <key>Hour</key>
-        <integer>4</integer>
+        <integer>6</integer>
         <key>Minute</key>
-        <integer>30</integer>
+        <integer>0</integer>
     </dict>
     <key>StandardOutPath</key>
-    <string>/tmp/tigris-backup.log</string>
+    <string>/tmp/tigris-backup-reconcile.log</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/tigris-backup.log</string>
+    <string>/tmp/tigris-backup-reconcile.log</string>
     <key>RunAtLoad</key>
     <false/>
 </dict>

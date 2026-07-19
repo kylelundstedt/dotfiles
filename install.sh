@@ -1179,27 +1179,29 @@ setup_agents() {
                 [[ "$kc_added" -gt 0 ]] && echo "  [+] sync-repos org PATs → Keychain ($kc_added/2)"
 
                 # tigris-backup (klundstedt-mini only): provision the nightly
-                # backup's rclone key + crypt password/salt + healthcheck URL into
-                # the login Keychain (service tigris-backup:*) from 1Password, so
-                # the unattended launchd job reads them non-interactively. Items
-                # live in the industryvault account, Personal vault.
+                # backup's rclone key + crypt password/salt + daily/weekly
+                # healthcheck URLs into the login Keychain from 1Password, so the
+                # unattended launchd jobs read them non-interactively. Items live
+                # in the industryvault account, Personal vault.
                 if [[ "$(scutil --get LocalHostName 2>/dev/null)" == "klundstedt-mini" ]]; then
                     local tb_acc=industryvault.1password.com tb_n=0
-                    local tb_keyid tb_keysec tb_cpw tb_csalt tb_hc
+                    local tb_keyid tb_keysec tb_cpw tb_csalt tb_hc tb_hc_reconcile
                     tb_keyid=$(op read "op://Personal/Tigris mini-backup rclone key/access_key_id" --account "$tb_acc" 2>/dev/null) || true
                     tb_keysec=$(op read "op://Personal/Tigris mini-backup rclone key/password" --account "$tb_acc" 2>/dev/null) || true
                     tb_cpw=$(op read "op://Personal/Tigris mini-backup rclone crypt/password" --account "$tb_acc" 2>/dev/null) || true
                     tb_csalt=$(op read "op://Personal/Tigris mini-backup rclone crypt/salt" --account "$tb_acc" 2>/dev/null) || true
                     tb_hc=$(op read "op://Personal/Tigris mini-backup rclone key/healthcheck_url" --account "$tb_acc" 2>/dev/null) || true
+                    tb_hc_reconcile=$(op read "op://Personal/Tigris mini-backup rclone key/reconcile_healthcheck_url" --account "$tb_acc" 2>/dev/null) || true
                     [[ -n "$tb_keyid"  ]] && security add-generic-password -a "$USER" -s "tigris-backup:s3-key-id"      -T /usr/bin/security -U -w "$tb_keyid"  2>/dev/null && tb_n=$((tb_n+1)) || true
                     [[ -n "$tb_keysec" ]] && security add-generic-password -a "$USER" -s "tigris-backup:s3-secret"      -T /usr/bin/security -U -w "$tb_keysec" 2>/dev/null && tb_n=$((tb_n+1)) || true
                     [[ -n "$tb_cpw"    ]] && security add-generic-password -a "$USER" -s "tigris-backup:crypt-password" -T /usr/bin/security -U -w "$tb_cpw"    2>/dev/null && tb_n=$((tb_n+1)) || true
                     [[ -n "$tb_csalt"  ]] && security add-generic-password -a "$USER" -s "tigris-backup:crypt-salt"     -T /usr/bin/security -U -w "$tb_csalt"  2>/dev/null && tb_n=$((tb_n+1)) || true
                     [[ -n "$tb_hc"     ]] && security add-generic-password -a "$USER" -s "tigris-backup:healthcheck-url" -T /usr/bin/security -U -w "$tb_hc"    2>/dev/null && tb_n=$((tb_n+1)) || true
-                    if [[ "$tb_n" -eq 5 ]]; then
-                        echo "  [+] tigris-backup creds → Keychain (5/5)"
+                    [[ -n "$tb_hc_reconcile" ]] && security add-generic-password -a "$USER" -s "tigris-backup-reconcile:healthcheck-url" -T /usr/bin/security -U -w "$tb_hc_reconcile" 2>/dev/null && tb_n=$((tb_n+1)) || true
+                    if [[ "$tb_n" -eq 6 ]]; then
+                        echo "  [+] tigris-backup creds → Keychain (6/6)"
                     else
-                        echo "  [!] tigris-backup creds → Keychain incomplete ($tb_n/5 — check 1Password reads above)"
+                        echo "  [!] tigris-backup creds → Keychain incomplete ($tb_n/6 — check 1Password reads above)"
                     fi
                     # Encrypted external drive (OWC8TB) passphrase — used by
                     # owc8tb-unlock.sh to auto-mount the drive after a reboot so

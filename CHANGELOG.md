@@ -37,6 +37,33 @@ that commit messages don't always capture. Newest first. Open work lives in
   claiming this VM was not tailnet-joined, and recorded the endpoint model,
   audit matrix, and diagnostic workflow in `agent_docs/exe-dev-web.md`.
 
+## 2026-07-19 — daily fast sync + weekly exact Tigris reconciliation
+
+- The 04:30 backup went DOWN after remaining STARTED for 8h: the Photos data
+  transfer had completed, but exact S3 modification-time comparison was still
+  issuing per-object HEAD checks (87,322/97,354 complete when diagnosed) at
+  abnormal Tigris latency. The job was alive, not deadlocked: approximately
+  three checks/second versus roughly 105 on the prior normal night.
+- Split the backup into two monitored modes. The daily 04:30 sync uses
+  `--update --use-server-modtime`, avoiding per-object HEAD requests while
+  retaining full namespace traversal and deletion propagation. A new Sunday
+  06:00 exact reconciliation reads rclone's stored source mtimes and catches
+  timestamp-preserving/backdated changes. Each has its own LaunchAgent,
+  Healthchecks check, success timestamp, log directory, and run-wide deadline
+  (2h daily / 18h weekly, below 3h / 20h grace).
+- Added visible five-minute one-line stats and made lock/rclone collisions,
+  duration exhaustion, failures, and abnormal post-start exits report `/fail`
+  and return nonzero. Retained 16 checkers; concurrency was not the root fix.
+- Fixed the Photos completeness gate: osxphotos printed status lines before its
+  count, so the numeric validation failed every night and silently bypassed the
+  guard. It now targets the external library explicitly, mutes status output,
+  parses the final count, and pins uvx to Python 3.12 (osxphotos 0.76.1's pyobjc
+  dependency fails under the Homebrew Python 3.14 default). Verified the live
+  external library reports zero missing personal originals.
+- Operational gotcha: editing a shell script while launchd was executing it
+  caused the running shell to parse across the replaced file and exit 2 after
+  the Photos phase. Never edit/reload the backup while either mode is running.
+
 ## 2026-07-17 — embeddings dead-man's-switch (LM Studio outage post-mortem)
 
 - **LM Studio's API server was down 2026-07-14..17 with every check green** —

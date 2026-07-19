@@ -65,25 +65,25 @@ From here, the agent can walk you through customization (git identity, AWS, SSH)
 
 Configuration is managed with [GNU Stow](http://www.gnu.org/software/stow/), which creates symlinks from this repo into your home directory. Each top-level directory is a "package" that gets stowed independently:
 
-| Directory         | Purpose                                                                                                           | Stow Target                           | Platform |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------- | -------- |
-| `1Password/`      | 1Password SSH agent config                                                                                        | `~/.config/1Password/`                | macOS    |
-| `agents/`         | Agent infrastructure — `AGENTS.md`, Claude/Codex symlinks, skills, Claude Code settings                           | `~/`                                  | Both     |
-| `agent_docs/`     | Reference docs for this repo — agent setup plans, platform notes, secret management                               | N/A (not stowed)                      | Both     |
-| `aws/`            | Optional AWS CLI configuration, only useful if you install/use AWS CLI separately                                 | `~/.aws/`                             | Linux    |
-| `ghostty/`        | Ghostty terminal configuration                                                                                    | `~/.config/ghostty/`                  | macOS    |
-| `herdr/`          | herdr config + `herdr-layout` helper                                                                              | `~/.config/herdr/`, `~/.local/bin/`   | Both     |
-| `git/`            | Git configuration with OS-specific includes                                                                       | `~/`                                  | Both     |
-| `homebrew/`       | Brewfile for macOS casks and Mac App Store apps                                                                   | `~/`                                  | macOS    |
-| `launchd/`        | LaunchAgents — scheduled jobs (repo sync; Tigris backup; key-expiry check)                                        | `~/Library/LaunchAgents/`             | macOS    |
-| `provisioning/`   | Declarative manifests (skills, MCP, tools, keys, checks) + drift checks vs install.sh, iv-image, healthchecks.io  | N/A (not stowed)                      | Both     |
-| `ssh/`            | SSH client configuration                                                                                          | `~/.ssh/`                             | Both     |
-| `starship/`       | Starship prompt configuration                                                                                     | `~/.config/`                          | Both     |
-| `sync-repos.sh`   | Clones/fetches all GitHub repos for personal and work accounts                                                    | N/A (standalone script)               | Both     |
-| `backup/`         | Nightly encrypted backup of home + external data to Tigris (`tigris-backup.sh` + excludes) — klundstedt-mini only | N/A (run in place)                    | macOS    |
-| `test-install.sh` | Tests install.sh (Apple Container, Sprite, exe.dev) + local `provisioning`/`hook` checks + the IV `overlay` mode  | N/A (standalone script)               | macOS    |
-| `zed/`            | Zed editor settings                                                                                               | `~/.config/zed/`                      | macOS    |
-| `zsh/`            | Zsh shell configuration                                                                                           | `~/`                                  | Both     |
+| Directory         | Purpose                                                                                                          | Stow Target                         | Platform |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------- | -------- |
+| `1Password/`      | 1Password SSH agent config                                                                                       | `~/.config/1Password/`              | macOS    |
+| `agents/`         | Agent infrastructure — `AGENTS.md`, Claude/Codex symlinks, skills, Claude Code settings                          | `~/`                                | Both     |
+| `agent_docs/`     | Reference docs for this repo — agent setup plans, platform notes, secret management                              | N/A (not stowed)                    | Both     |
+| `aws/`            | Optional AWS CLI configuration, only useful if you install/use AWS CLI separately                                | `~/.aws/`                           | Linux    |
+| `ghostty/`        | Ghostty terminal configuration                                                                                   | `~/.config/ghostty/`                | macOS    |
+| `herdr/`          | herdr config + `herdr-layout` helper                                                                             | `~/.config/herdr/`, `~/.local/bin/` | Both     |
+| `git/`            | Git configuration with OS-specific includes                                                                      | `~/`                                | Both     |
+| `homebrew/`       | Brewfile for macOS casks and Mac App Store apps                                                                  | `~/`                                | macOS    |
+| `launchd/`        | LaunchAgents — scheduled jobs (repo sync; Tigris backup; key-expiry check)                                       | `~/Library/LaunchAgents/`           | macOS    |
+| `provisioning/`   | Declarative manifests (skills, MCP, tools, keys, checks) + drift checks vs install.sh, iv-image, healthchecks.io | N/A (not stowed)                    | Both     |
+| `ssh/`            | SSH client configuration                                                                                         | `~/.ssh/`                           | Both     |
+| `starship/`       | Starship prompt configuration                                                                                    | `~/.config/`                        | Both     |
+| `sync-repos.sh`   | Clones/fetches all GitHub repos for personal and work accounts                                                   | N/A (standalone script)             | Both     |
+| `backup/`         | Daily fast + weekly exact encrypted backup to Tigris (`tigris-backup.sh` + excludes) — klundstedt-mini only      | N/A (run in place)                  | macOS    |
+| `test-install.sh` | Tests install.sh (Apple Container, Sprite, exe.dev) + local `provisioning`/`hook` checks + the IV `overlay` mode | N/A (standalone script)             | macOS    |
+| `zed/`            | Zed editor settings                                                                                              | `~/.config/zed/`                    | macOS    |
+| `zsh/`            | Zsh shell configuration                                                                                          | `~/`                                | Both     |
 
 Git uses a generated OS include so only one platform-specific file is active:
 
