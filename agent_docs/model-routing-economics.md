@@ -9,34 +9,49 @@ adjacent agent harnesses. Pricing and the usage snapshot below are dated
 - ChatGPT $100/month tier is connected to exe.dev and works as Shelley's
   OpenAI provider. Calls through this subscription record `$0` marginal cost
   in Shelley's usage data.
-- Claude Max 5x is $100/month. Claude Fable 5 is the preferred primary model,
-  but heavy use reaches Claude's subscription limits every few days.
-- Claude Max cannot be selected directly as a Shelley provider. It remains
-  usable through Claude Code, including when Shelley invokes Claude Code as an
-  external process, but all Claude surfaces share the same subscription quota.
+- Claude Max 5x is $100/month. Claude Fable 5 is the preferred model for
+  difficult planning, but heavy use reaches Claude's subscription limits every
+  few days.
+- **Claude Max quota is not available to Shelley.** Fable, Opus, and Sonnet
+  selected inside Shelley are exe.dev-managed API models: they consume the
+  limited included exe.dev Shelley allocation and then metered spend. Using
+  Fable through Claude Code is a separate harness and requires an explicit
+  cross-harness handoff; it must not be counted as a Shelley subscription
+  benefit.
 - The existing exe.dev plan includes a monthly Shelley-token allocation.
   Managed usage beyond that allocation is metered at the gateway's published
   per-token prices without markup.
 
 ## Current recommendation
 
-1. Keep Fable 5 for thoughtful planning, architecture, and the hardest
-   reasoning where its quality premium matters.
-2. Use `gpt-5.6-sol` through the ChatGPT subscription for independent strategic
-   evaluation and adversarial critique.
-3. Use a cheaper capable model for implementation and tool-heavy execution:
-   - Prefer a Z.ai GLM Coding Plan if execution volume is high and predictable.
-   - Use exe.dev-managed Claude Sonnet 5, GLM 5.2 on Fireworks, or Grok for
-     metered pilots, selective execution, overflow, and tie-breaking.
-4. If GLM is only a reviewer, start with Z.ai Lite monthly. If it becomes a
-   co-primary execution model or sustained Claude-overflow path, Z.ai Pro is
-   the more plausible tier. Do not start with Z.ai Max or an annual commitment.
-5. Use Claude Opus/Fable through the exe.dev gateway sparingly; their metered
-   cost is poorly suited to sustained primary-agent volume.
+There are two distinct workflows; do not mix their accounting.
 
-This is a quality funnel rather than a rigid pipeline: expensive models decide
-what to do and evaluate risk; cheaper models perform the token-heavy tool loop;
-the planner or strategist reviews checkpoints and the final result.
+### Shelley-native workflow
+
+1. Use `gpt-5.6-sol` through the ChatGPT subscription for planning, strategic
+   evaluation, and routine verification. This is the only currently connected
+   frontier subscription with zero marginal Shelley cost.
+2. Use a cheaper capable model for implementation and tool-heavy execution:
+   - Prefer a Z.ai GLM Coding Plan if execution volume is high and predictable.
+   - Use exe.dev-managed GLM 5.2 on Fireworks or Claude Sonnet 5 for metered
+     pilots, selective execution, overflow, and tie-breaking.
+3. Use exe.dev-managed Fable or Opus only for bounded, high-value escalations.
+   They are not covered by Claude Max when called from Shelley.
+4. If GLM is only a reviewer, start with Z.ai Lite monthly. If it becomes a
+   co-primary execution model or sustained overflow path, Z.ai Pro is the more
+   plausible tier. Do not start with Z.ai Max or an annual commitment.
+
+### Hybrid Claude Code → Shelley workflow
+
+1. Use Fable through Claude Code under Claude Max to write a durable execution
+   brief in the repository.
+2. Hand that artifact to Shelley explicitly.
+3. Use `gpt-5.6-sol` in Shelley for adversarial review and reconciliation.
+4. Use GLM or managed Sonnet in Shelley for execution, followed by GPT review.
+
+The hybrid workflow leverages Claude Max but is not an all-Shelley pipeline.
+Until a supported Claude-subscription provider exists in Shelley, there is no
+way to have both Fable planning inside Shelley and Claude Max economics.
 
 ## 2026-07-19 initial Shelley baseline
 
@@ -56,9 +71,9 @@ shape gives this first-order counterfactual:
 
 | Candidate execution model | Initial 3.5-hour workload cost |
 | --- | ---: |
-| Claude Fable 5 | about $78.41 |
-| Claude Opus 4.8 | about $39.20 |
-| Claude Sonnet 5 | about $16.40 |
+| exe.dev-managed Claude Fable 5 | about $78.41 |
+| exe.dev-managed Claude Opus 4.8 | about $39.20 |
+| exe.dev-managed Claude Sonnet 5 | about $16.40 |
 | GLM 5.2 on Fireworks | about $11.52 |
 | Grok 4.5 | about $17.34 |
 | GPT-5.6 Sol through managed API | about $39.83 |
@@ -84,7 +99,10 @@ Run:
 
 The tool reads Shelley's recorded usage, fetches current prices from the public
 exe.dev gateway model catalog, and shows what the same token shape would cost
-on representative managed models. It can also isolate one conversation:
+on representative managed models. For managed Claude models, this is gateway
+list-price consumption: included exe.dev Shelley allocation may absorb it
+before cash overage, but it is never Claude Max usage. It can also isolate one
+conversation:
 
 ```bash
 ./shelley-cost-report --conversation <conversation-id> --hours 168
@@ -126,20 +144,37 @@ quality-adjusted cost = (model spend + estimated human correction cost)
 A cheaper model that takes twice as many loops or creates cleanup work can be
 more expensive than a stronger model.
 
-## Routing experiment
+## Routing experiments
 
-Test the proposed pipeline on real work:
+Test both operationally valid versions rather than assuming Claude Max is
+available inside Shelley.
 
-1. **Plan — Fable 5:** produce architecture, invariants, risks, acceptance
-   criteria, and an execution brief. Stop before implementation.
-2. **Strategic review — GPT-5.6 Sol:** challenge assumptions, identify missing
-   cases, simplify the plan, and produce explicit amendments.
-3. **Execution — Sonnet 5 or GLM 5.2:** implement from the reconciled brief,
+### A. All-Shelley pipeline
+
+1. **Plan and strategy — GPT-5.6 Sol:** produce architecture, invariants,
+   risks, acceptance criteria, and an execution brief; then challenge and
+   reconcile it in a separate review pass.
+2. **Execution — Sonnet 5 or GLM 5.2:** implement from the reconciled brief,
    run tests, and report deviations rather than silently redesigning.
-4. **Verification — GPT or Fable:** inspect the diff and test evidence. Reserve
-   Fable for high-risk changes or disagreement; use GPT for routine gates.
+3. **Verification — GPT-5.6 Sol:** inspect the diff and test evidence.
+4. **Selective escalation — managed Fable/Opus:** use only when risk or model
+   disagreement justifies consuming exe.dev allocation or metered spend.
 
-Compare two execution arms over at least 10 accepted tasks:
+### B. Hybrid subscription pipeline
+
+1. **Plan — Fable in Claude Code, outside Shelley:** write the execution brief
+   to a committed or otherwise durable file.
+2. **Strategic review — GPT-5.6 Sol in Shelley:** challenge the artifact and
+   produce explicit amendments.
+3. **Execution — Sonnet 5 or GLM 5.2 in Shelley:** implement the reconciled
+   brief and run tests.
+4. **Verification — GPT in Shelley:** use Fable in Claude Code again only for
+   high-risk final review.
+
+The hybrid handoff should pass a bounded artifact, not an entire chat transcript,
+so Shelley's execution context stays economical and reproducible.
+
+For either pipeline, compare two execution arms over at least 10 accepted tasks:
 
 - exe.dev-managed Sonnet/Fireworks GLM, measuring exact `cost_usd`
 - Z.ai GLM subscription, measuring quota consumption and interruptions
