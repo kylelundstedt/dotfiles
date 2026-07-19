@@ -4,6 +4,22 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-07-19 — exe.dev fleet web audit
+
+- **All eight running VMs audited end-to-end** — authoritative account inventory
+  from `ssh exe.dev ls --json`, tailnet/SSH reachability, local listeners,
+  system + user services, and authenticated upstream requests through each
+  exe.dev application proxy. Five intended websites are healthy (`iv-gitlake`,
+  `iv-docs`, `iv-gitlake-examples`, `rss-feed`, `kgl-thoughts`); both
+  `lundstedt.us` custom domains are also healthy. `iv-home` correctly returns
+  503 through exe.dev because its enabled service is deliberately tailnet-only.
+  `iv-ave-adapters` has no web application or listener configured.
+- **`kgl-dotfiles.exe.xyz` explained:** the VM itself and Shelley are healthy,
+  but the main URL proxies port 8000 and nothing listens there; Shelley is a
+  separate `.shelley.exe.xyz` endpoint and returned 200. Removed the stale TODO
+  claiming this VM was not tailnet-joined, and recorded the endpoint model,
+  audit matrix, and diagnostic workflow in `agent_docs/exe-dev-web.md`.
+
 ## 2026-07-17 — embeddings dead-man's-switch (LM Studio outage post-mortem)
 
 - **LM Studio's API server was down 2026-07-14..17 with every check green** —

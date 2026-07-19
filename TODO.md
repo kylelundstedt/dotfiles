@@ -10,7 +10,6 @@ Open work only, grouped by when it can happen. Completed work →
 - [ ] Split `setup_agents` and `setup_git` into focused functions; verify with `./test-install.sh overlay` + `exe`
 - [ ] Tailscale admin console: tighten `tag:dev` SSH users (drop `root`/`autogroup:nonroot` → `exedev`); consider `*:22` instead of `"ip": ["*"]` in the network grant
 - [ ] Request `github-ro` from exe.dev (Discord https://discord.gg/jc9WQUfaxf), then `integrations edit github-kylelundstedt-{dotfiles,iv-image} --readonly` — least privilege on VMs (they consume, not develop, those repos); details in [agent_docs/git-identity.md](agent_docs/git-identity.md)
-- [ ] `kgl-dotfiles` VM — running but not tailnet-joined and purpose unrecorded; investigate (`ssh exe.dev`) or retire
 
 ## Waiting on a trigger
 
