@@ -4,6 +4,23 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-07-19 — exe.dev website remediation
+
+- **`kgl-dotfiles` now serves a private Quarto documentation site** — committed
+  `_quarto.yml` + `index.qmd`, rendering the setup guide, TODO/changelog, and
+  selected durable runbooks. `provision-docsite ~/dotfiles` rendered `_site`
+  and installed enabled nginx on the proxy port (`0.0.0.0:8000`).
+- **`iv-ave-adapters` now serves the same nginx/Quarto pattern** — fast-forwarded
+  the VM checkout first, added a searchable project guide/roadmap site, fixed
+  its cross-repo README links for rendered use, rendered and provisioned nginx,
+  then pushed the repo commit. `iv-home` was deliberately left unchanged and
+  its possible retirement is deferred in TODO.
+- **Cleaned `iv-docs`'s false failed-unit alarm** — exe.dev already owns port 22
+  with `/exe.dev/bin/sshd`; the redundant Ubuntu `ssh.service`/`ssh.socket`
+  pair had been enabled and could not bind. Disabled and masked both, matching
+  the rest of the fleet. Port 22, Tailscale SSH, and the docs site remained
+  healthy; the system failed-unit count is now zero.
+
 ## 2026-07-19 — exe.dev fleet web audit
 
 - **All eight running VMs audited end-to-end** — authoritative account inventory

@@ -31,3 +31,8 @@ git/.gitconfig_work
 .claude/scheduled_tasks.lock
 agents/.claude/settings.json
 .install-apps.log
+_site/
+
+/.quarto/
+**/*.quarto_ipynb
+__pycache__/

@@ -27,13 +27,13 @@ All eight local Shelley endpoints returned HTTP 200 (`Shelley Agent`).
 
 | VM | App proxy | Intended state / finding |
 | --- | --- | --- |
-| `kgl-dotfiles` | **503** | No process listens on `8000` and no app service is configured. This VM hosts the dotfiles workspace and Shelley; Shelley is healthy on its separate `.shelley.exe.xyz` endpoint. |
+| `kgl-dotfiles` | **200** (`Dotfiles`) | Healthy private Quarto site. `provision-docsite ~/dotfiles` renders the committed site configuration and serves `_site` through enabled nginx on `0.0.0.0:8000`; Shelley remains independent on its `.shelley.exe.xyz` endpoint. |
 | `iv-gitlake` | **200** (`GitLake`) | Healthy private site. Enabled lingering user unit `docsite.service` serves `~/gitlake/_site` on `0.0.0.0:8000`. |
 | `iv-home` | **503 by design** | Healthy closed-door service, intentionally tailnet-only. `ivhome.service` binds only the Tailscale IP on `8000`; its unit explicitly forbids `0.0.0.0` so the exe.dev proxy cannot reach it. |
 | `rss-feed` | **200** (`RSS Feed Service`) | Healthy public Go service. System unit `srv.service` is enabled with restart policy; healthcheck timer is active. |
 | `kgl-thoughts` | **200** (`Kyle Lundstedt`) | Healthy public nginx static site. Both custom domains, `lundstedt.us` and `www.lundstedt.us`, also returned 200. |
-| `iv-docs` | **200** (`IndustryVault – IV`) | Healthy private site. Enabled lingering user unit `docsite.service` serves `~/iv-docs/_site` on `0.0.0.0:8000`. Unrelated: `ssh.socket` is failed while `ssh.service` still owns port 22 and SSH works. |
-| `iv-ave-adapters` | **503** | No process listens on `8000`, no site unit exists, and the repo is an adapter/test codebase with no web build. No website is currently configured. |
+| `iv-docs` | **200** (`IndustryVault – IV`) | Healthy private site. Enabled lingering user unit `docsite.service` serves `~/iv-docs/_site` on `0.0.0.0:8000`. The redundant Ubuntu `ssh.service`/`ssh.socket` pair is masked; exe.dev's own `/exe.dev/bin/sshd` continues to own port 22. |
+| `iv-ave-adapters` | **200** (`AVE Adapters`) | Healthy private Quarto site. The repository now commits `_quarto.yml` and `index.qmd`; enabled nginx serves the rendered `_site` on `0.0.0.0:8000`. |
 | `iv-gitlake-examples` | **200** (`GitLake Examples`) | Healthy private site. Enabled lingering user unit `docsite.service` serves `~/gitlake-examples/_site` on `0.0.0.0:8000`. |
 
 The private proxy results above were verified through short-lived, five-minute

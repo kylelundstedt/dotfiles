@@ -1,0 +1,31 @@
+---
+title: "Dotfiles"
+---
+
+A GNU Stow-managed development environment and agent platform for macOS and
+Linux.
+
+## Start here
+
+- [**Setup and architecture**](README.md) — installation, host behavior, tools,
+  and repository structure.
+- [**Open work**](TODO.md) — actionable tasks and deferred decisions.
+- [**Changelog**](CHANGELOG.md) — completed operational and configuration work.
+- [**Hosts**](agent_docs/hosts.md) — responsibilities of the Macs and exe.dev
+  VM fleet.
+- [**exe.dev web endpoints**](agent_docs/exe-dev-web.md) — application proxy,
+  Shelley endpoint, and fleet audit details.
+- [**Monitoring**](agent_docs/monitoring.md) — scheduled-job healthchecks and
+  incident notes.
+- [**Model routing**](agent_docs/model-routing-economics.md) — subscription
+  economics and workload-routing guidance.
+- [**Secrets**](agent_docs/secrets.md) — credential boundaries and rotation
+  practices.
+
+## What this repository manages
+
+- Shell, Git, SSH, terminal, and editor configuration.
+- Shared instructions, skills, hooks, and MCP registration for coding agents.
+- Cross-platform bootstrap and upgrade automation.
+- Always-on Mac mini operations, including backups and repository sync.
+- Durable operational context under `agent_docs/`.

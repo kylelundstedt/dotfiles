@@ -1,0 +1,48 @@
+project:
+  type: website
+  output-dir: _site
+  render:
+    - index.qmd
+    - README.md
+    - TODO.md
+    - CHANGELOG.md
+    - agent_docs/agents-recommendations.md
+    - agent_docs/exe-dev-web.md
+    - agent_docs/git-identity.md
+    - agent_docs/herdr-pilot.md
+    - agent_docs/hosts.md
+    - agent_docs/model-routing-economics.md
+    - agent_docs/monitoring.md
+    - agent_docs/multi-tenant.md
+    - agent_docs/repo-boundaries.md
+    - agent_docs/secrets.md
+    - agent_docs/shelley-sovreignty.md
+    - agent_docs/tigris-backup-runbook.md
+
+website:
+  title: "Dotfiles"
+  description: >-
+    Development-environment configuration, agent infrastructure, and
+    operational runbooks for macOS and Linux.
+  search: true
+  navbar:
+    left:
+      - href: index.qmd
+        text: Home
+      - href: README.md
+        text: Setup
+      - href: TODO.md
+        text: TODO
+      - href: CHANGELOG.md
+        text: Changelog
+  sidebar:
+    style: floating
+    collapse-level: 1
+    contents: auto
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    toc-location: right
