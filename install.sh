@@ -296,13 +296,12 @@ install_cli_tools() {
     # Platform strings for GitHub release asset matching
     # target_triple: used by bat, ripgrep (Rust-style: aarch64-apple-darwin, x86_64-unknown-linux)
     # gh_os/gh_arch: used by gh, fzf, jq, yq, duckdb, carapace (go-style: darwin/amd64, linux/arm64)
-    # croc_platform: upstream's release labels (macOS-ARM64, Linux-64bit, etc.)
-    local target_triple gh_os gh_arch duckdb_os gh_cli_os croc_platform
+    local target_triple gh_os gh_arch duckdb_os gh_cli_os
     case "$OS-$arch" in
-        macos-arm64)   target_triple="aarch64-apple-darwin"; gh_os="darwin"; gh_arch="arm64"; duckdb_os="osx"; gh_cli_os="macOS"; croc_platform="macOS-ARM64" ;;
-        macos-x86_64)  target_triple="x86_64-apple-darwin";  gh_os="darwin"; gh_arch="amd64"; duckdb_os="osx"; gh_cli_os="macOS"; croc_platform="macOS-64bit" ;;
-        linux-x86_64)  target_triple="x86_64-unknown-linux";  gh_os="linux";  gh_arch="amd64"; duckdb_os="linux"; gh_cli_os="linux"; croc_platform="Linux-64bit" ;;
-        linux-aarch64) target_triple="aarch64-unknown-linux"; gh_os="linux";  gh_arch="arm64"; duckdb_os="linux"; gh_cli_os="linux"; croc_platform="Linux-ARM64" ;;
+        macos-arm64)   target_triple="aarch64-apple-darwin"; gh_os="darwin"; gh_arch="arm64"; duckdb_os="osx"; gh_cli_os="macOS" ;;
+        macos-x86_64)  target_triple="x86_64-apple-darwin";  gh_os="darwin"; gh_arch="amd64"; duckdb_os="osx"; gh_cli_os="macOS" ;;
+        linux-x86_64)  target_triple="x86_64-unknown-linux";  gh_os="linux";  gh_arch="amd64"; duckdb_os="linux"; gh_cli_os="linux" ;;
+        linux-aarch64) target_triple="aarch64-unknown-linux"; gh_os="linux";  gh_arch="arm64"; duckdb_os="linux"; gh_cli_os="linux" ;;
         *) echo "  [!] Unsupported platform: $OS-$arch"; return 1 ;;
     esac
 
@@ -350,6 +349,12 @@ install_cli_tools() {
         (install_github_binary "ajeetdsouza/zoxide" "zoxide-.*-${target_triple}.*\\.tar\\.gz" "zoxide") &
         pids+=($!)
     else echo "  [=] zoxide"; fi
+    # Official installer pins its current release and verifies the published checksum,
+    # avoiding the GitHub API rate limit shared by exe.dev VMs.
+    if want croc; then
+        (curl -fsSL https://getcroc.schollz.com | bash -s -- -p "$LOCAL_BIN" >/dev/null 2>&1 && echo "  [+] croc" || echo "  [!] croc failed") &
+        pids+=($!)
+    else echo "  [=] croc"; fi
     local tigris_arch; case "$arch" in arm64|aarch64) tigris_arch="arm64" ;; x86_64) tigris_arch="x64" ;; esac
     if want tigris; then
         (install_release_asset "tigrisdata/cli" "tigris-${direnv_os}-${tigris_arch}.tar.gz" "tigris" "tigris-${direnv_os}-${tigris_arch}") &
@@ -399,10 +404,6 @@ install_cli_tools() {
         (install_github_binary "carapace-sh/carapace-bin" "carapace-bin_.*_${gh_os}_${gh_arch}\\.tar\\.gz" "carapace" "carapace") &
         pids+=($!)
     else echo "  [=] carapace"; fi
-    if want croc; then
-        (install_github_binary "schollz/croc" "croc_v.*_${croc_platform}\\.tar\\.gz" "croc" "croc") &
-        pids+=($!)
-    else echo "  [=] croc"; fi
     if want cship; then
         (install_github_binary "stephenleo/cship" "cship-${target_triple}" "cship" "cship-${target_triple}") &
         pids+=($!)

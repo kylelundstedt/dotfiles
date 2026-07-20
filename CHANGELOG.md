@@ -6,8 +6,9 @@ that commit messages don't always capture. Newest first. Open work lives in
 
 ## 2026-07-20 — croc file transfer CLI
 
-- **Added `croc` to the personal dotfiles tool layer** — `install.sh` now installs
-  the latest upstream release for Intel/ARM macOS and Linux, the provisioning
+- **Added `croc` to the personal dotfiles tool layer** — `install.sh` uses
+  croc's official checksummed installer for Intel/ARM macOS and Linux without
+  consuming the GitHub API quota shared by exe.dev VMs. The provisioning
   manifest declares it as a personal tool, and remote install smoke checks cover
   the command.
 
