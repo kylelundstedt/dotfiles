@@ -4,6 +4,13 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-07-20 — croc file transfer CLI
+
+- **Added `croc` to the personal dotfiles tool layer** — `install.sh` now installs
+  the latest upstream release for Intel/ARM macOS and Linux, the provisioning
+  manifest declares it as a personal tool, and remote install smoke checks cover
+  the command.
+
 ## 2026-07-19 — exe.dev website remediation
 
 - **`kgl-dotfiles` now serves a private Quarto documentation site** — committed

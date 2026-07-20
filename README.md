@@ -10,7 +10,7 @@ One command to set up a fully configured development environment on macOS or Lin
 
 **Modern CLI replacements** — `cat` → [bat](https://github.com/sharkdp/bat), `grep` → [ripgrep](https://github.com/BurntSushi/ripgrep), `cd` → [zoxide](https://github.com/ajeetdsouza/zoxide)
 
-**Dev tools** — Git with 1Password SSH signing, Tigris CLI for object storage, DuckDB, Python via [uv](https://docs.astral.sh/uv/)
+**Dev tools** — Git with 1Password SSH signing, [croc](https://github.com/schollz/croc) for secure device-to-device file transfer, Tigris CLI for object storage, DuckDB, Python via [uv](https://docs.astral.sh/uv/)
 
 **Ops for the always-on Mac mini** — nightly encrypted backup to Tigris (`backup/`), scheduled repo sync and credential-expiry alarms (`launchd/`), and a healthchecks.io monitoring registry with automated drift checks (`provisioning/`)
 

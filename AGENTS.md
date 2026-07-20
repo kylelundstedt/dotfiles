@@ -57,7 +57,7 @@ The install script sets up a machine from scratch. It self-bootstraps — when p
 
 1. **Bootstrap** — (only when not in repo) install git, clone to `~/dotfiles`, re-exec
 2. **System deps** — stow, zsh, git, curl (apt on Linux, Homebrew on macOS)
-3. **CLI tools** — installed in parallel via curl scripts and GitHub release binaries to `~/.local/bin` (starship, uv, atuin, zoxide, direnv, tigris, archil, fnm, bat, fzf, rg, jq, yq, gh, duckdb, carapace)
+3. **CLI tools** — installed in parallel via curl scripts and GitHub release binaries to `~/.local/bin` (starship, uv, atuin, zoxide, direnv, tigris, archil, fnm, bat, fzf, rg, jq, yq, gh, duckdb, carapace, croc)
 4. **Python CLIs** — `uv tool install` for Python-based tools (snowflake-cli → `snow`)
 5. **Node** — via fnm (LTS)
 6. **Git config** — OS include file, SSH config (macOS: written from scratch — canonicalization + multiplexing + exe.dev key pinning + agent forwarding for `*.ts.net` + 1Password agent; Linux: a marker-managed block PREPENDED to `~/.ssh/config` — GitHub over port 443 + exe.dev key pinning — preserving foreign blocks like iv-image's stanza), exe.dev host key pre-seeded in known_hosts, identity (interactive prompt or default for non-interactive Linux). Commit signing is enabled at login time by `.zshrc` when a forwarded SSH agent is detected.
