@@ -36,11 +36,17 @@
 2. **iv-sandbox (and any local AC guest) switches to the tailnet URL + token**
    like every other consumer. The vmnet door dies; one auth model everywhere.
 3. **Seed credentials by copying the existing token files** from
-   `~/.cli-proxy-api/` on the host into the VM (they're refresh-token JSON;
-   CLIProxyAPI refreshes in place). Fresh in-VM OAuth logins are the
-   _contingency_, not the default — the runbook for that (tailnet SSH with
-   `-L` forwarding the localhost callback port, browser on the host) goes in
-   the repo, exercised only if a copied token dies.
+   `~/.cli-proxy-api/` on the host into the VM. **CORRECTED 2026-07-21:
+   copies are only safe while exactly ONE CPA instance is live.** With the
+   old host CPA and the VM CPA both running, the two instances share one
+   OAuth session with a rotating refresh token — the host's restart-time
+   refresh (16:26) invalidated the VM's copy within hours (claude went
+   `auth_unavailable`/cooldown). Resolution, now the doctrine: **each live
+   CPA instance gets its own fresh OAuth login** (exercised for BOTH
+   providers 2026-07-21 via isolated host-side `-claude-login` /
+   `-codex-login` runs with a temp auth-dir, operator browser approvals,
+   token files moved into the VM, temps scrubbed). Copying remains fine
+   for a plain host→VM move where the old instance is retired immediately.
 4. **Rotate the gateway access token at cutover.** Cheap, and it cleanly
    separates old-door and new-door credentials during burn-in.
 5. **Tailnet tag: `tag:dev`** — the only tag the existing OAuth client may
@@ -358,11 +364,31 @@ come back in this path (its LaunchAgent needs console login) — boot it
 manually via `container machine run`. One llm-gateway README commit
 (verified reboot model) is committed locally, push pending console login.
 
-Remaining, in order: power-loss drill (plain `sudo reboot` + operator
-console unlock, expect DOWN alert within grace) → Phase 4 gate → Phase 5
-cutover + 7-day burn-in → Phase 6 teardown. Phase 5 note: repointing is
-done inline (★), not delegated — consumer updates carry the access token,
-which never goes to a subagent.
+**2026-07-21 — power-loss drill PASSED; Phase 4 gate CLOSED.** Plain
+reboot 12:53; mini sat locked ~3.5 h; DOWN alerts received (proven with a
+long dwell). Single console unlock 16:26 → **passthrough auto-login
+worked** (physical pre-boot auth, unlike authrestart) → LaunchAgents fired
+→ VM up 16:27:01 → healthcheck UP 16:29. Apple Silicon note: the FileVault
+unlock screen looks like a normal loginwindow (the distinct Intel-era EFI
+screen doesn't exist) — don't misread that as a failure.
+
+**2026-07-21 — copied-token refresh race hit during Phase 4 wrap-up
+(risk-table row materialized).** The host CPA's restart at the 16:26 login
+refreshed the shared claude token, rotating the refresh token and killing
+the VM's copy (`auth_unavailable` + cooldown; codex path unaffected until
+its next refresh). Fixed per the corrected decision 3: fresh independent
+OAuth sessions minted for BOTH providers into the VM (two operator
+approvals); both verified through the gateway. The host and VM CPAs now
+run disjoint sessions and cannot clobber each other during burn-in.
+Incidental: two transient `op read` empty-returns produced false-alarm
+401s right after console login — prefer the guest-held token for
+gateway verification.
+
+Remaining: Phase 5 cutover (repoint iv-sandbox, then each exe.dev VM, one
+at a time, verifying a completion after each; then 7-day burn-in — record
+the start date here) → Phase 6 teardown. Phase 5 note: repointing is done
+inline (★), not delegated — consumer updates carry the access token, which
+never goes to a subagent.
 
 ## Risks
 
