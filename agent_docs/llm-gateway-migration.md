@@ -384,11 +384,19 @@ Incidental: two transient `op read` empty-returns produced false-alarm
 401s right after console login — prefer the guest-held token for
 gateway verification.
 
-Remaining: Phase 5 cutover (repoint iv-sandbox, then each exe.dev VM, one
-at a time, verifying a completion after each; then 7-day burn-in — record
-the start date here) → Phase 6 teardown. Phase 5 note: repointing is done
-inline (★), not delegated — consumer updates carry the access token, which
-never goes to a subagent.
+**2026-07-21 — Phase 5 cutover COMPLETE; burn-in started.** iv-sandbox
+repointed (shelley.json → `https://llm-gateway.dojo-sun.ts.net`; token via
+`EnvironmentFile` drop-in `llm-gateway.conf`; shelley restarted clean;
+gateway answers 200 from inside the VM). Scope finding: **the exe.dev VMs
+were never consumers** — their shelley runs off the control-plane config
+`/exe.dev/shelley.json`, which uses exe.dev's own LLM integration; nothing
+in the fleet references the mini's old door. iv-sandbox was the sole
+consumer. Pointing exe.dev VMs at this gateway (for Claude Max access) is
+a separate post-migration option with ToS fan-out visibility concerns
+(llm-gateway.md) — deliberately NOT part of this migration. **Old door now
+has zero consumers. Burn-in clock started 2026-07-21;** gate = 7 clean
+days (no manual restarts, no `gateway-health` alerts, no consumer
+fallback) → then Phase 6 teardown.
 
 ## Risks
 
