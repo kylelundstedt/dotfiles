@@ -1,10 +1,12 @@
 # LLM gateway migration plan — host stack → AC appliance VM
 
-> Status: APPROVED 2026-07-21 (all decisions confirmed); execution not
-> started. Companion to [llm-gateway.md](llm-gateway.md) (current form +
-> target rationale) and [apple-container-vms.md](apple-container-vms.md)
-> (build mechanics). Work the phases top to bottom — each has an acceptance
-> gate; don't start the next phase until the gate passes.
+> Status: IN EXECUTION. Phases 1–3 complete and gates passed 2026-07-21;
+> Phase 4 agent-executable items done; **paused awaiting operator
+> touchpoints** (reboot tests + healthchecks.io project) — see Execution
+> log. Companion to [llm-gateway.md](llm-gateway.md) (current form + target
+> rationale) and [apple-container-vms.md](apple-container-vms.md) (build
+> mechanics). Work the phases top to bottom — each has an acceptance gate;
+> don't start the next phase until the gate passes.
 
 ## End state
 
@@ -280,6 +282,46 @@ fallback.
 **Gate:** old endpoints refuse connections; docs match reality;
 `test-install.sh provisioning` still green (no manifest references to the
 removed pieces).
+
+## Execution log
+
+**2026-07-21 — Phases 1–3 done, Phase 4 partial (paused on operator).**
+Repo: `kylelundstedt/llm-gateway` (private). VM `llm-gateway` running
+(192.168.64.5 / tailnet 100.127.121.69); gate results: Phase 2 `running` +
+tailnet + 401-with-no-auth through the full chain; Phase 3 24 models served
+and a live `GATEWAY-OK` completion from **both** providers via
+`https://llm-gateway.dojo-sun.ts.net`. Copied tokens survived first in-VM
+use. New access token minted + stored in 1P Employee vault
+(`llm-gateway access token`, item `7qr3qlnfag3jl3tuuhemhqmnx4`). Boot
+LaunchAgent installed; all five host gates PASS. Health **timer disabled**
+pending the healthchecks.io ping URL (its final ping would fail every 5 min
+and mark systemd degraded). Old host stack untouched (rollback path).
+
+Findings folded back into the repos:
+
+- **ADP prompts recur per new VM**, not per install — the first
+  `machine create` boot XPC-timed-out until the fresh
+  `container-runtime-linux` prompt for `llm-gateway` was approved live.
+- **PTY mangles multi-line guest commands** (canonical-mode line limit);
+  the single-line base64-tarball method is the only reliable transfer/exec
+  path.
+- **Caddy site address must be any-Host** (`http://:8318`); the documented
+  original-gateway gotcha got reintroduced from spec and was caught by the
+  tailnet 401 test (host-specific site = silent empty 200).
+- **growfs mask isn't enough** — the unit fails before provision.sh masks
+  it; `systemctl reset-failed` needed for `is-system-running` = `running`.
+- **launchd PATH lacks `/usr/local/bin`** — host scripts must export PATH
+  or the `container` CLI silently no-ops.
+- **Healthcheck expiry grace = 24 h**: `expired` is the ~8 h access-token
+  expiry and CLIProxyAPI refreshes on demand, so an idle gateway
+  legitimately sits past it; only >24 h indicates a broken refresh.
+
+Remaining, in order: operator touchpoints 2+3 (double `sudo fdesetup
+authrestart` acceptance test; healthchecks.io `llm-gateway` project + ping
+URL) → agent wires URL + re-enables timer + power-loss drill (operator
+unlock) → Phase 4 gate → Phase 5 cutover + 7-day burn-in → Phase 6
+teardown. Phase 5 note: repointing is done inline (★), not delegated —
+consumer updates carry the access token, which never goes to a subagent.
 
 ## Risks
 

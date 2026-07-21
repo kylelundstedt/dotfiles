@@ -40,6 +40,10 @@ unattended operation** if missing:
    (`container-runtime-linux`, `container-apiserver`). On macOS 26 the first VM
    boot triggers permission prompts; until answered, every boot/exec **hangs and
    dies with an XPC timeout**. Grant them so it persists across reboots.
+   **The prompt recurs per NEW VM**, not just per install — creating a second
+   machine (llm-gateway, 2026-07-21) XPC-timed-out its first boot until a fresh
+   `container-runtime-linux` prompt was approved. Expect one prompt per
+   `machine create`.
 
 ## Creating a machine (worked example: iv-sandbox)
 
