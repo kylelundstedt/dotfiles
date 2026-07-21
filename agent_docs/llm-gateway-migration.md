@@ -323,7 +323,7 @@ enabled; healthcheck green (ExecMainStatus=0). Two healthcheck-script bugs
 found on first live run, both jq-falsy footguns on `disabled: false`
 (`jq -e` exits 1 on a false value; `//` substitutes on false too) — fixed
 with a bare `jq -r` read + string test. The buggy runs pinged `/fail` for
-real, exercising the DOWN→alert→UP cycle end to end.
+real, exercising the DOWN→alert→UP cycle end to end. Email integration added to the project and BOTH alert emails confirmed received (deliberate drill). Reboot acceptance test #1 (authrestart) initiated by operator.
 
 Remaining, in order: operator touchpoint 2 (double `sudo fdesetup
 authrestart` acceptance test) → power-loss drill (plain reboot + operator
