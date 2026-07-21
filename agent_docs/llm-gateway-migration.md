@@ -341,14 +341,28 @@ alert. Both VMs recovered (guest vmnet IPs reassigned post-reboot; tailnet
 addresses unaffected). Redefined pass criterion: reboot + one console
 login + zero further intervention.
 
-Remaining, in order: reboot test #2 (authrestart; this time verify tailnet
-SSH is up **before** console login, and attempt SSH-driven recovery — if
-the container stack runs from an SSH session, planned reboots become
-remotely recoverable) → power-loss drill (plain reboot + operator console
-unlock, expect DOWN alert within grace) → Phase 4 gate → Phase 5 cutover +
-7-day burn-in → Phase 6 teardown. Phase 5 note: repointing is done inline
-(★), not delegated — consumer updates carry the access token, which never
-goes to a subagent.
+**2026-07-21 — reboot test #2: PASSED, remote recovery proven.** Boot
+12:41:30; NO console login at any point (verified via `last` — SSH
+sessions only). Tailnet SSH reachable from the mbp while the mini sat at
+the loginwindow (authrestart disk-unlock confirmed). `boot-llm-gateway.sh`
+run in the SSH session brought the full stack up — **the container stack
+does not need a GUI session** — completion `SSH-RECOVERY-OK` +
+healthcheck green. Planned reboots are therefore fully remotely
+recoverable; console is only required after power loss. Limitations of
+the pre-console-login state, all verified: (1) **op CLI dead** (1P
+desktop-app integration needs the GUI app) — no secret reads; (2) **1P
+SSH agent down** — commit signing fails (`-c commit.gpgsign=false` to
+commit); (3) **GitHub push blocked** (SSH auth via 1P agent; PAT env
+resolved from 1P at login; gh keyring token stale). iv-sandbox does NOT
+come back in this path (its LaunchAgent needs console login) — boot it
+manually via `container machine run`. One llm-gateway README commit
+(verified reboot model) is committed locally, push pending console login.
+
+Remaining, in order: power-loss drill (plain `sudo reboot` + operator
+console unlock, expect DOWN alert within grace) → Phase 4 gate → Phase 5
+cutover + 7-day burn-in → Phase 6 teardown. Phase 5 note: repointing is
+done inline (★), not delegated — consumer updates carry the access token,
+which never goes to a subagent.
 
 ## Risks
 
