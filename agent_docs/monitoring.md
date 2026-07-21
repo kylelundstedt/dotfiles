@@ -92,3 +92,9 @@ responsibility.
   monitored weekly exact reconciliation. Both have run-wide deadlines below
   their check grace. Also fixed the osxphotos completeness gate, which had
   parsed status text instead of the final numeric count.
+- 2026-07-21: the daily backup stalled after home sync because the Photos gate's
+  ephemeral `uvx` runtime waited on a macOS removable-volume permission modal.
+  The gate was outside the rclone-only deadline and treated every execution
+  error as success. Replaced uvx with a persistent Python 3.12 osxphotos tool,
+  bounded the entire process group, and made all gate failures skip Photos but
+  fail the overall run after the unrelated archive sources continue.

@@ -148,10 +148,36 @@ regression.
   shared lock, and independent staleness guards (20h daily / 6d reconcile).
   Run-wide deadlines are 2h daily and 18h reconcile; each phase receives only
   the remaining budget. `lastrun` is written **only on full success**.
+- Before syncing Photos, a schema-aware osxphotos query counts missing personal
+  originals while excluding shared and syndicated items. `install.sh` provisions
+  the persistent `~/.local/bin/osxphotos` command on the mini with Python 3.12;
+  the job never uses ephemeral `uvx`. The gate has a 15-minute cap clipped to
+  the run-wide deadline, and its whole process group is terminated on timeout.
+  Missing tooling, permission denial, command errors, malformed output, timeout,
+  or any count above zero fail closed: Photos is skipped, later archive sources
+  still run, and the completed job reports `/fail` and exits nonzero.
 - Logs: `~/Library/Logs/tigris-backup/<date>.log` and
   `~/Library/Logs/tigris-backup-reconcile/<date>.log` (30-day retention; `/tmp`
   launchd logs are only the latest and are wiped on reboot). Rclone emits
   one-line progress stats every five minutes at NOTICE level.
+
+### One-time Photos permission after install
+
+After `install.sh` first provisions or replaces the stable osxphotos tool, run
+the exact gate interactively from a logged-in desktop session:
+
+```bash
+~/.local/bin/osxphotos query \
+  --library "/Volumes/OWC8TB/Photos Library.photoslibrary" \
+  --missing --not-syndicated --not-shared --count --mute
+```
+
+Approve the macOS removable-volume prompt. The expected output is `0`. If it is
+denied, enable the corresponding Python/osxphotos removable-volume permission
+in System Settings → Privacy & Security → Files & Folders, then rerun the query.
+Do this before relying on the next unattended launchd run; the backup now fails
+boundedly and preserves Photos when permission is absent, but cannot grant TCC
+permission itself.
 
 ## Encrypted external drive (OWC8TB)
 

@@ -441,6 +441,24 @@ install_python_clis() {
     else
         uv tool install snowflake-cli >/dev/null 2>&1 && echo "  [+] snow" || echo "  [!] snowflake-cli failed"
     fi
+
+    # The mini's Photos completeness gate must use a persistent executable:
+    # uvx creates an ephemeral Python identity that macOS can prompt for again
+    # when it reads the external Photos library. Python 3.12 is required by the
+    # currently verified osxphotos/pyobjc combination.
+    if [[ "$OS" == "macos" && "$(scutil --get LocalHostName 2>/dev/null)" == "klundstedt-mini" ]]; then
+        if [[ "$UPGRADE" == true ]]; then
+            uv tool install --python 3.12 --force --upgrade osxphotos >/dev/null 2>&1 \
+                && echo "  [+] osxphotos (upgraded, Python 3.12)" \
+                || echo "  [!] osxphotos failed"
+        elif [[ -x "$LOCAL_BIN/osxphotos" ]]; then
+            echo "  [=] osxphotos"
+        else
+            uv tool install --python 3.12 osxphotos >/dev/null 2>&1 \
+                && echo "  [+] osxphotos (Python 3.12)" \
+                || echo "  [!] osxphotos failed"
+        fi
+    fi
 }
 
 # --- setup_node ---

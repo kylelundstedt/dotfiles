@@ -19,6 +19,9 @@ jobs:
           find . -name '*.sh' -not -path './.git/*' -print0 | xargs -0 -I{} bash -n {}
           echo "all scripts parse"
 
+      - name: Photos completeness gate
+        run: python3 -m unittest -v backup/test_photos_gate.py
+
       - name: validate launchd plists
         run: |
           python3 - <<'EOF'

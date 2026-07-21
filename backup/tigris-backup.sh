@@ -44,6 +44,11 @@ EXT=/Volumes/OWC8TB
 # sync the library (see photos_originals_complete). 0 = strict; bump a little if
 # a freshly-shot photo still mid-download from iCloud flaps the gate at 04:00.
 PHOTOS_MISSING_MAX=0
+# Bound the metadata gate independently, while also clipping it to the shared
+# run deadline below. osxphotos normally completes in seconds to minutes.
+PHOTOS_GATE_LIMIT=${PHOTOS_GATE_LIMIT:-900}
+PHOTOS_GATE_PYTHON=${PHOTOS_GATE_PYTHON:-/usr/bin/python3}
+OSXPHOTOS_BIN=${OSXPHOTOS_BIN:-$HOME/.local/bin/osxphotos}
 
 # Monitoring + skip/lock/log semantics come from _lib.sh (the skip pings
 # success by construction — see the lib header for why that's load-bearing).
@@ -150,29 +155,27 @@ checkpoint_sqlite() { # path
 # Count ONLY our own library originals: shared-album photos and "Shared with You"
 # syndication items are never stored as local originals by Apple, so they're
 # legitimately absent and must be excluded (a raw Photos.sqlite query misclassifies
-# them -- use osxphotos, which is schema-aware). Fail-safe: if osxphotos can't run
-# we fall back to the existing --max-delete guard and proceed with a WARN rather
-# than block the photo backup indefinitely.
+# them -- use osxphotos, which is schema-aware). Fail closed for Photos: any
+# unavailable/error/malformed/timeout result skips only this source, records a
+# failed run, and lets the unrelated archive phases continue.
 photos_originals_complete() {
-    local uvx; uvx=$(command -v uvx || echo "$HOME/.local/bin/uvx")
-    [[ -x "$uvx" ]] || { echo "WARN photos-gate: uvx not found; skipping completeness check"; return 0; }
-    local missing output
-    # osxphotos 0.76.1 fails under Homebrew Python 3.14 in a pyobjc dependency
-    # (type | None); pin uvx to the verified 3.12 runtime.
-    if ! output=$("$uvx" --python 3.12 osxphotos query --library "$EXT/Photos Library.photoslibrary" \
-        --missing --not-syndicated --not-shared --count --mute 2>&1); then
-        echo "WARN photos-gate: osxphotos check failed: $(printf '%s\n' "$output" | tail -1)"
-        return 0
+    local remaining timeout
+    remaining=$(( RUN_DEADLINE - $(date +%s) ))
+    if (( remaining <= 0 )); then
+        echo "WARN photos-gate: run-wide deadline reached"
+        return 15
     fi
-    missing=$(printf '%s\n' "$output" | tail -1)
-    if ! [[ "$missing" =~ ^[0-9]+$ ]]; then
-        echo "WARN photos-gate: unexpected osxphotos output: $(printf '%s\n' "$output" | tail -1); backing up library as-is"
-        return 0
+    timeout=$PHOTOS_GATE_LIMIT
+    (( remaining < timeout )) && timeout=$remaining
+    if [[ ! -x "$PHOTOS_GATE_PYTHON" ]]; then
+        echo "WARN photos-gate: Python runner unavailable ($PHOTOS_GATE_PYTHON)"
+        return 11
     fi
-    if (( missing > PHOTOS_MISSING_MAX )); then
-        echo "photos-gate: $missing personal originals NOT on disk (> $PHOTOS_MISSING_MAX)"; return 1
-    fi
-    echo "photos-gate: all personal originals present ($missing missing, threshold $PHOTOS_MISSING_MAX)"; return 0
+    "$PHOTOS_GATE_PYTHON" "$HOME/dotfiles/backup/photos_gate.py" \
+        --osxphotos "$OSXPHOTOS_BIN" \
+        --library "$EXT/Photos Library.photoslibrary" \
+        --missing-max "$PHOTOS_MISSING_MAX" \
+        --timeout "$timeout"
 }
 
 echo "=== $(date '+%F %T') $JOB_NAME START (mode=$MODE) ==="
@@ -186,8 +189,18 @@ sync_one home   "$HOME/"                          bkup:home --filter-from "$FILT
 if photos_originals_complete; then
     sync_one photos "$EXT/Photos Library.photoslibrary" bkup:photos
 else
-    echo "SKIP photos: library incomplete; not syncing (would delete originals from backup)"
-    FAILURES+=("photos(incomplete-library)")
+    photos_gate_rc=$?
+    case "$photos_gate_rc" in
+        10) photos_gate_failure=incomplete-library ;;
+        11) photos_gate_failure=gate-unavailable ;;
+        12) photos_gate_failure=gate-error ;;
+        13) photos_gate_failure=malformed-output ;;
+        14) photos_gate_failure=gate-timeout ;;
+        15) photos_gate_failure=deadline ;;
+        *)  photos_gate_failure="gate-rc=$photos_gate_rc" ;;
+    esac
+    echo "SKIP photos: $photos_gate_failure; not syncing (would risk deleting originals from backup)"
+    FAILURES+=("photos($photos_gate_failure)")
 fi
 # Archive bucket: GLACIER_IR (Archive Instant Retrieval) — same $/GB as GLACIER
 # but directly retrievable (plain GLACIER objects are frozen and need a thaw).

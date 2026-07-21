@@ -4,6 +4,22 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-07-21 — fail-closed, bounded Photos backup gate
+
+- Replaced the ephemeral `uvx osxphotos` invocation with a persistent
+  `~/.local/bin/osxphotos` tool environment, provisioned on klundstedt-mini by
+  `install.sh` with Python 3.12. This gives macOS a stable executable to grant
+  removable-volume access instead of prompting against a transient uvx run.
+- Added a 15-minute gate cap clipped to the backup's remaining run-wide budget.
+  A small Python supervisor starts osxphotos in its own process group and
+  terminates the whole group on timeout, preventing a privacy modal or wedged
+  child from holding the Healthchecks run open indefinitely.
+- Made every unsafe result fail closed for Photos. Missing tooling, command
+  errors (including permission denial), malformed output, timeout, and an
+  incomplete library all skip only the Photos sync; archive sources continue,
+  then the run pings `/fail` and exits nonzero. Added acceptance coverage for
+  all result classes and process-tree cleanup.
+
 ## 2026-07-20 — croc file transfer CLI
 
 - **Added `croc` to the personal dotfiles tool layer** — `install.sh` uses
