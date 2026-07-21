@@ -316,10 +316,18 @@ Findings folded back into the repos:
   expiry and CLIProxyAPI refreshes on demand, so an idle gateway
   legitimately sits past it; only >24 h indicates a broken refresh.
 
-Remaining, in order: operator touchpoints 2+3 (double `sudo fdesetup
-authrestart` acceptance test; healthchecks.io `llm-gateway` project + ping
-URL) → agent wires URL + re-enables timer + power-loss drill (operator
-unlock) → Phase 4 gate → Phase 5 cutover + 7-day burn-in → Phase 6
+**2026-07-21 (later) — monitoring live.** healthchecks.io project
+`llm-gateway`, check `gateway-health` (period 300 s / grace 900 s) created
+by operator; URL wired into `/etc/llm-gateway/healthchecks.env`; timer
+enabled; healthcheck green (ExecMainStatus=0). Two healthcheck-script bugs
+found on first live run, both jq-falsy footguns on `disabled: false`
+(`jq -e` exits 1 on a false value; `//` substitutes on false too) — fixed
+with a bare `jq -r` read + string test. The buggy runs pinged `/fail` for
+real, exercising the DOWN→alert→UP cycle end to end.
+
+Remaining, in order: operator touchpoint 2 (double `sudo fdesetup
+authrestart` acceptance test) → power-loss drill (plain reboot + operator
+console unlock) → Phase 4 gate → Phase 5 cutover + 7-day burn-in → Phase 6
 teardown. Phase 5 note: repointing is done inline (★), not delegated —
 consumer updates carry the access token, which never goes to a subagent.
 
