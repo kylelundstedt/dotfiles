@@ -57,13 +57,19 @@
    makes auto-login impossible (macOS disallows the combination), and an
    unplanned reboot halts at the pre-boot unlock screen where **nothing**
    runs — no tailscaled, no SSH, no LaunchAgents. Posture: planned reboots
-   use `sudo fdesetup authrestart` (one-time unlocked reboot; FileVault's
-   pre-boot auth passes through to user login by default, so the session
-   comes up and LaunchAgents load — verify `DisableFDEAutoLogin` is not
-   set). Unplanned reboots (power loss, panic) halt at the unlock screen
-   until someone touches the mini; the dead-man check turns that into an
-   alert rather than silence. "No-touch" therefore holds for planned
-   reboots only. Rejected alternative: disabling FileVault + auto-login
+   use `sudo fdesetup authrestart` (one-time unlocked reboot). **CORRECTED
+   by reboot test #1 (2026-07-21): authrestart lands at the loginwindow,
+   not in a logged-in session** — the FileVault→login passthrough only
+   applies to a _physical_ pre-boot unlock, and authrestart skips that
+   screen, so there is no auth event to pass through. What authrestart
+   actually buys: the disk is unlocked and **system daemons (incl.
+   tailscaled → tailnet SSH) come up without touch**; user LaunchAgents —
+   and therefore the VMs — wait for one console login. Working posture:
+   every reboot needs one console credential entry before the gateway
+   returns; the dead-man check alerts if that's forgotten. Open
+   improvement: test whether the container stack can be driven from an SSH
+   session (boot script by hand post-authrestart) — if yes, planned
+   reboots become remotely recoverable with no console touch. Rejected alternative: disabling FileVault + auto-login
    buys no-touch for all reboot causes at the cost of at-rest encryption on
    the disk holding the subscription tokens — wrong trade for a
    token-custody appliance. **This posture supersedes the "enable
@@ -325,11 +331,24 @@ found on first live run, both jq-falsy footguns on `disabled: false`
 with a bare `jq -r` read + string test. The buggy runs pinged `/fail` for
 real, exercising the DOWN→alert→UP cycle end to end. Email integration added to the project and BOTH alert emails confirmed received (deliberate drill). Reboot acceptance test #1 (authrestart) initiated by operator.
 
-Remaining, in order: operator touchpoint 2 (double `sudo fdesetup
-authrestart` acceptance test) → power-loss drill (plain reboot + operator
-console unlock) → Phase 4 gate → Phase 5 cutover + 7-day burn-in → Phase 6
-teardown. Phase 5 note: repointing is done inline (★), not delegated —
-consumer updates carry the access token, which never goes to a subagent.
+**2026-07-21 — reboot test #1: PASSED with a corrected model.**
+`authrestart` (12:31 boot) landed at a **fresh loginwindow** — the
+passthrough-login assumption in decision 7 was wrong (see correction
+there). After ONE console login (12:32): boot agent fired, gates correctly
+FAILed on the not-yet-started container system, self-heal started it,
+VM up at 12:32:39, healthcheck green at 12:34 — inside grace, no false
+alert. Both VMs recovered (guest vmnet IPs reassigned post-reboot; tailnet
+addresses unaffected). Redefined pass criterion: reboot + one console
+login + zero further intervention.
+
+Remaining, in order: reboot test #2 (authrestart; this time verify tailnet
+SSH is up **before** console login, and attempt SSH-driven recovery — if
+the container stack runs from an SSH session, planned reboots become
+remotely recoverable) → power-loss drill (plain reboot + operator console
+unlock, expect DOWN alert within grace) → Phase 4 gate → Phase 5 cutover +
+7-day burn-in → Phase 6 teardown. Phase 5 note: repointing is done inline
+(★), not delegated — consumer updates carry the access token, which never
+goes to a subagent.
 
 ## Risks
 
