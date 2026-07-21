@@ -93,6 +93,39 @@ and addresses them three ways:
   authrestart acceptance test), same spirit as the tailscale brew ritual in
   CLAUDE.md. macOS major updates get the same post-update verification.
 
+## Execution model — operator touchpoints and delegation
+
+**Operator touchpoints (the only steps an agent cannot do).** Everything not
+listed here is agent-executable from documented state; the agent drives the
+migration and requests these four at the moments they're needed:
+
+1. **Console GUI (Phase 0):** grant App Data Protection / Full Disk Access
+   to the container helpers in System Settings — TCC is not scriptable.
+2. **FileVault password (Phases 0 & 4):** `sudo fdesetup authrestart`
+   prompts interactively (run it via the `!` prefix or at the console), and
+   the power-loss drill ends at a console unlock.
+3. **healthchecks.io project (Phase 4):** creating the new `llm-gateway`
+   project + its API key is dashboard-only; the checks inside it are then
+   API-created by the agent.
+4. **OAuth browser approvals:** only if the copied-token contingency fires
+   (decision 3).
+
+**Delegation tiers** (H = Haiku, S = Sonnet, ★ = session model; per the
+global rule, delegate H/S units to subagents at that tier and verify their
+claims against the files before acting):
+
+| Unit                                                    | Tier | Self-checkable acceptance test                                                             |
+| ------------------------------------------------------- | ---- | ------------------------------------------------------------------------------------------ |
+| Phase 1 authoring (config tmpl, units, scripts, README) | S    | `shellcheck` + `bash -n`; `plutil -lint` the plist; secret-grep clean; ★ review pre-commit |
+| Phase 2 VM build/provision                              | ★    | Host-state sensitive; TTY-wrapper gotchas — inline                                         |
+| Phase 2 path-shape probe matrix                         | S    | Fixed matrix of request shapes → recorded status/body per row                              |
+| Phase 3 credentials                                     | ★    | Secrets in play — **never** hand tokens, api-keys, or the access token to a subagent       |
+| Phase 4 healthcheck wiring + timer                      | S    | Timer fires; check pings green; `/fail` path exercised once                                |
+| Phase 4/0 reboot tests                                  | ★    | Operator present anyway (touchpoint 2)                                                     |
+| Phase 5 per-consumer repointing                         | H/S  | One subagent per VM; completion succeeds via the new URL; ★ spot-verifies                  |
+| Phase 6 teardown                                        | ★    | Destructive — inline, with pre-delete inspection                                           |
+| Phase 6 doc rewrites                                    | S    | Prettier clean; links resolve; ★ review pre-commit                                         |
+
 ## Phase 0 — prerequisites (host)
 
 - [ ] Verify `DisableFDEAutoLogin` is not set (decision 7); write the
@@ -111,7 +144,9 @@ mini after the command is issued.
 
 Create `kylelundstedt/llm-gateway` (private) containing:
 
-- [ ] `config/cli-proxy-api.yaml.tmpl` — hardened template: bind
+- [ ] `config/cli-proxy-api.yaml.tmpl` — hardened template, derived from the
+      live host config `~/.config/iv-sandbox/cli-proxy-api.yaml` (the source
+      of truth for the yaml schema — don't guess key names): bind
       `127.0.0.1:8317`, required `api-keys` (placeholder), control panel +
       auto-update + plugins + usage stats off. Carry the hardening checklist
       from llm-gateway.md as comments so it survives upgrades. Include the
@@ -135,7 +170,7 @@ Create `kylelundstedt/llm-gateway` (private) containing:
 - [ ] `host/` — the two host-side components, versioned here rather than
       hand-managed: the **boot LaunchAgent** plist (RunAtLoad:
       `check-host-gates.sh`, then `container system start` + `machine run …
-  true`, with one bounded retry through `container system stop && start`
+true`, with one bounded retry through `container system stop && start`
       to absorb the known first-use race and post-reboot bridge desync) and
       **`check-host-gates.sh`** (see "Host-fragility posture"), plus an
       install snippet.
@@ -218,11 +253,13 @@ recovers; check is green with real cadence.
       each tailnet/exe.dev VM (URL unchanged in shape, new host + new token).
 - [ ] Old door goes quiet but **stays up** — Caddy access logs (or CLIProxyAPI
       request logs) confirm zero traffic on `:8443`/`:8484` after cutover.
-- [ ] **Burn-in: 7 days.** Rollback at any point = repoint `shelley.json`s
-      back to the old URLs/token; host stack is untouched until Phase 6.
-      Watch specifically for: token-refresh failures (both files were
-      _copied_ — first in-VM refresh is the real test), post-reboot
-      serve/subnet desync, and check flapping.
+- [ ] **Burn-in: 7 days** — spans sessions; record the start date and any
+      incidents on the TODO item so a later session can judge the gate.
+      Rollback at any point = repoint `shelley.json`s back to the old
+      URLs/token; host stack is untouched until Phase 6. Watch specifically
+      for: token-refresh failures (both files were _copied_ — first in-VM
+      refresh is the real test), post-reboot serve/subnet desync, and check
+      flapping.
 
 **Gate:** 7 clean days — no manual restarts, no check alerts, no consumer
 fallback.
