@@ -28,6 +28,7 @@ always-on rules live in `AGENTS.md`.
 | `apple-container-vms.md`     | Creating & using Apple Container VMs (exe.dev-equivalent, machine mode + Shelley)            |
 | `llm-gateway.md`             | Self-hosted Claude/Codex subscription LLM gateway on the mini — current form + target VM     |
 | `llm-gateway-migration.md`   | Approved plan: gateway host stack → AC appliance VM — phases, gates, host-fragility posture  |
+| `service-placement.md`       | Criterion: AC appliance VM vs. host for mini services (llm-gateway yes, personal-mcp no)     |
 | `monitoring.md`              | healthchecks.io registry — job↔check schedule pairs, grace rules, incidents                  |
 | `secrets.md`                 | Secret management — exe.dev integrations, 1Password patterns, MCP server auth                |
 | `multi-tenant.md`            | Future multi-tenant plan (gated on first paying client) — decisions, checklist               |
