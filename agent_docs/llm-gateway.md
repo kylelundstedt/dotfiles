@@ -132,12 +132,34 @@ down the host LaunchAgents + Caddy + the `:8443` serve.
 
 - **Custody:** all provider/subscription tokens stay on the mini; guests and
   remote VMs hold none. Target form isolates them further inside an AC VM.
-- **ToS gray zone (both vendors):** subscription OAuth tokens are meant for the
-  official Claude/Codex clients; CLIProxyAPI is an unofficial client, and
-  fanning multiple VMs through one subscription raises visibility. Account-flag
-  risk applies to both accounts. **Team scale-out should switch to metered API
-  keys behind a sanctioned gateway (e.g. Tailscale Aperture), not
-  subscriptions** — see `model-routing-economics.md`.
+- **NOT a gray zone any more — Anthropic addresses this explicitly (verified
+  2026-07-22).** This bullet previously called it a gray zone; that was accurate
+  when written and is now understated.
+  [Claude Code — Legal and compliance](https://code.claude.com/docs/en/legal-and-compliance)
+  states OAuth authentication "is designed to support **ordinary use of Claude
+  Code and other native Anthropic applications**," that limits "assume
+  **ordinary, individual usage** of Claude Code and the Agent SDK," that
+  Anthropic "does not permit third-party developers … to route requests through
+  Free, Pro, or Max plan credentials on behalf of their users," and that it
+  "reserves the right to take measures to enforce these restrictions and may do
+  so **without prior notice**." The docs tightened ~2026-02-19; enforcement
+  against third-party tools using Pro/Max quota began 2026-04-04. CLIProxyAPI is
+  not a native Anthropic application, so the Anthropic half of this gateway sits
+  outside the intended scope of subscription OAuth regardless of how few users
+  it serves — and is subject to being blocked without warning, which is an
+  availability risk as much as a policy one. The OpenAI half is a separate
+  question (OpenAI does sanction a device-code flow for ChatGPT accounts, which
+  is how exe.dev's own integration works) and has not been assessed here.
+- **The goal this gateway was built for has a supported answer.** Running
+  `claude` in a terminal on any VM is ordinary use of Claude Code and is fully
+  permitted; Claude Code is already installed and individually logged in across
+  the fleet. The gateway's distinct value is putting subscription-backed Claude
+  into a **non-native client's** model picker (Shelley) — which is the part the
+  policy addresses. Do not fan this out to more consumers; see
+  [shelley-dual-provider.md](shelley-dual-provider.md).
+- **Team scale-out should switch to metered API keys behind a sanctioned
+  gateway (e.g. Tailscale Aperture), not subscriptions** — see
+  `model-routing-economics.md`.
 - **CLIProxyAPI hardening (must persist across upgrades):** localhost bind,
   required `api-keys`, control panel + auto-update off, plugins off, usage stats
   off, `-local-model`. Never enable Home/cluster mode, Postgres/object-store

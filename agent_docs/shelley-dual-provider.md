@@ -1,12 +1,49 @@
 # Shelley dual-provider access (exe.dev OpenAI + personal-gateway Claude)
 
-> Status: design **verified end-to-end 2026-07-22** on two throwaway exe.dev
-> canaries (`gw-canary`, `merge-canary`, both deleted). NOT deployed. Gated
-> behind the llm-gateway burn-in close (~2026-07-28) and the custody work
-> below. Companion to [llm-gateway.md](llm-gateway.md) (the appliance) and
-> [model-routing-economics.md](model-routing-economics.md) (why it matters).
+> Status: **CLOSED 2026-07-22 — verified but NOT to be built.** The design below
+> works end to end (proven on two throwaway canaries, `gw-canary` and
+> `merge-canary`, both deleted). It is retained as a technical record only.
+> Do not implement it. Companion to [llm-gateway.md](llm-gateway.md) (the
+> appliance) and [model-routing-economics.md](model-routing-economics.md).
 
-## The problem
+## Why this is closed
+
+Two findings on 2026-07-22, in this order:
+
+1. **The premise is outside Anthropic's stated scope for subscription OAuth.**
+   [Claude Code — Legal and compliance](https://code.claude.com/docs/en/legal-and-compliance):
+   OAuth "is designed to support **ordinary use of Claude Code and other native
+   Anthropic applications**"; limits "assume **ordinary, individual usage**";
+   Anthropic "does not permit third-party developers … to route requests
+   through Free, Pro, or Max plan credentials on behalf of their users"; and it
+   "reserves the right to take measures to enforce these restrictions and may
+   do so **without prior notice**." Docs tightened ~2026-02-19; enforcement
+   against third-party tools using Pro/Max quota began 2026-04-04. Fanning a
+   non-native client across seven VMs moves further from "ordinary, individual,"
+   and a vendor-side block would take out Claude access fleet-wide with no
+   warning.
+2. **The goal was already met by a supported path.** The objective was "Claude
+   available on every exe.dev VM." Running `claude` in a terminal is ordinary
+   use of Claude Code — the native application — and is fully permitted. Claude
+   Code is installed and individually logged in on the fleet already
+   (`install.sh` distributes no credentials; each VM was logged in on its own).
+   So Claude Max is available on every VM today with **zero** infrastructure: no
+   merge proxy, no per-VM tokens, no service-account delivery, no dependency on
+   the mini.
+
+What the design would have added over that is Claude models inside **Shelley's
+model picker** — a non-native client — which is exactly the part the policy
+addresses. The residual gap is covered by the hybrid Claude Code → Shelley
+handoff in [model-routing-economics.md](model-routing-economics.md), which is
+now understood to be permanent rather than a stopgap.
+
+**Still useful from this work:** the measured fact base below (exe.dev's `llm`
+integration is OpenAI-only), the single-`llm_gateway`-slot constraint, the
+`.ts.net`/bare-IP limits on `http-proxy` targets, and the verified 1Password
+service-account delivery mechanism — that last one is generally applicable and
+is referenced from [secrets.md](secrets.md).
+
+## The problem (as it stood before the policy finding)
 
 Claude Max quota is unreachable from Shelley on exe.dev VMs, and exe.dev
 cannot fix that: per its integrations docs, **subscription backing exists only

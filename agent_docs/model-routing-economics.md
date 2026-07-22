@@ -12,12 +12,18 @@ adjacent agent harnesses. Pricing and the usage snapshot below are dated
 - Claude Max 5x is $100/month. Claude Fable 5 is the preferred model for
   difficult planning, but heavy use reaches Claude's subscription limits every
   few days.
-- **Claude Max quota is not available to Shelley.** Fable, Opus, and Sonnet
-  selected inside Shelley are exe.dev-managed API models: they consume the
-  limited included exe.dev Shelley allocation and then metered spend. Using
-  Fable through Claude Code is a separate harness and requires an explicit
-  cross-harness handoff; it must not be counted as a Shelley subscription
-  benefit.
+- **Claude Max quota is not available to Shelley, and cannot become
+  available** (see "Why this is permanent" below). Using Fable through Claude
+  Code is a separate harness and requires an explicit cross-harness handoff; it
+  must not be counted as a Shelley subscription benefit.
+- **Correction 2026-07-22:** an earlier version of this doc said Fable, Opus,
+  and Sonnet inside Shelley are exe.dev-managed API models drawing on the
+  allocation then metered spend. Measured false — the `llm` integration is
+  `providers=openai(chatgpt:chatgpt)` only, so `https://llm.int.exe.xyz/v1/models`
+  returns 39 unique models, **all OpenAI, zero Anthropic**. Claude models are
+  not selectable in Shelley on exe.dev VMs at any price. Enabling them means
+  configuring the integration's Anthropic slot (exe.dev gateway or an Anthropic
+  API key) — both metered.
 - The existing exe.dev plan includes a monthly Shelley-token allocation.
   Managed usage beyond that allocation is metered at the gateway's published
   per-token prices without markup.
@@ -50,8 +56,43 @@ There are two distinct workflows; do not mix their accounting.
 4. Use GLM or managed Sonnet in Shelley for execution, followed by GPT review.
 
 The hybrid workflow leverages Claude Max but is not an all-Shelley pipeline.
-Until a supported Claude-subscription provider exists in Shelley, there is no
-way to have both Fable planning inside Shelley and Claude Max economics.
+There is no way to have both Fable planning inside Shelley and Claude Max
+economics — and this is the permanent shape, not a stopgap.
+
+### Why this is permanent (2026-07-22)
+
+A supported Claude-subscription provider inside Shelley is precisely what
+Anthropic prohibits third parties from building.
+[Claude Code — Legal and compliance](https://code.claude.com/docs/en/legal-and-compliance):
+
+> **OAuth authentication** is intended exclusively for purchasers of Claude
+> Free, Pro, Max, Team, and Enterprise subscription plans and is designed to
+> support **ordinary use of Claude Code and other native Anthropic
+> applications**.
+
+> **Anthropic does not permit third-party developers to offer Claude.ai login
+> or to route requests through Free, Pro, or Max plan credentials on behalf of
+> their users.**
+
+> Advertised usage limits for Pro and Max plans assume **ordinary, individual
+> usage of Claude Code and the Agent SDK**. … Anthropic reserves the right to
+> take measures to enforce these restrictions and may do so **without prior
+> notice**.
+
+The docs were tightened around 2026-02-19 and enforcement against third-party
+tools using Pro/Max quota began in earnest on 2026-04-04. This is also the
+answer to "why does exe.dev have a ChatGPT subscription integration but no
+Claude one" — OpenAI ships a sanctioned device-code flow for ChatGPT accounts;
+Anthropic offers no third-party equivalent, and building one would make exe.dev
+the prohibited case verbatim.
+
+**The line is drawn at the client, not the machine.** Running `claude` in a
+terminal on an exe.dev VM is ordinary use of Claude Code — the native
+application — and is fully supported. Claude Code is already installed and
+individually logged in on the fleet, so **Claude Max is available on every VM
+today** without any additional infrastructure. What is not available, and will
+not be, is Claude models inside Shelley's own model picker. That gap is the
+reason the hybrid handoff above exists.
 
 ## Evidence: GPT-5.6 Sol versus Fable 5
 
@@ -59,18 +100,18 @@ As of 2026-07-19, the best public independent comparison is Artificial
 Analysis. Its results support treating the models as peers overall, with
 different strengths rather than assuming Fable is categorically superior.
 
-| Evaluation | GPT-5.6 Sol max | Fable 5 max | Interpretation |
-| --- | ---: | ---: | --- |
-| Intelligence Index v4.1 | 59 | 60 | Effectively tied overall |
-| Agentic Index | 54 | 53 | Effectively tied; slight Sol lead |
-| Coding Agent Index | 61 | 59 | Slight Sol/Codex lead |
-| DeepSWE | 69% | 66% | Sol/Codex lead |
-| Terminal-Bench v2 | 88% | 83% | Sol/Codex lead |
-| SWE-Atlas-QnA | 27% | 29% | Fable/Claude Code lead |
-| Coding-agent API cost/task | $7.08 | $11.72 | Sol cheaper |
-| Coding-agent active time/task | 10.2 min | 23.4 min | Sol faster |
-| GDPval-AA v2 Elo | 1743 ±19 | 1760 ±19 | Statistical tie |
-| AA-Briefcase Elo | 1496 ±12 | 1583 -15/+16 | Clear Fable lead |
+| Evaluation                    | GPT-5.6 Sol max |  Fable 5 max | Interpretation                    |
+| ----------------------------- | --------------: | -----------: | --------------------------------- |
+| Intelligence Index v4.1       |              59 |           60 | Effectively tied overall          |
+| Agentic Index                 |              54 |           53 | Effectively tied; slight Sol lead |
+| Coding Agent Index            |              61 |           59 | Slight Sol/Codex lead             |
+| DeepSWE                       |             69% |          66% | Sol/Codex lead                    |
+| Terminal-Bench v2             |             88% |          83% | Sol/Codex lead                    |
+| SWE-Atlas-QnA                 |             27% |          29% | Fable/Claude Code lead            |
+| Coding-agent API cost/task    |           $7.08 |       $11.72 | Sol cheaper                       |
+| Coding-agent active time/task |        10.2 min |     23.4 min | Sol faster                        |
+| GDPval-AA v2 Elo              |        1743 ±19 |     1760 ±19 | Statistical tie                   |
+| AA-Briefcase Elo              |        1496 ±12 | 1583 -15/+16 | Clear Fable lead                  |
 
 AA-Briefcase is particularly relevant to planning and professional deliverables.
 Fable's lead includes stronger rubric adherence and analytical quality; the
@@ -131,15 +172,15 @@ there is not yet a full-day or full-week history. A snapshot at approximately
 Applying the 2026-07-19 exe.dev gateway rates to exactly that initial workload
 shape gives this first-order counterfactual:
 
-| Candidate execution model | Initial 3.5-hour workload cost |
-| --- | ---: |
-| exe.dev-managed Claude Fable 5 | about $78.41 |
-| exe.dev-managed Claude Opus 4.8 | about $39.20 |
-| exe.dev-managed Claude Sonnet 5 | about $16.40 |
-| GLM 5.2 on Fireworks | about $11.52 |
-| Grok 4.5 | about $17.34 |
-| GPT-5.6 Sol through managed API | about $39.83 |
-| GPT-5.6 Sol through ChatGPT subscription | $0 marginal |
+| Candidate execution model                | Initial 3.5-hour workload cost |
+| ---------------------------------------- | -----------------------------: |
+| exe.dev-managed Claude Fable 5           |                   about $78.41 |
+| exe.dev-managed Claude Opus 4.8          |                   about $39.20 |
+| exe.dev-managed Claude Sonnet 5          |                   about $16.40 |
+| GLM 5.2 on Fireworks                     |                   about $11.52 |
+| Grok 4.5                                 |                   about $17.34 |
+| GPT-5.6 Sol through managed API          |                   about $39.83 |
+| GPT-5.6 Sol through ChatGPT subscription |                    $0 marginal |
 
 Do not extrapolate this short, unusually active setup session linearly to a
 month. Its value is as a concrete token-shape and per-heavy-session benchmark.
