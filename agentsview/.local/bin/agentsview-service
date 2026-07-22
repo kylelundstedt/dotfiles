@@ -21,8 +21,23 @@ TS_IP=$($TS_BIN ip -4 2>/dev/null | head -1)
 [[ -n "$TS_IP" ]] || { echo "FATAL: no Tailscale IPv4 address" >&2; exit 1; }
 
 AGENTSVIEW_AUTH_TOKEN=$(job_kc "agentsview:auth-token")
+# Remote/locked login Keychains may be unavailable during bootstrap. AgentsView
+# already requires remote-host tokens in its mode-0600 config, so accept its
+# native auth_token field as the fail-closed fallback until Keychain fan-out is
+# completed from an unlocked GUI login.
+if [[ -z "$AGENTSVIEW_AUTH_TOKEN" && -f "$DATA_DIR/config.toml" ]]; then
+    AGENTSVIEW_AUTH_TOKEN=$(python3 - "$DATA_DIR/config.toml" <<'PY'
+import pathlib
+import sys
+import tomllib
+
+with pathlib.Path(sys.argv[1]).open("rb") as config_file:
+    print(tomllib.load(config_file).get("auth_token", ""))
+PY
+)
+fi
 [[ -n "$AGENTSVIEW_AUTH_TOKEN" ]] || {
-    echo "FATAL: Keychain service agentsview:auth-token is missing" >&2
+    echo "FATAL: agentsview:auth-token is absent from Keychain and config.toml" >&2
     exit 1
 }
 export AGENTSVIEW_DATA_DIR="$DATA_DIR" AGENTSVIEW_AUTH_TOKEN

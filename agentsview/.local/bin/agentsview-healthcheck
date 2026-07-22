@@ -18,7 +18,17 @@ fail() {
 }
 
 TOKEN=$(job_kc "agentsview:auth-token")
-[[ -n "$TOKEN" ]] || fail "auth token missing from Keychain"
+if [[ -z "$TOKEN" && -f "$HOME/.agentsview/config.toml" ]]; then
+    TOKEN=$(python3 - "$HOME/.agentsview/config.toml" <<'PY'
+import pathlib
+import tomllib
+
+with pathlib.Path.home().joinpath(".agentsview/config.toml").open("rb") as config_file:
+    print(tomllib.load(config_file).get("auth_token", ""))
+PY
+)
+fi
+[[ -n "$TOKEN" ]] || fail "auth token missing from Keychain and config.toml"
 TS_IP=$(tailscale ip -4 2>/dev/null | head -1)
 [[ -n "$TS_IP" ]] || fail "no Tailscale IPv4 address"
 BASE="http://${TS_IP}:8080"
