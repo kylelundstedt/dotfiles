@@ -24,6 +24,7 @@ Best for: intermittent bugs, cross-layer regressions.
 ### Second-Opinion Gate
 
 Before merge on high-risk work:
+
 - Request one adversarial review from the other model.
 - Require at least one explicit "what could still fail?" pass.
 
@@ -41,10 +42,12 @@ Treat routing as default, not rigid policy.
 Agent teams (single-model parallelism) and dual models (cross-model diversity) solve different problems.
 
 Use agent teams when:
+
 - Work splits cleanly by module/layer.
 - You want parallel execution speed.
 
 Use dual models when:
+
 - Design quality and blind-spot detection matter most.
 - Problem framing is uncertain.
 
@@ -57,7 +60,7 @@ Rule of thumb: **parallel → worktree+branch; serial → just commit.**
 - **Sequential / single / read-only threads:** stay in the current checkout and commit between threads. The commit is the isolation — there's no concurrent thread to collide with.
 - **Concurrent threads that might edit overlapping files:** give each its own worktree + a named branch (better than Zed's default detached HEAD), then merge branches back one at a time.
 
-Worktrees solve *concurrency only* — branch-per-thread alone doesn't help, since all threads share one working directory. Don't make it unconditional: a fresh worktree starts cold (no `node_modules`/`.venv`/build artifacts to reuse, no gitignored local config such as `git/.gitconfig_local`), and parallel branches trade edit-time collisions for merge-time conflicts.
+Worktrees solve _concurrency only_ — branch-per-thread alone doesn't help, since all threads share one working directory. Don't make it unconditional: a fresh worktree starts cold (no `node_modules`/`.venv`/build artifacts to reuse, no gitignored local config such as `git/.gitconfig_local`), and parallel branches trade edit-time collisions for merge-time conflicts.
 
 ## Anti-Patterns
 

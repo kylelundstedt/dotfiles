@@ -1,10 +1,25 @@
 # Self-hosted LLM gateway (Claude + Codex subscriptions)
 
-> Status: built and verified on `klundstedt-mini` 2026-07-19. **Current form is
-> a host-level setup** (LaunchAgents + brew Caddy) — the expedient path used to
-> prove the concept. The **target form is an Apple Container appliance VM with
-> its own repo** (see "Target architecture"). This doc covers both; no secrets
-> here — credentials live in gitignored host paths noted below.
+> Status: **DECOMMISSIONED 2026-07-22. Nothing described here is running.**
+> Retained as a technical and decision record — do not rebuild from it without
+> reading "Security & caveats" first, which explains why it was retired.
+>
+> Both instances are gone: the Apple Container appliance VM (`llm-gateway`) and
+> the earlier host-level stack (LaunchAgents + brew Caddy). Also removed:
+> `~/.config/iv-sandbox/`, `~/.cli-proxy-api/` (Claude + Codex OAuth sessions),
+> the four `com.industryvault.*` LaunchAgents, both tailnet nodes, and the
+> `iv-sandbox` testbed VM. `llm-gateway.dojo-sun.ts.net` no longer resolves.
+> Full rationale and teardown order: [CHANGELOG.md](../CHANGELOG.md),
+> 2026-07-22.
+>
+> **Short version of why:** Anthropic scopes subscription OAuth to "ordinary use
+> of Claude Code and other native Anthropic applications" and does not permit
+> third parties to route requests through Pro/Max credentials; CLIProxyAPI is
+> not a native Anthropic application. The goal this served — Claude Max on the
+> VM fleet — is met by running `claude` in a terminal, which is fully supported.
+>
+> Historical description follows, describing the setup as it existed
+> 2026-07-19..22.
 
 ## What it is
 

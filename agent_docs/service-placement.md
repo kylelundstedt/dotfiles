@@ -2,6 +2,12 @@
 
 > Decision criterion recorded 2026-07-21, when deciding whether personal-mcp
 > should follow llm-gateway into an Apple Container appliance VM (answer: no).
+>
+> Note: `llm-gateway`, the worked example that motivated this rule, was itself
+> **decommissioned 2026-07-22** ([CHANGELOG.md](../CHANGELOG.md)) — for policy
+> reasons unrelated to placement. The criterion below is unaffected and stands
+> as general guidance; treat the llm-gateway references as an illustrative case,
+> not a running service.
 
 ## The rule
 

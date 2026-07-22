@@ -1,12 +1,15 @@
 # LLM gateway migration plan — host stack → AC appliance VM
 
-> Status: IN EXECUTION. Phases 1–3 complete and gates passed 2026-07-21;
-> Phase 4 agent-executable items done; **paused awaiting operator
-> touchpoints** (reboot tests + healthchecks.io project) — see Execution
-> log. Companion to [llm-gateway.md](llm-gateway.md) (current form + target
-> rationale) and [apple-container-vms.md](apple-container-vms.md) (build
-> mechanics). Work the phases top to bottom — each has an acceptance gate;
-> don't start the next phase until the gate passes.
+> Status: **ABANDONED 2026-07-22 — migration completed, then the whole gateway
+> was decommissioned the next day.** The AC appliance was built and burn-in
+> started 2026-07-21; on 2026-07-22 the gateway's premise was found to be
+> outside Anthropic's stated scope for subscription OAuth, and both the
+> appliance and the old host stack were torn down. Phase 6 (teardown) effectively
+> happened, but for a different reason than planned — not "host stack retired in
+> favour of the VM" but "the entire approach retired." Retained as an execution
+> record. Rationale + teardown order: [CHANGELOG.md](../CHANGELOG.md),
+> 2026-07-22; policy detail: [llm-gateway.md](llm-gateway.md) "Security &
+> caveats".
 
 ## End state
 

@@ -52,9 +52,9 @@ Git's `hasconfig` treats `/` as a path-component boundary, so a plain `*` won't
 cross the slashes in `https://…exe.xyz/`. Two globs per org are needed to cover
 all remote shapes:
 
-| glob | exe.dev proxy | `https://github.com/` |
-| --- | --- | --- |
-| `**/<org>/**` | ✅ | ✅ |
+| glob          | exe.dev proxy | `https://github.com/` |
+| ------------- | ------------- | --------------------- |
+| `**/<org>/**` | ✅            | ✅                    |
 
 The HTTPS-only transport policy needs one line per org. In `git/.gitconfig`,
 replace the `gitdir:` block with:
@@ -84,7 +84,7 @@ A mixed-case work org therefore needs two HTTPS forms: canonical
 `~/.gitconfig_personal` / `~/.gitconfig_work` are **gitignored** (they hold the
 emails, kept out of the public repo). Today `install.sh` generates only
 `.gitconfig_local` (the default) — the personal/work fragments are created
-*manually*, so **they don't exist on the VMs at all**. A `hasconfig` include
+_manually_, so **they don't exist on the VMs at all**. A `hasconfig` include
 pointing at a missing file silently no-ops → the VM would fall through to the
 default. So `install.sh` must be extended to generate `.gitconfig_personal`
 (`kyle@lundstedt.us`) and `.gitconfig_work` (`klundstedt@industryvault.com`)
@@ -95,11 +95,11 @@ committed.
 ### Why this satisfies every constraint
 
 - **Pt 1 (flat `~/<repo>`):** identity ignores location entirely.
-- **Pt 3 (multi-org VM + migration):** each repo resolves by *its own* remote,
+- **Pt 3 (multi-org VM + migration):** each repo resolves by _its own_ remote,
   in the same `~`; migrating `kylelundstedt → industryvault` changes the remote
   and flips identity automatically — no per-repo, per-VM, or re-clone step.
 - **Pt 4 (`/Users` vs `/home`, grouped vs flat):** remote-based → path- and
-  home-independent; the *same committed gitconfig* works on both. This lets us
+  home-independent; the _same committed gitconfig_ works on both. This lets us
   **retire the `gitdir:` includeIf** — `hasconfig` subsumes it on macOS too.
 
 ## GitHub HTTPS migration ownership and integration boundaries
@@ -117,8 +117,8 @@ Project VMs consume dotfiles and iv-image; they do not author either
 repository. The named consumer integrations are read-only and were created
 without `--act-as-user`:
 
-| Repository | Consumer integration | Attachments |
-| --- | --- | --- |
+| Repository               | Consumer integration            | Attachments                                                   |
+| ------------------------ | ------------------------------- | ------------------------------------------------------------- |
 | `kylelundstedt/dotfiles` | `github-kylelundstedt-dotfiles` | all ordinary project VMs; ephemeral canaries while under test |
 | `kylelundstedt/iv-image` | `github-kylelundstedt-iv-image` | all ordinary project VMs; ephemeral canaries while under test |
 

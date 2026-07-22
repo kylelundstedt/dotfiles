@@ -2,10 +2,16 @@
 
 > Status: verified on `klundstedt-mini` 2026-07-19, macOS 26.5.2,
 > `apple/container` 1.0.0 (Kata guest kernel). This is the AC counterpart to how
-> we create/use exe.dev VMs (`exe-dev` skill, `exe-dev-web.md`). First working
-> instance: `iv-sandbox` (a local Shelley VM). The `apple-containers` **skill**
-> predates this and uses the older `container run` + `ubuntu` path — this doc is
-> the current, machine-mode approach; update the skill to match.
+> we create/use exe.dev VMs (`exe-dev` skill, `exe-dev-web.md`). The
+> `apple-containers` **skill** predates this and uses the older `container run` +
+> `ubuntu` path — this doc is the current, machine-mode approach; update the
+> skill to match.
+>
+> The `iv-sandbox` and `llm-gateway` machines used as worked examples below were
+> **deleted 2026-07-22** ([CHANGELOG.md](../CHANGELOG.md)); the commands and
+> mechanics are unchanged and still correct — treat the names as illustrative,
+> not as running machines. As of 2026-07-22 there are no Apple Container machines
+> on the mini.
 
 ## What this gives you
 

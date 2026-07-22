@@ -143,7 +143,7 @@ herdr server.
       (iPhone + iPad); the free tier does not sync connections.
       **moshi-hook** (the "1 not installed" prompt — unlocks context detection / diff view /
       web preview) is **installed on the mini 2026-07-18**: `brew tap rjyo/moshi; brew install
-    moshi-hook; brew services start moshi-hook`. Mini-only + a third-party tap that needs
+  moshi-hook; brew services start moshi-hook`. Mini-only + a third-party tap that needs
       `brew trust rjyo/moshi`, so it's NOT in the Brewfile (would over-provision the mbp and
       trip the trust gate) — reinstall by hand on a mini rebuild. Brew taps use their native
       HTTPS remotes and do not depend on SSH rewrite rules.

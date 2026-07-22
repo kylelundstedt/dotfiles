@@ -105,10 +105,12 @@ Lifecycle (create, join tailnet, upgrade) lives in the `exe-dev` /
   avoid redundant downloads. On IV VMs, including Apple Container guests with
   `~/iv-provision.lock`, it runs as a thin personal overlay on top of
   iv-image's `provision-iv.sh` (see [repo-boundaries.md](repo-boundaries.md)).
-- **AgentsView canaries:** `iv-docs` (exe.dev) and `iv-sandbox` (Apple Container
-  guest) run the pinned, tailnet-only authenticated source service. Binary
-  installation is unconditional in `iv-image`; service activation requires a
-  joined tailnet and a mode-`0600` per-host token file.
+- **AgentsView canaries:** `iv-docs` (exe.dev) runs the pinned, tailnet-only
+  authenticated source service. (`iv-sandbox`, the original second canary, was
+  decommissioned 2026-07-22 with the LLM gateway — see
+  [CHANGELOG.md](../CHANGELOG.md).) Binary installation is unconditional in
+  `iv-image`; service activation requires a joined tailnet and a mode-`0600`
+  per-host token file.
 - Shell change targets zsh; in non-interactive mode it may be skipped without
   sudo/root.
 

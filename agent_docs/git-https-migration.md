@@ -18,15 +18,15 @@ Git transport uses HTTPS everywhere:
 
 ## Affected source and hosts
 
-| Area | Change |
-| --- | --- |
-| `git/.gitconfig_{macos,linux}` | Remove SSH Git transport and SSH-signing configuration. |
-| `zsh/.zshrc` | Remove forwarded-agent commit-signing activation. |
-| `install.sh` | Clear stale local signing settings; authenticate GitHub CLI for HTTPS. |
-| `sync-repos.sh` | Use direct HTTPS remotes without SSH rewrite workarounds. |
-| Documentation | Remove claims that 1Password SSH forwarding signs or pushes Git. |
-| `klundstedt-mini` | Source author/merge host for dotfiles and iv-image; fleet rollout coordinator. |
-| Ephemeral exe.dev canary | On-demand Linux validation with read-only repo integrations by default. |
+| Area                           | Change                                                                         |
+| ------------------------------ | ------------------------------------------------------------------------------ |
+| `git/.gitconfig_{macos,linux}` | Remove SSH Git transport and SSH-signing configuration.                        |
+| `zsh/.zshrc`                   | Remove forwarded-agent commit-signing activation.                              |
+| `install.sh`                   | Clear stale local signing settings; authenticate GitHub CLI for HTTPS.         |
+| `sync-repos.sh`                | Use direct HTTPS remotes without SSH rewrite workarounds.                      |
+| Documentation                  | Remove claims that 1Password SSH forwarding signs or pushes Git.               |
+| `klundstedt-mini`              | Source author/merge host for dotfiles and iv-image; fleet rollout coordinator. |
+| Ephemeral exe.dev canary       | On-demand Linux validation with read-only repo integrations by default.        |
 
 ## Source migration
 

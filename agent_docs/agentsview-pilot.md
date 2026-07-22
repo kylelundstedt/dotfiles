@@ -448,16 +448,16 @@ Every active agent-capable tailnet host, checked 2026-07-22. All six exe.dev VMs
 already carry the `agentsview-source.service` unit from `iv-image`; none is
 enabled, so none of this history is collected:
 
-| Host                  | Shelley db | Claude jsonl | Codex jsonl | Source daemon |
-| --------------------- | ---------- | ------------ | ----------- | ------------- |
-| `iv-docs`             | present    | 55 sessions  | none        | **active**    |
-| `iv-sandbox`          | present    | none         | none        | **active**    |
-| `kgl-thoughts`        | 49M        | 111          | 7           | inactive      |
-| `iv-gitlake-examples` | 12M        | 4            | 3           | inactive      |
-| `rss-feed`            | 9.9M       | 0            | 0           | inactive      |
-| `iv-gitlake`          | 2.3M       | 0            | 0           | inactive      |
-| `iv-home`             | 908K       | 1            | 0           | inactive      |
-| `iv-ave-adapters`     | 172K       | 1            | 0           | inactive      |
+| Host                  | Shelley db | Claude jsonl | Codex jsonl | Source daemon             |
+| --------------------- | ---------- | ------------ | ----------- | ------------------------- |
+| `iv-docs`             | present    | 55 sessions  | none        | **active**                |
+| `iv-sandbox`          | —          | —            | —           | decommissioned 2026-07-22 |
+| `kgl-thoughts`        | 49M        | 111          | 7           | inactive                  |
+| `iv-gitlake-examples` | 12M        | 4            | 3           | inactive                  |
+| `rss-feed`            | 9.9M       | 0            | 0           | inactive                  |
+| `iv-gitlake`          | 2.3M       | 0            | 0           | inactive                  |
+| `iv-home`             | 908K       | 1            | 0           | inactive                  |
+| `iv-ave-adapters`     | 172K       | 1            | 0           | inactive                  |
 
 `kgl-thoughts` is the largest uncollected host by an order of magnitude.
 `llm-gateway` is excluded as a service-only appliance (no agent harness, SSH

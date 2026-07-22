@@ -4,6 +4,55 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-07-22 — LLM gateway and iv-sandbox decommissioned
+
+Retired the self-hosted Claude/Codex subscription gateway entirely, one day into
+its burn-in, after establishing that its premise is outside Anthropic's stated
+scope for subscription OAuth.
+
+- **Why.** [Claude Code — Legal and compliance](https://code.claude.com/docs/en/legal-and-compliance)
+  states OAuth authentication "is designed to support **ordinary use of Claude
+  Code and other native Anthropic applications**", that advertised Pro/Max
+  limits "assume **ordinary, individual usage**", that Anthropic "does not
+  permit third-party developers … to route requests through Free, Pro, or Max
+  plan credentials on behalf of their users", and that it "reserves the right to
+  take measures to enforce these restrictions and may do so **without prior
+  notice**". The docs tightened ~2026-02-19; enforcement against third-party
+  tools using Pro/Max quota began 2026-04-04. CLIProxyAPI is not a native
+  Anthropic application.
+- **What replaced it: nothing.** The objective was Claude Max available on the
+  VM fleet. Running `claude` in a terminal is ordinary use of the native client
+  and is fully permitted — Claude Code is already installed and individually
+  logged in across the fleet (`install.sh` distributes no Claude credentials).
+  The gateway's distinct capability was putting subscription-backed Claude into
+  a **non-native** client's model picker (Shelley), which is the part the policy
+  addresses. That gap is covered by the hybrid Claude Code → Shelley handoff in
+  `model-routing-economics.md`, now understood as permanent.
+- **Also answered:** why exe.dev ships a ChatGPT subscription integration but no
+  Claude one. OpenAI sanctions a device-code flow for ChatGPT accounts;
+  Anthropic offers no third-party equivalent, and building one would make
+  exe.dev the prohibited case verbatim. Its `llm` integration is
+  `providers=openai(chatgpt:chatgpt)` — 39 models, all OpenAI, zero Anthropic.
+- **Decommission order** (dependencies first): deregistered `iv-sandbox` from
+  the AgentsView collector and restarted it (8 sources → 7) after confirming its
+  4 sessions were already collected through 2026-07-22 02:58; unloaded four
+  `com.industryvault.*` LaunchAgents; stopped and deleted both Apple Container
+  machines (`iv-sandbox`, `llm-gateway`); removed the plists,
+  `~/.config/iv-sandbox/`, and `~/.cli-proxy-api/` (Claude + Codex OAuth
+  sessions); deleted both stale tailnet nodes via the Tailscale API.
+  `llm-gateway.dojo-sun.ts.net` no longer resolves.
+- **Gotcha for any similar teardown.** A healthchecks.io check cannot be paused
+  from its ping URL (`/pause` returns 400) — it needs the owning project's API
+  key, and the `llm-gateway` project's key was dashboard-only. Expect one
+  spurious DOWN alert unless the check is deleted from the dashboard first.
+  Likewise, deleting credential files does **not** revoke the underlying OAuth
+  sessions; those must be signed out vendor-side.
+- **Kept from the abandoned work:** the verified 1Password service-account
+  delivery mechanism (now generally applicable, documented in `secrets.md`), the
+  secret-placement tiering, and the measured facts about exe.dev's LLM
+  integration. `shelley-dual-provider.md` is retained as a closed technical
+  record.
+
 ## 2026-07-22 — AgentsView pilot collector and canaries live
 
 - Installed AgentsView `v0.38.1` on `klundstedt-mini` through the Homebrew cask

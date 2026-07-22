@@ -224,23 +224,23 @@ should not open the live Shelley database alongside Shelley.
 
 ## Assessment against the operating-memory criteria
 
-| Criterion | Status | Assessment |
-| --- | --- | --- |
-| Firm possesses the stored data | Pass | The SQLite database is local and directly readable without Shelley. |
-| Open, movable format | Conditional pass | Standard SQLite is portable, but a live copy must include a consistent WAL-safe snapshot. |
-| Complete/current/authoritative memory | Partial | Authoritative for Shelley conversation state, not for all operational artifacts or customer systems. |
-| Conversation and tool history | Strong partial pass | Rich prompts, responses, tool activity, model, usage, generations, and forks are retained. |
-| Exact provider traffic | Fail | Raw request/response logging was removed. |
-| Retrieval index | Partial | Owned FTS5 exists for selected transcript text, not broader operating memory. |
-| Governed prompt library | Outside DB | Instructions and skills live in files/repos; ownership depends on their versioning and backup. |
-| Eval library | Fail in Shelley | No first-class eval-case, expected-result, or certification store exists. |
-| Rules, exceptions, approvals | Fail as governed entities | They may appear in prose but are not normalized, reviewed, effective-dated records. |
-| Immutable audit history | Fail | Rows are mutable; deleting a conversation cascades to its messages. |
-| Model contestability | Partial | Model identity is retained, but exact prompt assembly and harness semantics are not fully captured. |
-| Successor without incumbent permission | Data pass; operational partial | A successor can read/export the bits but may not reproduce undocumented harness behavior exactly. |
-| Harness telemetry auditable | Partial/unverified | Local activity is visible; remote harness/provider telemetry and retention require separate verification. |
-| Security and custody | Needs hardening | The inspected DB and WAL files were plaintext mode `0644` under a mode `0755` directory. |
-| Client isolation | Not established by the DB | Enterprise use needs explicit tenant boundaries, authorization, keys, retention, and deletion controls. |
+| Criterion                              | Status                         | Assessment                                                                                                |
+| -------------------------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| Firm possesses the stored data         | Pass                           | The SQLite database is local and directly readable without Shelley.                                       |
+| Open, movable format                   | Conditional pass               | Standard SQLite is portable, but a live copy must include a consistent WAL-safe snapshot.                 |
+| Complete/current/authoritative memory  | Partial                        | Authoritative for Shelley conversation state, not for all operational artifacts or customer systems.      |
+| Conversation and tool history          | Strong partial pass            | Rich prompts, responses, tool activity, model, usage, generations, and forks are retained.                |
+| Exact provider traffic                 | Fail                           | Raw request/response logging was removed.                                                                 |
+| Retrieval index                        | Partial                        | Owned FTS5 exists for selected transcript text, not broader operating memory.                             |
+| Governed prompt library                | Outside DB                     | Instructions and skills live in files/repos; ownership depends on their versioning and backup.            |
+| Eval library                           | Fail in Shelley                | No first-class eval-case, expected-result, or certification store exists.                                 |
+| Rules, exceptions, approvals           | Fail as governed entities      | They may appear in prose but are not normalized, reviewed, effective-dated records.                       |
+| Immutable audit history                | Fail                           | Rows are mutable; deleting a conversation cascades to its messages.                                       |
+| Model contestability                   | Partial                        | Model identity is retained, but exact prompt assembly and harness semantics are not fully captured.       |
+| Successor without incumbent permission | Data pass; operational partial | A successor can read/export the bits but may not reproduce undocumented harness behavior exactly.         |
+| Harness telemetry auditable            | Partial/unverified             | Local activity is visible; remote harness/provider telemetry and retention require separate verification. |
+| Security and custody                   | Needs hardening                | The inspected DB and WAL files were plaintext mode `0644` under a mode `0755` directory.                  |
+| Client isolation                       | Not established by the DB      | Enterprise use needs explicit tenant boundaries, authorization, keys, retention, and deletion controls.   |
 
 ## Important conceptual boundary
 
