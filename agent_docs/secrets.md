@@ -3,9 +3,68 @@
 Secrets are never committed. Prefer integrations or 1Password/Keychain; when a
 service requires a local secret file, keep it narrowly scoped and mode `0600`.
 
+## Choosing where a secret lives
+
+Work down this list and stop at the first tier that fits. The ordering is by
+what an attacker gets from a compromised VM, not by convenience.
+
+| Tier | Mechanism                                  | Secret on VM?           | What a compromised VM yields                                                      |
+| ---- | ------------------------------------------ | ----------------------- | --------------------------------------------------------------------------------- |
+| 1    | Typed exe.dev integration (`github`, `s3`) | No                      | Ability to _use_ the credential, scoped by the integration; nothing to exfiltrate |
+| 2    | Generic exe.dev `http-proxy` integration   | No                      | Same — the header is injected server-side at egress                               |
+| 3    | 1Password service account + `op run`       | Yes — the SA token      | Everything in the vault that SA can read                                          |
+| 4    | Plaintext secret in an env file            | Yes — the secret itself | The secret, directly                                                              |
+
+**Decision rule.** Ask, in order:
+
+1. Is there a **typed** integration for this service (`github`, `s3`)? Use it —
+   it carries semantics you'd otherwise hand-roll (`--readonly`, per-repo
+   scoping).
+2. Can the tool be pointed at a **custom base URL**, and is its backend a
+   **public HTTPS host**? Use a generic `http-proxy` integration. This covers
+   far more than it appears: `tailscale-api`, `motherduck-api`, and both
+   `github-mcp-*` entries below are all the same `http-proxy` type with
+   different targets and headers — there is no per-vendor integration type
+   involved.
+3. Otherwise — the tool needs a **literal secret value** in its environment or
+   config, speaks something other than HTTPS, can't take a custom base URL, or
+   the target isn't a public hostname — use a **1Password service account**
+   with `op run --env-file` (tier 3).
+4. Never tier 4 for anything new.
+
+**Why the target can't be private (tier 2's real limit).** exe.dev's proxy
+egresses from exe.dev's infrastructure, not from the VM, and it rejects targets
+it could never reach — verified 2026-07-22:
+
+```
+--target=https://<host>.ts.net  → "target URL must not use a .ts.net domain"
+--target=https://100.127.121.69 → "target URL must use a hostname, not an IP address"
+```
+
+So anything on the tailnet is out of reach of tier 2 by construction, and drops
+to tier 3.
+
+**What tier 3 costs, stated plainly.** It does not keep secrets off the VM — it
+swaps an application secret for an `OP_SERVICE_ACCOUNT_TOKEN` in a `0600`
+`EnvironmentFile`. The gains are real but specific: the SA token is centrally
+revocable, scoped to one vault, grants no direct access to the underlying
+service, and rotating the underlying secret becomes a 1Password edit plus a
+service restart rather than a per-VM file edit. **This is why vault-per-project
+matters** — the token's blast radius is exactly one vault, so scope one vault
+and one read-only SA per project. Do not store an SA's own credential item in
+the vault that SA can read.
+
+Mechanism verified 2026-07-22 (gates, gotchas, and the fails-closed behavior):
+[shelley-dual-provider.md](shelley-dual-provider.md) → "1Password
+service-account delivery". For client-scoped extensions of this tiering, see
+[multi-tenant.md](multi-tenant.md).
+
 ## exe.dev VMs
 
-No credentials on VM disk. Integrations are scoped by tag (client/project) or per-VM:
+No _application_ credentials on VM disk — integrations inject them server-side.
+The sole exception is a tier-3 bootstrap credential (an `OP_SERVICE_ACCOUNT_TOKEN`
+scoped to one project vault), used only where no integration can reach the
+target. Integrations are scoped by tag (client/project) or per-VM:
 
 | Integration           | Type       | Scope        | Purpose                                                     |
 | --------------------- | ---------- | ------------ | ----------------------------------------------------------- |
@@ -80,7 +139,7 @@ op run --env-file=.env -- your-command
 ## Platform Notes
 
 - **macOS** — 1Password desktop app handles auth (biometric on first access)
-- **Linux VMs** — 1Password CLI not configured; secrets come from exe.dev integrations or are passed as ephemeral env vars from the Mac
+- **Linux VMs** — `install.sh` installs the 1Password CLI (`op`), but no account is signed in and none is needed: `op` authenticates non-interactively from `OP_SERVICE_ACCOUNT_TOKEN` alone (no desktop-app integration, unlike macOS). Secrets otherwise come from exe.dev integrations. Note service accounts require an explicit `--vault` on `op item get`, so scripts written against a signed-in `op` will break
 
 ## Credential Inventory & Rotation Runbook
 

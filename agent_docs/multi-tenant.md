@@ -15,6 +15,15 @@ setup. Nothing here is active work; the trigger is the first paying client.
   Full analysis: `gitlake:iv/reference/exe_dev_multi_tenant.md`.
 - **2026-07-13** (`repo-boundaries.md`) — when the first client lands, the
   repo split to make is personal-vs-client, not further slicing of this repo.
+- **2026-07-22** (`secrets.md` → "Choosing where a secret lives") — the
+  four-tier secret-placement rule extends to clients by scope substitution:
+  per-**client** vault + per-client read-only 1Password service account
+  wherever tier 3 is unavoidable, exactly as per-project works today. The
+  tiering matters more under multi-tenancy, not less: a tier-3 SA token on a
+  VM yields everything in the vault it can read, so the vault boundary _is_
+  the client isolation boundary for any secret an exe.dev integration cannot
+  carry. Prefer tiers 1–2 for client work whenever the target is a public
+  HTTPS host.
 
 ## Build-out checklist (in order)
 

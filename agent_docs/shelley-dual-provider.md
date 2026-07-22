@@ -138,11 +138,12 @@ the real cost of this design.
    VM rather than fan out one shared token to seven. Converts a compromise
    from "rotate everything" to "revoke one VM." The rotation runbook in the
    llm-gateway repo README assumes a single shared token and needs revising.
-2. **Token delivery.** Plaintext `EnvironmentFile` (iv-sandbox's current
-   pattern) does not scale to the fleet. Intended path is the 1Password
-   service-account item already on TODO (`op run --env-file`). Note this
-   trades the gateway token for an SA token on the VM — the gain is central
-   revocation and no gateway secret at rest, not elimination.
+2. **Token delivery — mechanism VERIFIED 2026-07-22** (spike on canary
+   `op-spike`, deleted; see "1Password service-account delivery" below).
+   Plaintext `EnvironmentFile` (iv-sandbox's current pattern) does not scale to
+   the fleet; `op run --env-file` under a per-project service account does, and
+   fails closed. Still trades the gateway token for an SA token on the VM — the
+   gain is central revocation and no gateway secret at rest, not elimination.
 3. **`-disable-llm-integration` is a silent-failure surface.** Omit it and the
    VM quietly reverts to OpenAI-only with no error. Needs a healthcheck
    assertion, not just a provisioning step.
@@ -151,6 +152,42 @@ the real cost of this design.
    appear and fail (404 at the merge proxy — clean, but the picker still
    lies). Adding a `/fireworks/*` route would make them real if that slot is
    ever enabled on the exe.dev integration.
+
+## 1Password service-account delivery (spike, 2026-07-22)
+
+Verified on the mini and on a bare exeuntu canary (`op-spike`, x86_64, both
+since deleted). Test SA scoped read-only to a single `gitlake-spikes` vault.
+
+| Gate                                | Result                                                                                   |
+| ----------------------------------- | ---------------------------------------------------------------------------------------- |
+| Plan supports service accounts      | ✅ `User Type: SERVICE_ACCOUNT`; SA sees exactly the one granted vault                   |
+| `op run --env-file` non-interactive | ✅ resolves with only `OP_SERVICE_ACCOUNT_TOKEN` — no desktop-app integration needed     |
+| systemd `ExecStart` wrapping        | ✅ `ExecStart=/usr/local/bin/op run --env-file=… -- <binary>`; child sees resolved value |
+| Fails closed                        | ✅ see below                                                                             |
+
+**Fails closed, which is the important property.** Missing `EnvironmentFile`
+→ systemd refuses the job outright and the unit never executes. Bad secret
+reference → `op` exits 1 with a precise journal line (`could not find item … in
+vault …`) and the service fails. Restoring either recovers on the next start.
+In neither case does the service come up with an empty or unresolved secret.
+
+Gotchas worth carrying into any implementation:
+
+- **Service accounts require an explicit `--vault`** on `op item get`
+  (`a vault query must be provided when this command is called by a service
+account`). Scripts written against a normally signed-in `op` will break.
+- `install.sh`'s existing Linux `op` install path works unchanged on x86_64
+  (v2.35.0 at time of test) — VMs need no new provisioning to support this.
+- Do **not** store an SA's own credential item in the vault that SA can read
+  (the test setup did; that was 1Password's default placement, not a design
+  choice).
+
+**Not directly proven: rotation.** The test SA was read-only, so no secret
+value could be changed and observed. Indirect evidence is strong — changing the
+_reference_ took effect on the very next service start, and an invalid one
+failed at start, so resolution happens per process start rather than at install
+time. "Update the 1P item, restart the service" follows, but deserves one
+direct confirmation against a writable item before it is relied on.
 
 ## Failure domain
 
