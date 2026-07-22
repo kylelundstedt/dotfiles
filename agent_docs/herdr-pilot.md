@@ -30,7 +30,7 @@ herdr server.
   next to their code**; clients attach to view them.
 - **Do NOT collapse this into one hub session with ssh panes into the other machines** —
   herdr's agent-state sidebar is blind to agents on the far side of a raw ssh pane. Reach a
-  remote with `herdr --remote <host>`, which attaches to *that host's herdr server* (the
+  remote with `herdr --remote <host>`, which attaches to _that host's herdr server_ (the
   sidebar sees its agents); an ssh pane does not, and is the anti-pattern.
 - `klundstedt-mini` is the **always-on** server (monitored; hub-mcp at localhost; the only
   machine that can ever send iMessage / run LM Studio). Its repos live in named per-project
@@ -55,7 +55,7 @@ herdr server.
   Plain `herdr-layout <name>` keeps the desk split (claude top / codex bottom). yazi dropped.
 - **Phone — web alternative: [collie](https://github.com/AltanS/collie)** (community plugin).
   A tailnet-only PWA (Bun bridge + `systemd --user`, `tailscale serve` on :8787) that surfaces
-  a host's herdr agents in a phone browser with push notifications — the "web UI to *local*
+  a host's herdr agents in a phone browser with push notifications — the "web UI to _local_
   agents" that Shelley's cloud UI structurally can't be (Shelley can't reach tailnet-only
   `hub-mcp`). Same slot as the ttyd browser-view under Boundaries, purpose-built. **Trust:**
   it is "remote shell access to your machine by design" — `tailscale serve` only (never
@@ -71,6 +71,25 @@ herdr server.
   pinned in iv-image `provision-iv.sh` for VMs, floating in dotfiles `install.sh` for Macs
   (`team` row in `provisioning/tools.manifest`). VMs not yet reprovisioned still get the
   binary via `herdr --remote <vm>` self-bootstrap.
+
+### Screenshot → remote agent (image paste; verified 2026-07-21)
+
+- **Flow:** capture to the clipboard with `Cmd+Ctrl+Shift+4` (the Ctrl targets the
+  clipboard, not a Desktop file), focus the agent pane in the `herdr --remote` window,
+  press **`Ctrl+V`** — NOT Cmd+V. The local herdr client intercepts the chord
+  (`keys.remote_image_paste`, default `ctrl+v`), reads the local clipboard, stages the
+  image to a temp file on the server (`/var/folders/…/herdr-clipboard-images-<uid>/`),
+  and pastes that path; Claude Code attaches it as `[Image #N]`.
+- **Why not Cmd+V:** Cmd-chords have no tty byte encoding — the terminal consumes them
+  itself (Ghostty's Cmd+V pastes clipboard _text_), so no app inside a terminal can ever
+  bind Cmd+anything. Ctrl+V is a real byte (0x16), reaches the client, and matches Claude
+  Code's own local image-paste key — same muscle memory local and remote.
+- **Finder drag** onto the remote pane is bridged the same way (staged remotely, not a
+  useless local path) since herdr 0.7.2.
+- **This only works under `herdr --remote`** — the bridge lives in the local thin client.
+  The ssh-then-run-herdr anti-pattern (above) has no local-desktop access, another reason
+  it stays the anti-pattern. Phone path (Moshi) has no equivalent; images from the phone
+  still need a file transfer.
 
 ## Boundaries (decided in the same discussion)
 
@@ -106,8 +125,8 @@ herdr server.
       pubkey-only → Password auth fails; the "leave empty for Tailscale SSH" hint is for
       port-22 connections, not this), **Connection = Mosh** (this reveals the **Mosh path**
       field) → `/opt/homebrew/bin/mosh-server`.
-      **mosh-server-PATH gotcha:** mosh invokes mosh-server through a *non-login* shell that
-      lacks `/opt/homebrew/bin`, so the explicit Mosh-path is load-bearing. The *interactive*
+      **mosh-server-PATH gotcha:** mosh invokes mosh-server through a _non-login_ shell that
+      lacks `/opt/homebrew/bin`, so the explicit Mosh-path is load-bearing. The _interactive_
       shell mosh then spawns is a full login zsh (`herdr`/`herdr-layout` on PATH) — **no
       `chsh` needed** (login shell already `/bin/zsh`). When restoring an empty herdr session,
       spawn the login shell (`herdr agent start … -- zsh -l`), never `-- bash`, or attaches
@@ -119,12 +138,12 @@ herdr server.
       instead. Also: iOS nodes have `keyExpiryDisabled`, so a long-offline phone isn't
       expired — it just needs its Tailscale VPN actually re-established (VPN-config / On-Demand
       / conflicting-VPN, not tags/ACL).
-      **Cost:** Moshi's *Herdr panel* is metered (10 free uses, then paid Unlock); the plain
+      **Cost:** Moshi's _Herdr panel_ is metered (10 free uses, then paid Unlock); the plain
       mosh terminal session is free. **Pro** (paid) shares saved hosts across up to 3 devices
       (iPhone + iPad); the free tier does not sync connections.
       **moshi-hook** (the "1 not installed" prompt — unlocks context detection / diff view /
       web preview) is **installed on the mini 2026-07-18**: `brew tap rjyo/moshi; brew install
-      moshi-hook; brew services start moshi-hook`. Mini-only + a third-party tap that needs
+    moshi-hook; brew services start moshi-hook`. Mini-only + a third-party tap that needs
       `brew trust rjyo/moshi`, so it's NOT in the Brewfile (would over-provision the mbp and
       trip the trust gate) — reinstall by hand on a mini rebuild. Note: `brew tap` over HTTPS
       only works now because the git rewrite was changed to `pushInsteadOf` (see
