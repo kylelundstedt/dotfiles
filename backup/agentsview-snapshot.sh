@@ -16,6 +16,9 @@ LOCKDIR=/tmp/agentsview-snapshot.lock
 [[ -s "$SRC" ]] || { echo "FATAL: AgentsView database missing or empty: $SRC" >&2; exit 1; }
 command -v sqlite3 >/dev/null 2>&1 || { echo "FATAL: sqlite3 not installed" >&2; exit 1; }
 command -v jq >/dev/null 2>&1 || { echo "FATAL: jq not installed" >&2; exit 1; }
+AGENTSVIEW_BIN=$(command -v agentsview || true)
+[[ -n "$AGENTSVIEW_BIN" ]] || [[ ! -x /opt/homebrew/bin/agentsview ]] || AGENTSVIEW_BIN=/opt/homebrew/bin/agentsview
+[[ -n "$AGENTSVIEW_BIN" ]] || { echo "FATAL: agentsview not installed" >&2; exit 1; }
 job_lock "$LOCKDIR" || { echo "FATAL: another AgentsView snapshot is running" >&2; exit 1; }
 DB_TMP=""
 MANIFEST_TMP=""
@@ -38,7 +41,7 @@ sqlite3 "$SRC" ".timeout 30000" ".backup '$DB_TMP'"
 size=$(wc -c < "$DB_TMP" | tr -d '[:space:]')
 sha=$(shasum -a 256 "$DB_TMP" | awk '{print $1}')
 created=$(date -u +%FT%TZ)
-version_json=$(agentsview version --format json 2>/dev/null || printf '{"version":"unknown"}')
+version_json=$("$AGENTSVIEW_BIN" version --format json 2>/dev/null || printf '{"version":"unknown"}')
 
 jq -n \
     --arg created_utc "$created" \
