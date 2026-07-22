@@ -1,6 +1,6 @@
 # Git HTTPS migration
 
-Status: **in implementation** (2026-07-22).
+Status: **canary passed; fleet rollout partial** (2026-07-22).
 
 ## Desired end state
 
@@ -69,6 +69,26 @@ completion; do not recreate VMs or rebuild iv-image for this migration.
 If a host fails, restore the prior dotfiles commit on that host and re-run the
 installer. Do not reintroduce SSH rewrites as an ad-hoc workaround; diagnose
 GitHub CLI credential or integration scope instead.
+
+## Execution record — 2026-07-22
+
+- `klundstedt-mini` authenticated GitHub CLI for HTTPS and pushed the migration
+  commits over `https://github.com/kylelundstedt/dotfiles.git`.
+- `kgl-dotfiles` passed the no-agent canary: `install.sh` cleared signing
+  settings, personal and IndustryVault identity resolution passed, and an
+  unsigned temporary branch pushed through
+  `github-kylelundstedt-dotfiles-writer` before being deleted.
+- `kgl-dotfiles` now consumes iv-image through the read-only
+  `github-kylelundstedt-iv-image` endpoint; fetch succeeded and dry-run push
+  returned HTTP 403. The former iv-image writer integration is retained but has
+  no attachments.
+- Completed serial rollout: `iv-ave-adapters`, `rss-feed`, `iv-gitlake`, and
+  `iv-gitlake-examples`. Each has signing unset, fetched dotfiles over HTTPS,
+  and completed a dry-run project-repository push through its scoped
+  integration.
+- Deferred safely: `iv-home` has untracked project `.claude/` state; `iv-docs`
+  has 11 unpushed dotfiles commits plus staged project work; `kgl-thoughts` was
+  unreachable over SSH. Resolve those conditions before updating them.
 
 ## Completion criteria
 
