@@ -210,6 +210,52 @@ install_github_binary() {
     _fetch_and_place "$asset_url" "$bin_name" "$inner_path"
 }
 
+# Install the latest AgentsView CLI release with its published SHA256SUMS.
+# macOS uses the Homebrew cask instead; this path is for non-IV Linux hosts.
+install_agentsview_cli() {
+    local arch platform latest_url version filename base tmp expected actual
+    arch=$(uname -m)
+    case "$arch" in
+        x86_64|amd64) platform="linux_amd64" ;;
+        aarch64|arm64) platform="linux_arm64" ;;
+        *) echo "  [!] agentsview: unsupported Linux architecture $arch"; return 1 ;;
+    esac
+
+    latest_url=$(curl -fsSLI -o /dev/null -w '%{url_effective}' \
+        https://github.com/kenn-io/agentsview/releases/latest) || {
+        echo "  [!] agentsview: latest release lookup failed"; return 1;
+    }
+    version="${latest_url##*/releases/tag/}"
+    [[ "$version" != "$latest_url" && -n "$version" ]] || {
+        echo "  [!] agentsview: latest release version not found"; return 1;
+    }
+    filename="agentsview_${version#v}_${platform}.tar.gz"
+    base="https://github.com/kenn-io/agentsview/releases/download/${version}"
+    tmp=$(mktemp -d)
+
+    if ! curl -fsSL "$base/$filename" -o "$tmp/$filename" \
+        || ! curl -fsSL "$base/SHA256SUMS" -o "$tmp/SHA256SUMS"; then
+        echo "  [!] agentsview: release download failed"; rm -rf "$tmp"; return 1
+    fi
+    expected=$(awk -v f="$filename" '$2 == f {print $1; exit}' "$tmp/SHA256SUMS")
+    if command -v sha256sum >/dev/null 2>&1; then
+        actual=$(sha256sum "$tmp/$filename" | awk '{print $1}')
+    else
+        actual=$(shasum -a 256 "$tmp/$filename" | awk '{print $1}')
+    fi
+    if [[ -z "$expected" || "$actual" != "$expected" ]]; then
+        echo "  [!] agentsview: SHA-256 verification failed"; rm -rf "$tmp"; return 1
+    fi
+    tar -xzf "$tmp/$filename" -C "$tmp"
+    if [[ ! -x "$tmp/agentsview" ]]; then
+        echo "  [!] agentsview: binary missing from archive"; rm -rf "$tmp"; return 1
+    fi
+    mv "$tmp/agentsview" "$LOCAL_BIN/agentsview"
+    chmod +x "$LOCAL_BIN/agentsview"
+    rm -rf "$tmp"
+    echo "  [+] agentsview ${version#v}"
+}
+
 # Quarto: install tarball to ~/.local/share/quarto, symlink binary to ~/.local/bin.
 # Replaces the Brewfile cask, whose .pkg installer required sudo on every run.
 install_quarto() {
@@ -412,6 +458,30 @@ install_cli_tools() {
         (install_release_asset "ogulcancelik/herdr" "$herdr_asset" "herdr" "$herdr_asset") &
         pids+=($!)
     else echo "  [=] herdr"; fi
+    # AgentsView is a team tool: iv-image owns the pinned Linux copy on IV VMs,
+    # while dotfiles floats at latest for Macs and non-IV hosts. On macOS use
+    # the official Homebrew cask (desktop app + CLI binary); Linux uses the
+    # checksum-verified release tarball.
+    if want agentsview; then
+        if [[ "$OS" == "macos" ]]; then
+            if brew list --cask agentsview &>/dev/null; then
+                if [[ "$UPGRADE" == true ]]; then
+                    brew upgrade --cask agentsview >/dev/null 2>&1 \
+                        && echo "  [+] agentsview (brew cask, upgraded)" \
+                        || echo "  [=] agentsview (brew cask, up to date)"
+                else
+                    echo "  [=] agentsview"
+                fi
+            else
+                brew install --cask agentsview >/dev/null 2>&1 \
+                    && echo "  [+] agentsview (brew cask)" \
+                    || echo "  [!] agentsview brew install failed"
+            fi
+        else
+            (install_agentsview_cli) &
+            pids+=($!)
+        fi
+    else echo "  [=] agentsview"; fi
     # quarto compares the installed version dir against latest, so it's already
     # upgrade-aware; want() just lets --upgrade force the API check even when present.
     if want quarto; then
@@ -868,8 +938,8 @@ run_stow() {
     fi
     sync_claude_settings_hooks
 
-    # Always stow these (herdr: config + herdr-layout helper — herdr runs on VMs too)
-    local packages=("git" "zsh" "starship" "agents" "herdr")
+    # Always stow these (herdr/agentsview: config + operational helpers run on VMs too)
+    local packages=("git" "zsh" "starship" "agents" "herdr" "agentsview")
 
     # Platform-specific
     if [[ "$OS" == "macos" ]]; then

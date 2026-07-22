@@ -32,6 +32,10 @@
 - /Library/**
 # Re-downloadable model weights (symlink target on external)
 - /.lmstudio/models/**
+# AgentsView live SQLite/WAL, bearer tokens, and raw remote mirrors are not
+# copied directly. backup/agentsview-snapshot.sh stages a consistent database
+# under ~/archives/agentsview, which remains included.
+- /.agentsview/**
 # Derived DuckDB rebuilt nightly from the source DBs (regenerable)
 - /archives/hub/hub.duckdb
 - /archives/hub/hub.duckdb.tmp

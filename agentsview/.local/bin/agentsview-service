@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Supervised AgentsView collector on klundstedt-mini. launchd owns this
+# foreground process; do not replace it with `agentsview daemon start`.
+set -euo pipefail
+umask 077
+
+source "$HOME/dotfiles/backup/_lib.sh"
+job_require_mini agentsview
+
+DATA_DIR=${AGENTSVIEW_DATA_DIR:-$HOME/.agentsview}
+mkdir -p "$DATA_DIR"
+chmod 700 "$DATA_DIR"
+[[ -f "$DATA_DIR/config.toml" ]] && chmod 600 "$DATA_DIR/config.toml"
+
+AGENTSVIEW_BIN=$(command -v agentsview || true)
+[[ -n "$AGENTSVIEW_BIN" ]] || { echo "FATAL: agentsview not installed" >&2; exit 1; }
+
+TS_BIN=$(command -v tailscale || true)
+[[ -n "$TS_BIN" ]] || { echo "FATAL: tailscale not installed" >&2; exit 1; }
+TS_IP=$($TS_BIN ip -4 2>/dev/null | head -1)
+[[ -n "$TS_IP" ]] || { echo "FATAL: no Tailscale IPv4 address" >&2; exit 1; }
+
+AGENTSVIEW_AUTH_TOKEN=$(job_kc "agentsview:auth-token")
+[[ -n "$AGENTSVIEW_AUTH_TOKEN" ]] || {
+    echo "FATAL: Keychain service agentsview:auth-token is missing" >&2
+    exit 1
+}
+export AGENTSVIEW_DATA_DIR="$DATA_DIR" AGENTSVIEW_AUTH_TOKEN
+
+exec "$AGENTSVIEW_BIN" serve \
+    --host "$TS_IP" \
+    --port 8080 \
+    --no-browser \
+    --no-update-check \
+    --require-auth

@@ -22,6 +22,9 @@ jobs:
       - name: Photos completeness gate
         run: python3 -m unittest -v backup/test_photos_gate.py
 
+      - name: AgentsView snapshot and restore staging
+        run: backup/test_agentsview_snapshot.sh
+
       - name: validate launchd plists
         run: |
           python3 - <<'EOF'

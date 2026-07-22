@@ -185,6 +185,15 @@ if command -v sqlite3 >/dev/null 2>&1; then
 else
     echo "WARN sqlite3 not found; skipping pre-sync checkpoint"
 fi
+# AgentsView is an active WAL database. Stage a transactionally consistent
+# online-backup copy under ~/archives before the encrypted home sync; the live
+# ~/.agentsview tree (including bearer tokens and remote mirrors) is excluded.
+if bash "$HOME/dotfiles/backup/agentsview-snapshot.sh"; then
+    echo "agentsview snapshot staged"
+else
+    echo "WARN AgentsView snapshot failed; retaining prior known-good snapshot"
+    FAILURES+=("agentsview-snapshot")
+fi
 sync_one home   "$HOME/"                          bkup:home --filter-from "$FILTER"
 if photos_originals_complete; then
     sync_one photos "$EXT/Photos Library.photoslibrary" bkup:photos

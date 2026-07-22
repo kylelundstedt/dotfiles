@@ -82,7 +82,7 @@ eval "$(fnm env 2>/dev/null)" || true
 # a hand-picked cross-section (curl installers, GitHub-release binaries, uv/fnm
 # managed, agents). Full-list coverage is `./test-install.sh provisioning`
 # (diff-provisioning.sh); keep this line short so remote runs stay readable.
-for cmd in starship uv atuin zoxide direnv fnm bat fzf rg jq yq gh duckdb carapace croc node claude codex op tailscale; do
+for cmd in starship uv atuin zoxide direnv fnm bat fzf rg jq yq gh duckdb carapace croc agentsview node claude codex op tailscale; do
     if command -v $cmd >/dev/null 2>&1; then echo "OK $cmd"; else echo "MISSING $cmd"; fi
 done
 

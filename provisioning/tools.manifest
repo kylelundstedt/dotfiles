@@ -13,8 +13,8 @@
 #             install.sh may still install these (need-guarded) for macOS and
 #             non-exeuntu hosts.
 #   team      pinned and installed by iv-image provision-iv.sh on VMs.
-#             install.sh also installs duckdb/quarto/tigris/herdr (floating)
-#             so macOS gets them — a known, intentional overlap.
+#             install.sh also installs duckdb/quarto/tigris/herdr/agentsview
+#             (floating) so macOS gets them — a known, intentional overlap.
 #   personal  dotfiles-only: installed by install.sh, absent from iv-image.
 #
 # Consumers: none yet (installers are still imperative); checked by
@@ -36,6 +36,7 @@ team aws
 team tigris
 team rclone
 team herdr
+team agentsview
 team render-site
 team provision-docsite
 team gen-llms-txt

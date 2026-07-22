@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Local health/freshness check for the mini's AgentsView collector.
+# An optional healthchecks.io ping URL may be stored as
+# agentsview:healthcheck-url in the login Keychain.
+set -euo pipefail
+umask 077
+
+source "$HOME/dotfiles/backup/_lib.sh"
+job_require_mini agentsview-healthcheck
+job_hc_init "agentsview:healthcheck-url"
+job_log "$HOME/Library/Logs/agentsview-healthcheck"
+
+fail() {
+    local reason=$1
+    echo "FAIL: $reason"
+    job_hc /fail --data-raw "agentsview-healthcheck $(date '+%F %T') $reason"
+    exit 1
+}
+
+TOKEN=$(job_kc "agentsview:auth-token")
+[[ -n "$TOKEN" ]] || fail "auth token missing from Keychain"
+TS_IP=$(tailscale ip -4 2>/dev/null | head -1)
+[[ -n "$TS_IP" ]] || fail "no Tailscale IPv4 address"
+BASE="http://${TS_IP}:8080"
+
+job_hc /start
+curl -fsS --max-time 15 -H "Authorization: Bearer $TOKEN" \
+    "$BASE/api/ping" >/dev/null || fail "authenticated ping failed"
+status=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' \
+    "$BASE/api/v1/settings" || true)
+[[ "$status" == "401" ]] || fail "unauthenticated API returned HTTP $status, expected 401"
+
+DATA_DIR=${AGENTSVIEW_DATA_DIR:-$HOME/.agentsview}
+DB="$DATA_DIR/sessions.db"
+[[ -s "$DB" ]] || fail "sessions.db missing or empty"
+
+# Once remote hosts are configured, the collector's coordinated sync timestamp
+# must stay close to the five-minute per-host schedule. Allow 20 minutes for a
+# slow fleet sync before alerting.
+if grep -q '^\[\[remote_hosts\]\]' "$DATA_DIR/config.toml" 2>/dev/null; then
+    finished=$(sqlite3 "$DB" \
+        "SELECT value FROM pg_sync_state WHERE key='last_sync_finished_at';" \
+        2>/dev/null || true)
+    [[ -n "$finished" ]] || fail "no completed sync timestamp"
+    age=$(python3 - "$finished" <<'PY'
+import datetime as dt
+import sys
+value = sys.argv[1].replace("Z", "+00:00")
+when = dt.datetime.fromisoformat(value)
+now = dt.datetime.now(dt.timezone.utc)
+print(max(0, int((now - when).total_seconds())))
+PY
+)
+    (( age <= 1200 )) || fail "last completed sync is ${age}s old"
+fi
+
+job_hc
+echo "OK: authenticated, unauthenticated rejected, archive present"
