@@ -95,14 +95,14 @@ need() { ! command -v "$1" >/dev/null 2>&1; }
 # present tools are skipped so re-runs stay fast. Replaces bare `need` in the CLI
 # tool / agent guards, which otherwise skip anything already on PATH forever.
 #
-# IV-provisioned exe.dev VM (U7, Core decision 1): iv-image's provision-iv.sh
-# owns the team baseline there — pinned tools, team AGENTS.md, team MCP
-# servers, its ssh stanza — and install.sh behaves as a thin personal overlay:
-# personal delta only, never redo or clobber what the image laid down. A bare
-# exe.dev VM without the IV layer still gets the full personal install.
+# IV-provisioned VM (exe.dev or Apple Container guest; Core decision 1):
+# iv-image's provision-iv.sh owns the team baseline there — pinned tools, team
+# AGENTS.md, team MCP servers, its ssh stanza — and install.sh behaves as a thin
+# personal overlay: personal delta only, never redo or clobber what the image
+# laid down. A bare VM without the IV layer still gets the full personal install.
 # (Provision iv-image BEFORE dotfiles on VMs that want both.)
 IS_IV_VM=false
-[[ -d /exe.dev && -f "$HOME/iv-provision.lock" ]] && IS_IV_VM=true
+[[ -f "$HOME/iv-provision.lock" ]] && IS_IV_VM=true
 
 # want() also refuses team-layer tools (tools.manifest) on IV VMs: those are
 # iv-image's, version-pinned — installing (or --upgrade'ing) the floating

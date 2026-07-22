@@ -53,3 +53,8 @@ jobs:
           # whitespace manifests: layer + at least one more field
           awk '!/^[[:space:]]*#/ && NF && NF < 2 { print FILENAME": bad row: "$0; rc=1 } END { exit rc }' \
             provisioning/tools.manifest provisioning/skills.manifest && echo "OK   tools+skills manifests"
+
+      - name: IV overlay detection covers exe.dev and Apple Container guests
+        run: |
+          grep -q '\[\[ -f "\$HOME/iv-provision.lock" \]\] && IS_IV_VM=true' install.sh
+          ! grep -q '\[\[ -d /exe.dev && -f "\$HOME/iv-provision.lock"' install.sh
