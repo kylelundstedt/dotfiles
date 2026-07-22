@@ -13,8 +13,9 @@ know before acting.
 
 ### `klundstedt-mini` — always-on Mac mini
 
-The operational host and dotfiles author/merge host. Everything scheduled,
-backed up, served, or coordinated across the exe.dev fleet runs here.
+The operational host and author/merge host for both dotfiles and iv-image.
+Everything scheduled, backed up, served, or coordinated across the exe.dev
+fleet runs here.
 
 - **Tailscale:** open-source `tailscaled` (brew formula, system daemon via
   `sudo brew services`), not the standard app. Needs `--tailscale-ssh` on the
@@ -40,8 +41,10 @@ backed up, served, or coordinated across the exe.dev fleet runs here.
 - **Monitoring:** the healthchecks.io registry ([monitoring.md](monitoring.md))
   covers this host's scheduled jobs.
 - **External disk:** `OWC8TB` (encrypted; unlocked by `backup/owc8tb-unlock.sh`).
-- **Git ownership:** authors and merges `kylelundstedt/dotfiles`, performs
-  GitHub HTTPS authentication, and coordinates fleet rollout. See
+- **Git ownership:** authors and merges `kylelundstedt/dotfiles` from
+  `~/dotfiles` and `kylelundstedt/iv-image` from
+  `~/github/kylelundstedt/iv-image`; performs GitHub HTTPS authentication and
+  coordinates fleet rollout. See
   [git-https-migration.md](git-https-migration.md).
 
 ### `klundstedt-mbp` — dev laptop
@@ -72,12 +75,19 @@ tailnet URL).
 ## Linux — exe.dev VMs
 
 Most of the Linux side is an ephemeral, tag-scoped VM fleet.
-**`kgl-dotfiles` is the dedicated Linux dotfiles canary**, with a writable
-dotfiles integration only for temporary-branch validation. `klundstedt-mini`
-authors and merges dotfiles; ordinary project VMs consume dotfiles and iv-image
-read-only. Account control-plane changes (integrations, attachments, and VM
-lifecycle) are made from `klundstedt-mini` or another Mac with the account SSH
-credential.
+**`kgl-dotfiles` is retained as a disposable Linux compatibility canary and
+private Quarto preview for dotfiles**, not as an authoring host. Its dotfiles
+and iv-image checkouts use read-only integrations by default. A dedicated
+writer may be attached only for an explicit temporary-branch canary and must be
+detached immediately afterward. `klundstedt-mini` authors and merges both
+repositories; ordinary project VMs also consume them read-only.
+
+Keep `kgl-dotfiles` while it provides the isolated Linux validation target and
+private documentation preview. It may be deleted and recreated after the
+preview is moved or retired and any active Shelley conversation data is
+preserved; no repository state on the VM is authoritative. Account
+control-plane changes (integrations, attachments, and VM lifecycle) are made
+from `klundstedt-mini` or another Mac with the account SSH credential.
 
 Lifecycle (create, join tailnet, upgrade) lives in the `exe-dev` /
 `join-tailnet` / `upgrade-vm` skills, not here.

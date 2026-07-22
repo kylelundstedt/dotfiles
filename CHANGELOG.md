@@ -4,6 +4,19 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-07-22 — mini authoring boundary; kgl writers detached
+
+- Formalized `klundstedt-mini` as the author/merge host for both dotfiles and
+  iv-image. GitHub remains canonical; exe.dev project VMs and `kgl-dotfiles`
+  consume both repositories read-only.
+- Returned `kgl-dotfiles` to the explicit read-only dotfiles endpoint and
+  detached `github-kylelundstedt-dotfiles-writer`. The iv-image writer was
+  already detached, so both dedicated writer integrations now have no
+  attachments and are reserved for explicit temporary push canaries.
+- Retained `kgl-dotfiles` for now as a disposable Linux compatibility canary
+  and private Quarto preview. It can be deleted after replacing or retiring
+  those roles and preserving any active Shelley conversation data.
+
 ## 2026-07-21 — fail-closed, bounded Photos backup gate
 
 - Replaced the ephemeral `uvx osxphotos` invocation with a persistent

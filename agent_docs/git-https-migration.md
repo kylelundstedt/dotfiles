@@ -6,9 +6,11 @@ Status: **exe.dev fleet complete; MBP validation pending** (2026-07-22).
 
 Git transport uses HTTPS everywhere:
 
-- `klundstedt-mini` authors and merges `kylelundstedt/dotfiles` using GitHub
-  CLI credentials and HTTPS remotes.
-- `kgl-dotfiles` is the Linux canary, not the permanent author/merge host.
+- GitHub is the canonical source of truth for both repositories.
+- `klundstedt-mini` authors and merges `kylelundstedt/dotfiles` and
+  `kylelundstedt/iv-image` using GitHub CLI credentials and HTTPS remotes.
+- `kgl-dotfiles` is a read-only Linux compatibility canary and private
+  dotfiles documentation preview, not an author/merge host.
 - exe.dev project VMs push only through their scoped HTTPS GitHub integrations;
   no Git PAT or signing key is stored on a VM.
 - dotfiles and iv-image remain read-only consumers on ordinary project VMs.
@@ -23,8 +25,8 @@ Git transport uses HTTPS everywhere:
 | `install.sh` | Clear stale local signing settings; authenticate GitHub CLI for HTTPS. |
 | `sync-repos.sh` | Use direct HTTPS remotes without SSH rewrite workarounds. |
 | Documentation | Remove claims that 1Password SSH forwarding signs or pushes Git. |
-| `klundstedt-mini` | Source author/merge host and fleet rollout coordinator. |
-| `kgl-dotfiles` | Tailnet-joined Linux HTTPS canary with a scoped writable dotfiles integration. |
+| `klundstedt-mini` | Source author/merge host for dotfiles and iv-image; fleet rollout coordinator. |
+| `kgl-dotfiles` | Tailnet-joined Linux compatibility canary with read-only repo integrations by default. |
 
 ## Source migration
 
@@ -47,16 +49,16 @@ exe.dev integration remotes already use HTTPS and require no PAT on the VM.
 
 ## Canary procedure
 
-1. Confirm `kgl-dotfiles` is tailnet-reachable and has the writable dotfiles
-   integration only.
-2. Set its dotfiles origin to the explicit integration HTTPS endpoint.
-3. Pull the migration, run `~/dotfiles/install.sh`, and verify
+1. Confirm `kgl-dotfiles` is tailnet-reachable and both repository origins use
+   their explicit read-only integration endpoints.
+2. Pull the candidate commit, run `~/dotfiles/install.sh`, and verify
    `commit.gpgsign` and `user.signingkey` are unset.
-4. With no `SSH_AUTH_SOCK`, create an unsigned temporary-branch commit and push
-   it through the integration; delete the branch after validation.
-5. Verify personal/work author identity still resolves from each repository
+3. Verify personal/work author identity still resolves from each repository
    remote URL.
-6. On the mini with 1Password locked, verify GitHub CLI HTTPS fetch and push for
+4. If a push canary is explicitly required, temporarily attach the matching
+   writer integration, push and delete a temporary branch, restore the
+   read-only origin, and detach the writer immediately afterward.
+5. On the mini with 1Password locked, verify GitHub CLI HTTPS fetch and push for
    one personal and one IndustryVault repository. Verify `sync-repos.sh`.
 
 ## Fleet rollout and rollback
@@ -93,6 +95,9 @@ GitHub CLI credential or integration scope instead.
 - `klundstedt-mbp` remains the sole validation gap: it was offline/unreachable
   over Tailscale when checked. When it is online, pull dotfiles, run the
   installer, and verify HTTPS fetch/push with `SSH_AUTH_SOCK` unset.
+- After the fleet canary completed, `kgl-dotfiles` was moved back to the
+  read-only dotfiles endpoint. Both dedicated writer integrations now have no
+  attachments and are available only for an explicit, temporary push canary.
 
 ## Completion criteria
 
@@ -100,6 +105,7 @@ GitHub CLI credential or integration scope instead.
 - The canary and both Macs pass HTTPS fetch/push validation.
 - Every VM is updated without dirty-worktree loss.
 - Obsolete SSH-signing and GitHub-SSH documentation is removed.
+- Dedicated VM writer integrations have no attachments by default.
 - Old GitHub signing keys may be retired later; key deletion is not part of this
   migration.
 

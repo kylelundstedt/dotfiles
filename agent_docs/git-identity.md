@@ -105,10 +105,10 @@ committed.
 ## GitHub HTTPS migration ownership and integration boundaries
 
 The Git transport migration is owned by **`kylelundstedt/dotfiles`** and is
-implemented, reviewed, merged, and rolled out from `klundstedt-mini`.
-`kgl-dotfiles` is the Linux canary: it verifies that an exe.dev VM can commit
-without signing and push through its scoped HTTPS integration. It is not the
-permanent author/merge host for dotfiles or iv-image. The rollout plan is
+implemented, reviewed, merged, and rolled out from `klundstedt-mini`. The
+authoritative authoring worktrees for both dotfiles and iv-image live on the
+mini. `kgl-dotfiles` is a read-only Linux compatibility canary; it is not an
+author/merge host. The rollout plan is
 [git-https-migration.md](git-https-migration.md).
 
 ### Read-only project-VM consumers
@@ -119,12 +119,14 @@ without `--act-as-user`:
 
 | Repository | Consumer integration | Attachments |
 | --- | --- | --- |
-| `kylelundstedt/dotfiles` | `github-kylelundstedt-dotfiles` | `iv-home`, `iv-docs`, `iv-ave-adapters`, `rss-feed`, `kgl-thoughts`, `iv-gitlake`, `iv-gitlake-examples` |
-| `kylelundstedt/iv-image` | `github-kylelundstedt-iv-image` | all ordinary project VMs; `kgl-dotfiles` during its provisioning/canary role |
+| `kylelundstedt/dotfiles` | `github-kylelundstedt-dotfiles` | all ordinary project VMs plus the read-only `kgl-dotfiles` canary |
+| `kylelundstedt/iv-image` | `github-kylelundstedt-iv-image` | all ordinary project VMs plus the read-only `kgl-dotfiles` canary |
 
 Both named endpoints fetch successfully and reject dry-run pushes. Dedicated
-writer integrations are retained only while the HTTPS canary and Mac
-credential migration are validated; they are not a fleet-wide write grant.
+writer integrations have no attachments by default. Attach one to
+`kgl-dotfiles` only for an explicit temporary push canary, then detach it and
+restore the read-only origin immediately afterward. They are never a
+fleet-wide write grant.
 
 ### Control plane
 
