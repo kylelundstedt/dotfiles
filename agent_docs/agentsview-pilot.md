@@ -385,6 +385,63 @@ Two traps found on the way, both recorded because they cause false confidence:
   while aborting correctly on the bash 5.x VMs. Assertions there now use
   explicit failure.
 
+### Growth and sync traffic measured (DuckDB mirror)
+
+`agentsview duckdb push` mirrors the archive into
+`~/.agentsview/mirror.duckdb` for analysis. It needs no server and no new
+secrets, and the existing backup filter already excludes it (`- /.agentsview/**`)
+— which is what the durable-backup section above anticipated for derived
+indexes. Run it on demand; a watched daemon buys nothing here.
+
+**Caveat: `duckdb push` flattens machine attribution.** Every session in the
+mirror is stamped with the _pushing_ host, because the mirror is built for the
+each-machine-pushes-its-own model where `machine` means pusher. Recover the true
+origin from the session id prefix (`kgl-thoughts~…`); `AGENTSVIEW_DUCKDB_MACHINE`
+is a single value and cannot preserve ten origins. Query the SQLite archive
+directly for anything machine-level that matters.
+
+**Storage growth is negligible and predictable.** Over the 14 days to
+2026-07-22, measured by when work happened rather than when it was ingested:
+136 sessions across 12 active days (**9.7/day**), 6,378 messages (**456/day**),
+busiest day 38 sessions. At 113 MB for 337 sessions (~344 KB/session) that is
+**~3.3 MB/day, ~100 MB/month, ~1.2 GB/year**, costing about $0.36/month to back
+up after a full year.
+
+What occupies the archive is worth knowing for any future retention rule: tool
+call input+result content is **52.1 MB** against **8.2 MB** of message text and
+2.1 MB of tool result events. Size tracks tool verbosity, roughly 6× the
+conversation itself — so a size-motivated retention rule should target tool
+payloads, not messages.
+
+**Sync traffic is the part that scales badly.** Mirrors are whole-file with no
+delta: touching a source `shelley.db` mtime with no content change refetched the
+entire file. Per-round cost is therefore the sum of changed files, and Shelley
+databases are the unit — `kgl-thoughts` 48.2 MB, `iv-docs` 29.0 MB,
+`iv-gitlake-examples` 11.5 MB, `rss-feed` 9.9 MB, everything else under 2.5 MB.
+
+| round                               | transferred |
+| ----------------------------------- | ----------- |
+| all hosts idle (measured)           | 0.2 MB      |
+| every host active at once (ceiling) | 103 MB      |
+
+At twelve rounds an hour, one continuously-active Shelley session on
+`kgl-thoughts` would move ~578 MB/hour — the same 48 MB file re-fetched every
+five minutes. Free in money (tailnet, and Tigris egress is free regardless) but
+real bandwidth and disk writes, and invisible today only because those VMs are
+mostly idle.
+
+**Mitigation: `kgl-thoughts` and `iv-docs` moved to `interval = "15m"`**, which
+cuts their worst case by two thirds. Every other host stays at 5m.
+
+> **This creates a deliberate exception to an acceptance criterion.** "New
+> sessions normally arrive within ten minutes" no longer holds for those two
+> hosts, whose worst case is now ~15 minutes. Accepted because they are the
+> traffic-heavy hosts and the least likely to need sub-15-minute freshness.
+> Revisit if either becomes a host whose sessions are wanted promptly — the
+> alternative is `10m`, which halves traffic while staying inside the criterion.
+> Amend the criterion or the intervals before adoption; do not let them silently
+> disagree.
+
 ### Fleet inventory
 
 Every active agent-capable tailnet host, checked 2026-07-22. All six exe.dev VMs
@@ -432,11 +489,17 @@ any other host.
 - [x] Enable a source daemon on one exe.dev VM (`iv-docs`).
 - [x] Enable a source daemon on one Apple Container VM (`iv-sandbox`).
 - [x] Verify Shelley, Claude, and Codex discovery where source data exists.
-- [ ] Verify a newly created canary session appears centrally within ten minutes.
+- [x] Verify a newly created session appears centrally within ten minutes: a
+      marked session seeded on `iv-home` arrived in **39s** on the normal 5m
+      schedule (favourable phase; structural worst case ~5m10s). Note the two
+      hosts now at `interval = "15m"` are a deliberate exception — see the
+      traffic section above.
 - [x] Compare sampled source and normalized sessions/messages/tool calls.
 - [x] Verify unauthenticated remote-sync access is rejected.
-- [ ] Complete resource measurement: idle CPU/RSS and archive/mirror size are
-      recorded; capture steady-state sync traffic over a representative day.
+- [x] Complete resource measurement (2026-07-22). Idle CPU/RSS, archive/mirror
+      size, storage growth (~3.3 MB/day) and per-round sync traffic (0.2 MB idle,
+      103 MB ceiling) are all measured; the whole-file refetch behaviour is
+      characterised rather than sampled over one day.
 
 ### Phase 2 — fleet rollout
 
