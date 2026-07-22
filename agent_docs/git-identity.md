@@ -110,39 +110,62 @@ committed.
   home-independent; the *same committed gitconfig* works on both. This lets us
   **retire the `gitdir:` includeIf** — `hasconfig` subsumes it on macOS too.
 
-## Uniform integration cloning (constraint 2)
+## GitHub integration authoring and consumer boundaries
 
-Add a `github-kylelundstedt-dotfiles` exe.dev integration attached `auto:all`,
-so **dotfiles clones to `~/dotfiles` via the proxy** like iv-image and the
-project repo. Then every VM's three repos arrive the same way.
+### Authoring
 
-Benefits beyond uniformity:
+As of 2026-07-22, **`kgl-dotfiles` is the authoritative writable authoring
+VM for both repositories**:
 
-- **Auth:** the proxy authenticates git operations with no PAT on the VM. Also
-  works for `gh`: `GH_HOST=github.int.exe.xyz gh repo view kylelundstedt/dotfiles`
-  (the CLI hits the same proxy — no `gh auth login` on the VM).
-- The proxy remote (`…/kylelundstedt/dotfiles.git`) still matches the personal
-  `hasconfig` rule — consistent.
-- `install.sh`'s `curl | bash` bootstrap stays as the entry for **non-exe.dev**
-  machines; on exe.dev the integration pre-clones dotfiles and you run
-  `~/dotfiles/install.sh` (it already handles running from inside the repo).
+| Repository | Authoring checkout | Writable integration | Attachment |
+| --- | --- | --- | --- |
+| `kylelundstedt/dotfiles` | `~/dotfiles` | `github-kylelundstedt-dotfiles-writer` | `vm:kgl-dotfiles` |
+| `kylelundstedt/iv-image` | `~/iv-image` | `github-kylelundstedt-iv-image-writer` | `vm:kgl-dotfiles` |
 
-### Access posture — dotfiles + iv-image should be READONLY on VMs
+Both authoring checkouts use the generic
+`https://github.int.exe.xyz/kylelundstedt/<repo>.git` remote. On
+`kgl-dotfiles`, that endpoint resolves to the corresponding writer integration.
+This replaces the stale policy that dotfiles is authored from a Mac: the Macs
+may perform account-level exe.dev control-plane work, but repository edits,
+commits, and pushes for these two repositories happen on `kgl-dotfiles`.
 
-They're *consumed* on VMs (cloned, provisioned from), never developed there —
-you edit dotfiles from the Mac and iv-image via PR. So least privilege says
-`--readonly` (allows clone/fetch/read + `gh` read; blocks push/write-API/LFS-
-upload), rather than granting standing write to your dotfiles repo from every
-VM. Project repos stay read+write (that's where they're developed) — and there
-`--act-as-user` is a nice-to-have (attributes VM pushes to your GitHub account
-instead of the exe.dev bot; **mutually exclusive with `--readonly`**).
+### Read-only project-VM consumers
 
-**Blocked as of 2026-07-18:** `integrations edit <name> --readonly` returns
-`--readonly is not enabled for this account` — the feature is gated behind
-exe.dev's `github-ro` flag. **Action: request `github-ro` enablement from
-exe.dev**, then `integrations edit github-kylelundstedt-{dotfiles,iv-image}
---readonly` (propagates to running VMs in ~1 min). Until then both are the
-default read+write.
+Project VMs consume the repositories; they do not author either repository.
+The named consumer endpoints are read-only and were created without
+`--act-as-user`:
+
+| Repository | Consumer integration | Mode | Attachments |
+| --- | --- | --- | --- |
+| `kylelundstedt/dotfiles` | `github-kylelundstedt-dotfiles` | `--readonly` | `iv-home`, `iv-docs`, `iv-ave-adapters`, `rss-feed`, `kgl-thoughts`, `iv-gitlake`, `iv-gitlake-examples` |
+| `kylelundstedt/iv-image` | `github-kylelundstedt-iv-image` | `--readonly` | `iv-home`, `iv-docs`, `iv-ave-adapters`, `rss-feed`, `kgl-thoughts`, `iv-gitlake`, `iv-gitlake-examples` |
+
+The prior read/write integrations had been attached `auto:all`, including the
+authoring VM, so they could not safely be converted in place. After the
+read-only replacements were verified, those integrations were retained and
+renamed `github-kylelundstedt-{dotfiles,iv-image}-writer`, then scoped only to
+`vm:kgl-dotfiles`. This preserves the dedicated writer while ensuring that the
+generic `github.int.exe.xyz` remote resolves read-only on project VMs.
+
+The named consumer endpoints are:
+
+```text
+https://github-kylelundstedt-dotfiles.int.exe.xyz/kylelundstedt/dotfiles.git
+https://github-kylelundstedt-iv-image.int.exe.xyz/kylelundstedt/iv-image.git
+```
+
+On 2026-07-22, `iv-docs` successfully fetched both endpoints. A dry-run push
+of `HEAD:refs/heads/__readonly_probe__` to each was rejected with HTTP 403, and
+neither probe branch existed afterward. The same fetch and dry-run-push checks
+through the generic endpoint confirmed that `kgl-dotfiles` retains write access
+while `iv-docs` does not.
+
+### Control plane
+
+Use `klundstedt-mini` (or another Mac with the account SSH credential) for
+exe.dev integration, attachment, and VM-lifecycle changes. `kgl-dotfiles` is
+for repository authoring; it intentionally does not hold that control-plane
+credential.
 
 ## Cleanups this unlocks
 
@@ -151,74 +174,3 @@ default read+write.
 - Remove iv-docs's two stray `~/github/kylelundstedt/{ave-adapters,thoughts}`
   clones (SSH remotes, manual leftovers — pure clutter; only iv-docs has them).
 - Retire the `gitdir:` includeIf blocks (replaced by `hasconfig`).
-
-## Current state snapshot (2026-07-18)
-
-Eight VMs, all running (`ssh exe.dev ls`). `kgl-dotfiles` is running but **not
-tailnet-joined** (purpose unrecorded — investigate or retire). Repo layout is
-uniform: `~/dotfiles` (github.com HTTPS, from install.sh), `~/iv-image` (proxy,
-detached HEAD at a pin), `~/<project>` (proxy). `iv-home` has no dotfiles.
-
-**Unsaved work that a delete/recreate would destroy** — the gate for anything
-destructive:
-
-| VM | unsaved work |
-| --- | --- |
-| kgl-thoughts | `thoughts` **UNPUSHED(54)**, `dotfiles` **DIRTY** |
-| iv-docs | `iv-docs` **UNPUSHED(2)** + stray `~/github` clones |
-| iv-home | `iv-home` **UNPUSHED(1)** |
-| iv-ave-adapters, iv-gitlake, iv-gitlake-examples, rss-feed | clean |
-
-## Transition plan (staged; nothing destructive without the Phase 1 gate)
-
-**Status (2026-07-18): Phase 0–2 DONE.** Branch merged to master; `github-ro`
-readonly still pending exe.dev enablement (Phase 0 residual). Identity deployed +
-verified (real repo → personal, fake/real work-org → work) on both Macs and all
-7 tailnet-reachable VMs — `iv-docs`, `iv-ave-adapters`, `kgl-thoughts`,
-`iv-gitlake`, `iv-gitlake-examples`, `rss-feed`, `iv-home` (dotfiles installed
-there this pass). `github-kylelundstedt-dotfiles` attached to all of them (+
-`auto:all`). Not covered: `kgl-dotfiles` (not tailnet-joined). Phase 3
-(delete/recreate) remains optional.
-
-**Phase 0 — prep (non-destructive, reversible).** Staged on branch
-`plan/git-identity` (master/live config untouched until merged).
-- Rework `git/.gitconfig` to the `hasconfig`-by-org model (case-correct globs).
-- Extend `install.sh` `setup_git` to **generate `.gitconfig_personal` +
-  `.gitconfig_work`** when absent (the mechanism's prerequisite — see above),
-  and drop the VM-side `mkdir ~/github/kylelundstedt`.
-- Validate on a **macOS box** (each `~/github/<org>/` repo resolves to the right
-  identity) and one **spare/clean VM** (e.g. iv-gitlake-examples) before rollout.
-  Resolve the case-sensitivity item here.
-- Create the `github-kylelundstedt-dotfiles` integration + attach `auto:all`.
-
-**Phase 1 — save all unsaved work (hard gate).**
-- Push: kgl-thoughts `thoughts` (54), iv-docs `iv-docs` (2), iv-home (1).
-- Inspect kgl-thoughts `dotfiles` DIRTY — discard app-generated noise (herdr
-  theme / codex hooks self-writes) or commit real changes.
-- Enumerate non-repo local state worth keeping (logs, `.env`, creds, data) per
-  VM. Confirm every VM clean + pushed before any recreate.
-
-**Phase 2 — roll out identity IN-PLACE (low-risk, recommended first).**
-- Per VM: `git pull` in `~/dotfiles` + re-run `install.sh` (regenerates the
-  identity fragments; the committed gitconfig with `hasconfig` comes with the
-  pull). No recreate needed — identity is pure config that propagates via stow.
-- Verify per repo: `git -C <repo> config user.email` resolves correctly
-  (kylelundstedt-owned → personal today).
-
-**Phase 3 — OPTIONAL clean reprovision (delete + recreate), per-VM, later.**
-Evaluated per the "might be cleanest" idea:
-- **Pro:** pristine, uniform, validates the new integration-cloned base
-  end-to-end; removes strays for free.
-- **Con:** destroys the VM's **persistent herdr session + named agents** (rebuild
-  via the `herdr-layout` helper), loses any non-repo local state, and requires
-  the full recreate dance (join-tailnet → attach integrations → clone →
-  provision) per VM. It is **not required** — Phase 2 already fixes identity.
-- **Recommendation:** do NOT recreate all VMs at once. If a pristine base is
-  wanted, recreate **one at a time, only after Phase 1**, starting with a
-  low-risk clean VM (rss-feed or iv-gitlake-examples) to validate the recreate
-  path, and touch kgl-thoughts (54 commits) / iv-docs last. For most VMs the
-  in-place Phase 2 is sufficient and far safer.
-
-**Rollback.** The gitconfig change is a single committed file; revert the commit
-+ pull. It cannot corrupt repos — worst case is a wrong author on a commit,
-fixable with `git commit --amend --reset-author`. Test on macOS first.

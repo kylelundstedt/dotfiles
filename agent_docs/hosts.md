@@ -67,10 +67,15 @@ tailnet URL).
 
 ## Linux — exe.dev VMs
 
-Unlike the Macs, the Linux side has no per-host identity: it's a fleet of
-ephemeral VMs, tag-scoped rather than named. Lifecycle (create, join tailnet,
-upgrade) lives in the `exe-dev` / `join-tailnet` / `upgrade-vm` skills, not
-here.
+Most of the Linux side is an ephemeral, tag-scoped VM fleet. One VM has a
+specific durable role: **`kgl-dotfiles` is the dedicated authoring VM for
+`~/dotfiles` and `~/iv-image`**. It has the repository-writer integrations;
+project VMs consume those repositories through read-only integrations. Account
+control-plane changes (integrations, attachments, and VM lifecycle) are made
+from `klundstedt-mini` or another Mac with the account SSH credential.
+
+Lifecycle (create, join tailnet, upgrade) lives in the `exe-dev` /
+`join-tailnet` / `upgrade-vm` skills, not here.
 
 ### Platform notes
 
