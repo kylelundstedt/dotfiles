@@ -355,6 +355,36 @@ Operational cost worth knowing: a dead configured source stalls each sync for
 ~90s on connection timeout. Retiring a VM must remove its `[[remote_hosts]]`
 block in the same change — the healthcheck now enforces this by failing.
 
+### Mirror cost — Zed was 74% of it
+
+Baselining for the resource criterion found the mirrors at 761 MB against a
+112 MB archive. The cause was not general fatness: `.claude/projects` and
+`.config/shelley` mirror real session data and account for the other 190 MB.
+It was Zed. A VM's `~/.local/share/zed` holds only the remote-server payload —
+a ~210 MB node runtime, extensions, prettier — and never a threads database,
+because Zed keeps agent threads on the client. The archive contains **zero Zed
+sessions**, and no VM has a Zed threads DB at all.
+
+|                | before       | after  |
+| -------------- | ------------ | ------ |
+| remote-mirrors | 761 MB       | 191 MB |
+| of which Zed   | 571 MB (74%) | 0      |
+| sessions       | 337          | 337    |
+
+Fixed by pinning `ZED_DIR` at an empty directory on every source, verified one
+host first, then fanned out; mirrors purged and re-synced with no session loss.
+The durable fix is `iv-image` `2fee0ad`, which pins it in
+`bin/agentsview-source-daemon` so rebuilt VMs inherit it, with tests covering
+the default and an explicit override.
+
+Two traps found on the way, both recorded because they cause false confidence:
+
+- `/api/v1/stats` is windowed, so it under-reports against central totals.
+- bash 3.2 on macOS — the authoring host — does **not** honour `set -e` for a
+  failing bare `[[ ]]`, so `iv-image` tests run locally report a false green
+  while aborting correctly on the bash 5.x VMs. Assertions there now use
+  explicit failure.
+
 ### Fleet inventory
 
 Every active agent-capable tailnet host, checked 2026-07-22. All six exe.dev VMs
