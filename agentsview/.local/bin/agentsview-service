@@ -13,9 +13,11 @@ chmod 700 "$DATA_DIR"
 [[ -f "$DATA_DIR/config.toml" ]] && chmod 600 "$DATA_DIR/config.toml"
 
 AGENTSVIEW_BIN=$(command -v agentsview || true)
+[[ -n "$AGENTSVIEW_BIN" ]] || [[ ! -x /opt/homebrew/bin/agentsview ]] || AGENTSVIEW_BIN=/opt/homebrew/bin/agentsview
 [[ -n "$AGENTSVIEW_BIN" ]] || { echo "FATAL: agentsview not installed" >&2; exit 1; }
 
 TS_BIN=$(command -v tailscale || true)
+[[ -n "$TS_BIN" ]] || [[ ! -x /opt/homebrew/bin/tailscale ]] || TS_BIN=/opt/homebrew/bin/tailscale
 [[ -n "$TS_BIN" ]] || { echo "FATAL: tailscale not installed" >&2; exit 1; }
 TS_IP=$($TS_BIN ip -4 2>/dev/null | head -1)
 [[ -n "$TS_IP" ]] || { echo "FATAL: no Tailscale IPv4 address" >&2; exit 1; }
@@ -26,15 +28,9 @@ AGENTSVIEW_AUTH_TOKEN=$(job_kc "agentsview:auth-token")
 # native auth_token field as the fail-closed fallback until Keychain fan-out is
 # completed from an unlocked GUI login.
 if [[ -z "$AGENTSVIEW_AUTH_TOKEN" && -f "$DATA_DIR/config.toml" ]]; then
-    AGENTSVIEW_AUTH_TOKEN=$(python3 - "$DATA_DIR/config.toml" <<'PY'
-import pathlib
-import sys
-import tomllib
-
-with pathlib.Path(sys.argv[1]).open("rb") as config_file:
-    print(tomllib.load(config_file).get("auth_token", ""))
-PY
-)
+    AGENTSVIEW_AUTH_TOKEN=$(sed -nE \
+        's/^auth_token[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' \
+        "$DATA_DIR/config.toml" | head -1)
 fi
 [[ -n "$AGENTSVIEW_AUTH_TOKEN" ]] || {
     echo "FATAL: agentsview:auth-token is absent from Keychain and config.toml" >&2
