@@ -309,6 +309,52 @@ presence, sync _freshness_, and snapshot freshness, but not per-source sync
 errors. A failing source is silent. Worth adding a per-source error assertion
 before fleet rollout, when there are eight more sources to go wrong.
 
+### Fleet rollout completed
+
+All six inventoried sources were enabled 2026-07-22 with unique tokens recorded
+in 1Password and verified byte-identical across host, vault, and collector
+config. Central archive: **335 sessions across 9 machines, 112 MB**
+(`kgl-thoughts` 166, mini 65, `iv-docs` 57, `iv-gitlake-examples` 23,
+`rss-feed` 10, `iv-gitlake` 5, `iv-home` 4, `iv-sandbox` 4,
+`iv-ave-adapters` 1).
+
+Fidelity spot-check on `kgl-thoughts`: source DB 110 claude + 7 codex + 49
+shelley = 166, central 166. Note `/api/v1/stats` is windowed, not a total —
+comparing it against central counts produces a false mismatch. Use the DB.
+
+### Monitoring hardened
+
+`agentsview-healthcheck` now also asserts zero failed sources
+(`/api/v1/sync/status`) and probes every configured source for authenticated
+200 / anonymous 401. External healthchecks.io check `agentsview` created
+(period 300s, grace 600s), ping URL in Keychain `agentsview:healthcheck-url`,
+row added to `provisioning/checks.manifest`, `check-monitoring.sh` clean.
+
+Two lessons, both recorded in `monitoring.md`: a freshness check does not prove
+the work happened, and printing the fan-out count in the success line
+immediately exposed a config parser that silently covered 6 of 8 sources
+because key order inside a `[[remote_hosts]]` block is not guaranteed.
+
+### Phase 3 executed — destruction and restore
+
+Built `av-canary` (exe.dev, joined tailnet, pinned v0.38.1 verified by
+SHA-256), seeded one synthetic 4-message Claude session carrying a unique
+marker, collected it, then destroyed the VM. Verified in order:
+
+1. sessions survive the host's destruction and remain searchable centrally;
+2. a **subsequent sync with the host gone does not purge them** — the collector
+   reports the failure instead;
+3. the new healthcheck correctly failed on the unreachable source, proving the
+   assertion fires in production, not only in a synthetic test;
+4. after removing the `[[remote_hosts]]` block, the check returned green and
+   the retired host's sessions remained;
+5. a fresh online snapshot restored into a clean data directory still contained
+   the destroyed host's session, with its four messages in correct order.
+
+Operational cost worth knowing: a dead configured source stalls each sync for
+~90s on connection timeout. Retiring a VM must remove its `[[remote_hosts]]`
+block in the same change — the healthcheck now enforces this by failing.
+
 ### Fleet inventory
 
 Every active agent-capable tailnet host, checked 2026-07-22. All six exe.dev VMs
@@ -383,12 +429,16 @@ any other host.
 
 ### Phase 3 — destruction and restore test
 
-- [ ] Choose a canary VM with no uncommitted work.
-- [ ] Confirm its final sync and central session counts.
-- [ ] Destroy or rebuild it.
-- [ ] Confirm its historical sessions remain searchable centrally.
-- [ ] Restore the central archive from Tigris into a clean environment.
-- [ ] Confirm restored search, session lineage, and Recall evidence links.
+Executed 2026-07-22 with a purpose-built throwaway (`av-canary`) rather than a
+real service VM.
+
+- [x] Choose a canary VM with no uncommitted work (created for the test).
+- [x] Confirm its final sync and central session counts (1 session, 4 messages).
+- [x] Destroy or rebuild it (`ssh exe.dev rm av-canary`).
+- [x] Confirm its historical sessions remain searchable centrally.
+- [x] Restore the central archive from Tigris into a clean environment.
+- [x] Confirm restored search and session lineage. Recall evidence links remain
+      untested — Recall itself is Phase 4.
 
 ### Phase 4 — Recall experiment
 
