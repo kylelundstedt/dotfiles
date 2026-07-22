@@ -33,4 +33,5 @@ always-on rules live in `AGENTS.md`.
 | `secrets.md`                 | Secret management — exe.dev integrations, 1Password patterns, MCP server auth                |
 | `multi-tenant.md`            | Future multi-tenant plan (gated on first paying client) — decisions, checklist               |
 | `herdr-pilot.md`             | herdr + Moshi agent-workflow pilot — topology decisions, boundaries, checklist               |
+| `agentsview-pilot.md`        | Approved fleet pilot — central Shelley/Claude/Codex history across exe.dev and AC VMs        |
 | `shelley-sovreignty.md`      | Shelley assessment + target architecture for sovereign operating memory                      |

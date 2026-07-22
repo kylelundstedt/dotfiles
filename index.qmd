@@ -15,6 +15,8 @@ Linux.
   VM fleet.
 - [**exe.dev web endpoints**](agent_docs/exe-dev-web.md) — application proxy,
   Shelley endpoint, and fleet audit details.
+- [**AgentsView fleet pilot**](agent_docs/agentsview-pilot.md) — approved plan
+  for unified Shelley/Claude/Codex history across agent-capable hosts.
 - [**Monitoring**](agent_docs/monitoring.md) — scheduled-job healthchecks and
   incident notes.
 - [**Model routing**](agent_docs/model-routing-economics.md) — subscription

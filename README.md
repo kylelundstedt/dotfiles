@@ -193,6 +193,7 @@ Re-run `install.sh` on a VM only when a pull _adds or removes_ files (new skills
 
 - [Secret Management with 1Password](agent_docs/secrets.md) — `op run` pattern, credential inventory + rotation runbook
 - [Hosts](agent_docs/hosts.md) — where this runs: the two Macs (mini vs mbp) and the Linux exe.dev VM fleet + testing
+- [AgentsView Fleet Pilot](agent_docs/agentsview-pilot.md) — approved rollout plan for unified Shelley/Claude/Codex history across the VM fleet
 - [Agent Recommendations](agent_docs/agents-recommendations.md) — dual-agent operating patterns, routing defaults, maintenance checklists
 - [Tigris Backup Runbook](agent_docs/tigris-backup-runbook.md) — what's backed up, credentials, and the disaster-recovery restore procedure
 - [Monitoring](agent_docs/monitoring.md) — healthchecks.io registry, grace rules, and incident post-mortems

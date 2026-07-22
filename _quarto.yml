@@ -7,6 +7,7 @@ project:
     - TODO.md
     - CHANGELOG.md
     - agent_docs/agents-recommendations.md
+    - agent_docs/agentsview-pilot.md
     - agent_docs/exe-dev-web.md
     - agent_docs/git-identity.md
     - agent_docs/herdr-pilot.md
