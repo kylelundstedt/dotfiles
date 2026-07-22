@@ -1396,8 +1396,8 @@ setup_agents() {
     # Skills — the set comes from provisioning/skills.manifest (layer method
     # args). Team skills are baked into iv-image, so they install on macOS only
     # (Linux VMs get them vendored from the image); personal skills install
-    # everywhere. apple-containers is private — installed locally on macOS only
-    # (npx -y skills add -g -y . -s apple-containers).
+    # everywhere; mac skills are macOS-only and never vendored. npx runs from
+    # $DOTFILES_DIR so a manifest source of `.` means this repo.
     local skills_manifest="$DOTFILES_DIR/provisioning/skills.manifest"
     if command -v npx >/dev/null 2>&1 && [[ -f "$skills_manifest" ]]; then
         echo "  Installing agent skills (skills.manifest)..."
@@ -1405,11 +1405,12 @@ setup_agents() {
         while read -u 9 -r s_layer s_method s_args; do
             [[ -z "$s_layer" ]] && continue
             [[ "$s_layer" == "team" && "$OS" != "macos" ]] && continue
+            [[ "$s_layer" == "mac" && "$OS" != "macos" ]] && continue
             case "$s_method" in
                 npx)
                     # $s_args is intentionally word-split (repo + optional -s flags)
                     # shellcheck disable=SC2086
-                    if npx -y skills add -g -y $s_args >/dev/null 2>&1; then
+                    if (cd "$DOTFILES_DIR" && npx -y skills add -g -y $s_args) >/dev/null 2>&1; then
                         s_ok=$((s_ok+1))
                     else
                         echo "  [!] skill install failed: npx skills add $s_args"; s_fail=$((s_fail+1))

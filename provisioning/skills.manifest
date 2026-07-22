@@ -2,7 +2,7 @@
 # installed where. Consumers apply it per platform; this file is only the list.
 #
 # Columns (whitespace-separated; args = everything after method):
-#   layer   team | personal
+#   layer   team | personal | mac
 #   method  npx  — `npx -y skills add -g -y <args>`
 #           curl — `<name> <url>`: fetch <url> to ~/.agents/skills/<name>/SKILL.md
 #   args    method-specific (see above)
@@ -12,9 +12,13 @@
 #             dotfiles commit); dotfiles installs them on macOS only — Linux VMs
 #             get them from the image.
 #   personal  dotfiles-only, installed on every machine by install.sh.
+#   mac       dotfiles-only, macOS only, NOT vendored into iv-image. For skills
+#             that are meaningless on a Linux VM. `npx` args of `.` install from
+#             this repo (install.sh runs npx from $DOTFILES_DIR).
 #
-# Consumers: install.sh setup_agents (macOS: team+personal, Linux: personal);
-# iv-image vendor-skills.sh (team). Checked by diff-provisioning.sh.
+# Consumers: install.sh setup_agents (macOS: team+personal+mac, Linux:
+# personal); iv-image vendor-skills.sh (team). Checked by diff-provisioning.sh
+# and by test-install.sh provisioning (manifest vs what is on disk).
 
 team npx matsonj/mviz
 team npx vercel-labs/skills -s find-skills
@@ -32,4 +36,6 @@ team curl archil-guide https://archil.com/skill.md
 personal npx tigrisdata/tigris-agents-plugins
 personal npx marimo-team/marimo-pair
 personal npx kylelundstedt/dotfiles -s sprites-dev join-tailnet upgrade-vm
-# apple-containers is private — installed locally on macOS only, not listed here
+# apple-containers is private (macOS-only, this repo) — installed from `.`, not
+# published to a skills repo and not vendored into iv-image
+mac npx . -s apple-containers

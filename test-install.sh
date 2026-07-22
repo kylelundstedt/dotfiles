@@ -353,6 +353,67 @@ test_provisioning() {
     else
         log_fail "monitoring drift found — see /tmp/check-monitoring.out"
     fi
+    test_skills_on_disk
+}
+
+# skills.manifest vs what is actually installed. diff-provisioning.sh compares
+# the manifest against the *installers*; nothing compared it against the
+# *machine*, which let two opposite drifts sit undetected for weeks (2026-07-22):
+# three skills deleted from this repo on 2026-06-11 kept loading into every
+# agent session, and apple-containers was in the repo but in no manifest row, so
+# it never installed at all.
+test_skills_on_disk() {
+    echo ""
+    echo "=== skills.manifest vs ~/.agents/skills (local) ==="
+    local skills_dir="$HOME/.agents/skills"
+    if [[ ! -d "$skills_dir" ]]; then
+        echo "  SKIP: no ~/.agents/skills on this host"
+        return
+    fi
+
+    # Direction 1 — every explicitly named skill in the manifest must be present.
+    # Rows without -s install an unknown set from an upstream repo, so only the
+    # explicit names (-s ... and curl <name>) are assertable.
+    local missing=""
+    while read -r layer method args; do
+        [[ -z "$layer" ]] && continue
+        [[ "$layer" == "team" && "$(uname -s)" != "Darwin" ]] && continue
+        [[ "$layer" == "mac"  && "$(uname -s)" != "Darwin" ]] && continue
+        local names=""
+        case "$method" in
+            npx)  [[ "$args" == *" -s "* ]] && names="${args#* -s }" ;;
+            curl) names="${args%% *}" ;;
+        esac
+        local n
+        for n in $names; do
+            [[ -f "$skills_dir/$n/SKILL.md" ]] || missing+=" $n"
+        done
+    done <<< "$(grep -vE '^[[:space:]]*#|^[[:space:]]*$' "$DOTFILES_DIR/provisioning/skills.manifest")"
+    if [[ -z "$missing" ]]; then
+        log_pass "every explicitly named manifest skill is installed"
+    else
+        log_fail "manifest names skills that are not installed:$missing"
+    fi
+
+    # Direction 2 — a skill this repo once owned, has since deleted, and does not
+    # install via the manifest must not still be sitting on disk. Unknown-set
+    # upstream repos are untouched by this, so it stays quiet in normal use.
+    local orphans="" deleted
+    deleted=$(git -C "$DOTFILES_DIR" log --all --diff-filter=D --name-only --format= \
+        -- 'agents/.agents/skills/*/SKILL.md' 2>/dev/null |
+        awk -F/ 'NF{print $4}' | sort -u)
+    local d
+    for d in $deleted; do
+        [[ -d "$DOTFILES_DIR/agents/.agents/skills/$d" ]] && continue   # re-added since
+        grep -qE "(^| )-s .*\b${d}\b|^[a-z]+ curl ${d} " \
+            "$DOTFILES_DIR/provisioning/skills.manifest" && continue    # installed on purpose
+        [[ -e "$skills_dir/$d" ]] && orphans+=" $d"
+    done
+    if [[ -z "$orphans" ]]; then
+        log_pass "no skills deleted from this repo are still installed"
+    else
+        log_fail "orphaned skills still loading into agent sessions:$orphans (rm -rf ~/.agents/skills/<name> and its ~/.claude/skills symlink)"
+    fi
 }
 
 # --- IV overlay (U7): dotfiles as a thin personal overlay on an IV VM ---
