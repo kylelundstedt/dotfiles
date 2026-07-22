@@ -16,9 +16,32 @@ if [ "${1:-}" = version ]; then
     echo '{"schema_version":1,"name":"agentsview","version":"0.38.1","commit":"test","build_date":"2026-07-13T00:00:00Z"}'
     exit 0
 fi
-if [ "${1:-} ${2:-}" = "session list" ]; then
-    echo '[]'
-    exit 0
+if [ "${1:-}" = serve ]; then
+    shift
+    port=8080
+    while [ "$#" -gt 0 ]; do
+        if [ "$1" = --port ]; then port=$2; shift 2; else shift; fi
+    done
+    exec python3 - "$port" <<'PY'
+import http.server
+import json
+import sys
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        payload = {"ok": True} if self.path == "/api/ping" else {"sessions": []}
+        body = json.dumps(payload).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *_):
+        pass
+
+http.server.HTTPServer(("127.0.0.1", int(sys.argv[1])), Handler).serve_forever()
+PY
 fi
 exit 1
 EOF
