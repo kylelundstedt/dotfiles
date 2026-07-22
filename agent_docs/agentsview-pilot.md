@@ -1,7 +1,8 @@
 # AgentsView fleet pilot — unified agent history across machines
 
-Status: **approved for implementation** (2026-07-22). This is an internal
-KGL/IV development-fleet pilot, not an IV Platform product decision.
+Status: **pilot in progress** (approved and Phase 0/1 canaries started
+2026-07-22). This is an internal KGL/IV development-fleet pilot, not an IV
+Platform product decision.
 
 ## Decision
 
@@ -195,35 +196,81 @@ operational evidence; it does not silently promote AgentsView into the IV
 Platform canon. Product adoption would require an ADR and updates to the
 canonical Platform documents.
 
+## Execution record — 2026-07-22
+
+Phase 0 and the two Phase 1 canaries are live:
+
+- `klundstedt-mini` runs AgentsView `v0.38.1` from the Homebrew cask under
+  `com.kylelundstedt.agentsview`, bound only to its Tailscale IPv4 address on
+  port `8080`. The tailnet URL presents the expected bearer-token login; an
+  unauthenticated API request returns `401`.
+- `iv-docs` (exe.dev, amd64) and `iv-sandbox` (Apple Container guest, arm64)
+  run the pinned `v0.38.1` source service from `iv-image`. Both bind only their
+  Tailscale IPv4 address, use unique per-host tokens, and reject unauthenticated
+  remote-sync requests with `401`.
+- Discovery is correct for data that exists: `iv-docs` exposes Claude and
+  Shelley roots; `iv-sandbox` exposes Shelley. Neither canary currently has
+  Codex session data to expose.
+- The first coordinated sync produced 122 central sessions across three
+  machines: 64 mini, 55 `iv-docs`, and 3 `iv-sandbox`. Exact sampled fidelity
+  matched source and central counts: `iv-docs` 55 sessions / 3,296 messages /
+  3,343 tool calls; `iv-sandbox` 3 / 18 / 9.
+- The central archive was 67 MiB after the first canary sync. Persistent remote
+  mirrors used 118 MiB. Observed idle source RSS was about 78 MiB on `iv-docs`
+  and 62 MiB on `iv-sandbox`; central RSS was about 372 MiB after initial sync.
+- `backup/agentsview-snapshot.sh` created a 67 MiB online SQLite backup with
+  manifest, SHA-256, version, and successful `integrity_check`. The isolated
+  restore check opened that snapshot through a clean AgentsView server and
+  queried its API successfully.
+- `com.kylelundstedt.agentsview-healthcheck` validates authenticated access,
+  unauthenticated rejection, sync freshness, and snapshot freshness every five
+  minutes. Its optional external healthchecks.io ping URL is not provisioned
+  yet, so this is currently a local fail/log check rather than a dead-man alert.
+
+Two temporary bootstrap gaps remain:
+
+1. Unique tokens are mode-`0600` local secrets (`source.env` on canaries and
+   `config.toml` on the collector). Writing the mini login Keychain from the
+   remote SSH session failed with a Keychain permissions error. Move token
+   authority into 1Password/Keychain from an unlocked GUI login before fleet
+   rollout; no token is committed.
+2. The implementation commits are deployed on the mini and canaries, but the
+   newest dotfiles follow-ups and `iv-image` commit remain ahead of GitHub
+   because the mini's GitHub CLI token is invalid. Re-authenticate GitHub CLI
+   on the mini and push before treating provisioning as canonical.
+
 ## Rollout plan
 
 ### Phase 0 — prepare the collector
 
-- [ ] Pin the evaluated stable release (`v0.38.1` initially; recheck at
-      implementation time).
-- [ ] Install AgentsView on `klundstedt-mini`.
-- [ ] Create a local-only central data directory with restrictive permissions.
-- [ ] Configure central UI/API access over the tailnet only.
-- [ ] Create per-source token handling through 1Password/Keychain.
-- [ ] Add consistent SQLite snapshot, Tigris inclusion, and restore procedure.
-- [ ] Add health monitoring for collector freshness and backup freshness.
+- [x] Pin the evaluated stable release (`v0.38.1`, rechecked 2026-07-22).
+- [x] Install AgentsView on `klundstedt-mini`.
+- [x] Create a local-only central data directory with restrictive permissions.
+- [x] Configure central UI/API access over the tailnet only.
+- [ ] Move per-source token authority into 1Password/Keychain. Unique mode-`0600`
+      local tokens are live for the canaries; GUI-unlocked fan-out remains.
+- [x] Add consistent SQLite snapshot, Tigris inclusion, and restore procedure.
+- [ ] Complete health monitoring by adding the external healthchecks.io ping.
+      Local five-minute collector/sync/snapshot checks are active.
 
 ### Phase 1 — two canaries
 
-- [ ] Enable a source daemon on one exe.dev VM (`iv-docs` is suitable).
-- [ ] Enable a source daemon on one Apple Container VM (`iv-sandbox`).
-- [ ] Verify Shelley, Claude, and Codex discovery where source data exists.
-- [ ] Verify a new session appears centrally within ten minutes.
-- [ ] Compare sampled source and normalized sessions/messages/tool calls.
-- [ ] Verify unauthenticated remote-sync access is rejected.
-- [ ] Measure idle CPU, memory, sync traffic, and central archive growth.
+- [x] Enable a source daemon on one exe.dev VM (`iv-docs`).
+- [x] Enable a source daemon on one Apple Container VM (`iv-sandbox`).
+- [x] Verify Shelley, Claude, and Codex discovery where source data exists.
+- [ ] Verify a newly created canary session appears centrally within ten minutes.
+- [x] Compare sampled source and normalized sessions/messages/tool calls.
+- [x] Verify unauthenticated remote-sync access is rejected.
+- [ ] Complete resource measurement: idle CPU/RSS and archive/mirror size are
+      recorded; capture steady-state sync traffic over a representative day.
 
 ### Phase 2 — fleet rollout
 
-- [ ] Add AgentsView to `provisioning/tools.manifest` and dotfiles installation.
-- [ ] Add pinned installation and tests to `iv-image`.
-- [ ] Re-vendor/pin dotfiles material into `iv-image` as required by the existing
-      repository contract.
+- [x] Add AgentsView to `provisioning/tools.manifest` and dotfiles installation.
+- [ ] Push the pinned installation, source service, lock field, and tests in
+      `iv-image` to GitHub (deployed commit is currently mini-local).
+- [ ] Push/reconcile the newest dotfiles commits and canonical `iv-image`
+      dotfiles pin after mini GitHub CLI re-authentication.
 - [ ] Inventory every active agent-capable tailnet host.
 - [ ] Roll out per-host credentials and stable collector names.
 - [ ] Confirm every active host has synced recently; do not rely on a static host

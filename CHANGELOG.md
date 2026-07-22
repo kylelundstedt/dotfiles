@@ -4,6 +4,26 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-07-22 — AgentsView pilot collector and canaries live
+
+- Installed AgentsView `v0.38.1` on `klundstedt-mini` through the Homebrew cask
+  and added a launchd-supervised, bearer-authenticated collector bound only to
+  the mini's Tailscale address. The UI is reachable over MagicDNS and rejects
+  unauthenticated API requests.
+- Added pinned, checksum-verified amd64/arm64 AgentsView provisioning and a
+  fail-closed systemd user source service to `iv-image`. Enabled the first two
+  unique-token canaries on `iv-docs` and the `iv-sandbox` Apple Container guest;
+  both reject unauthenticated remote-sync requests.
+- Verified exact source-to-central fidelity for both canaries and collected 122
+  sessions across three machines. Added restrictive remote mirrors, five-minute
+  sync scheduling, local collector/sync/snapshot freshness checks, and fixed
+  dotfiles' IV-overlay detection so Apple Container guests preserve the
+  `iv-image` team layer.
+- Added an online SQLite backup staged under `~/archives/agentsview`, excluded
+  the live archive/tokens/mirrors from generic backup, and proved the snapshot
+  opens through an isolated clean AgentsView server. Remaining pilot gates are
+  tracked in `agent_docs/agentsview-pilot.md` and `TODO.md`.
+
 ## 2026-07-22 — mini authoring boundary; kgl writers detached
 
 - Formalized `klundstedt-mini` as the author/merge host for both dotfiles and

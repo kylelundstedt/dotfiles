@@ -59,6 +59,13 @@ Monitoring boundaries follow repo/VM boundaries (decided 2026-07-14): a
 service with its own repo on its own VM owns its own check in its own
 project, configured and documented there. Known out-of-registry monitoring:
 
+- **AgentsView pilot collector** (`klundstedt-mini`) — launchd runs
+  `agentsview-healthcheck` every five minutes and verifies authenticated API
+  access, unauthenticated rejection, last coordinated sync age (≤20 minutes),
+  and staged snapshot age (≤30 hours). The script supports Keychain service
+  `agentsview:healthcheck-url`, but no external check/ping URL is provisioned
+  yet; until then failures are local logs/exit status only. Add the live check
+  and `checks.manifest` row together before fleet rollout.
 - **rss-feed** (`kylelundstedt/rss-feed`, rss-feed VM) — a systemd timer runs
   `healthcheck.sh` every ~16 min, validates every generated feed, and pings a
   check in a separate healthchecks.io project (URL in

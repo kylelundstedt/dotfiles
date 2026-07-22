@@ -62,5 +62,25 @@ PY
     (( age <= 1200 )) || fail "last completed sync is ${age}s old"
 fi
 
+# The nightly Tigris job refreshes this staged online-backup snapshot. A copy
+# older than 30 hours means either snapshot preparation or the backup cascade
+# has missed its expected daily run.
+SNAPSHOT_MANIFEST="$HOME/archives/agentsview/manifest.json"
+[[ -s "$SNAPSHOT_MANIFEST" ]] || fail "snapshot manifest missing"
+snapshot_created=$(sed -nE \
+    's/.*"created_utc"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' \
+    "$SNAPSHOT_MANIFEST" | head -1)
+[[ -n "$snapshot_created" ]] || fail "snapshot timestamp missing"
+snapshot_age=$(python3 - "$snapshot_created" <<'PY'
+import datetime as dt
+import sys
+value = sys.argv[1].replace("Z", "+00:00")
+when = dt.datetime.fromisoformat(value)
+now = dt.datetime.now(dt.timezone.utc)
+print(max(0, int((now - when).total_seconds())))
+PY
+)
+(( snapshot_age <= 108000 )) || fail "snapshot is ${snapshot_age}s old"
+
 job_hc
-echo "OK: authenticated, unauthenticated rejected, archive present"
+echo "OK: authenticated, unauthenticated rejected, archive and snapshot fresh"

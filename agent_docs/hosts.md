@@ -38,6 +38,10 @@ fleet runs here.
 - **`~/archives/`:** msgvault email, calendar DuckDB, the search hub, and
   external-volume archives. The data contract between dotfiles (backup) and
   personal-mcp (serve).
+- **AgentsView collector (pilot):** launchd serves the authenticated central
+  archive on the mini's Tailscale address (`:8080`) and syncs source daemons at
+  five-minute intervals. The consistent backup authority is staged under
+  `~/archives/agentsview`; see [agentsview-pilot.md](agentsview-pilot.md).
 - **Monitoring:** the healthchecks.io registry ([monitoring.md](monitoring.md))
   covers this host's scheduled jobs.
 - **External disk:** `OWC8TB` (encrypted; unlocked by `backup/owc8tb-unlock.sh`).
@@ -56,7 +60,7 @@ hosts none of the mini's operational duties.
   **user** device (browser join), not tagged.
 - **No scheduled jobs:** the backup/sync LaunchAgents are mini-gated and no-op
   here.
-- **`hub-mcp` client, not server:** `install.sh` registers the MCP *client*
+- **`hub-mcp` client, not server:** `install.sh` registers the MCP _client_
   pointed at the mini's tailnet URL; the server itself never runs here.
 - **herdr client-only (pilot):** runs no herdr server — you attach via Ghostty
   tabs to the servers on the mini + VMs, so the agent sessions (dotfiles,
@@ -99,8 +103,13 @@ Lifecycle (create, join tailnet, upgrade) lives in the `exe-dev` /
 - Apple Containers and Sprites are alternative platforms, not actively
   maintained (see `TODO.md`).
 - `install.sh` skips tools already present on the image (`need` checks) to
-  avoid redundant downloads. On IV VMs it runs as a thin personal overlay on
-  top of iv-image's `provision-iv.sh` (see [repo-boundaries.md](repo-boundaries.md)).
+  avoid redundant downloads. On IV VMs, including Apple Container guests with
+  `~/iv-provision.lock`, it runs as a thin personal overlay on top of
+  iv-image's `provision-iv.sh` (see [repo-boundaries.md](repo-boundaries.md)).
+- **AgentsView canaries:** `iv-docs` (exe.dev) and `iv-sandbox` (Apple Container
+  guest) run the pinned, tailnet-only authenticated source service. Binary
+  installation is unconditional in `iv-image`; service activation requires a
+  joined tailnet and a mode-`0600` per-host token file.
 - Shell change targets zsh; in non-interactive mode it may be skipped without
   sudo/root.
 

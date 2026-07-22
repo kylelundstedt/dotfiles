@@ -9,7 +9,7 @@ backup is worthless if you can't decrypt it. Keep the credentials below in
 
 | Source                                                                   | Tigris bucket             | Prefix            | Tier       |
 | ------------------------------------------------------------------------ | ------------------------- | ----------------- | ---------- |
-| `~/` (minus excludes)                                                    | `klundstedt-mini-backup`  | `home/`           | IA         |
+| `~/` (minus excludes; includes staged AgentsView snapshot)               | `klundstedt-mini-backup`  | `home/`           | IA         |
 | External Photos library (`/Volumes/OWC8TB/Photos Library.photoslibrary`) | `klundstedt-mini-backup`  | `photos/`         | IA         |
 | `/Volumes/OWC8TB/aws_s3_backup`                                          | `klundstedt-mini-archive` | `aws-s3/`         | GLACIER_IR |
 | `/Volumes/OWC8TB/Box_Download_2025-01-12`                                | `klundstedt-mini-archive` | `box/`            | GLACIER_IR |
@@ -30,7 +30,12 @@ backup is worthless if you can't decrypt it. Keep the credentials below in
   vendors' own clouds) and **the rest of `~/Library`** (app state + all
   TCC-protected dirs — the unattended job has no Full Disk Access), plus
   `node_modules`/`.venv`, `.lmstudio/models`, `.Trash`, `.cache`,
-  `.DS_Store`, sockets, and the regenerable `archives/hub` DuckDB.
+  `.DS_Store`, sockets, the regenerable `archives/hub` DuckDB, and the live
+  `~/.agentsview` tree (SQLite/WAL, bearer tokens, and raw remote mirrors).
+  Immediately before home sync, `backup/agentsview-snapshot.sh` uses SQLite's
+  online backup API to stage a consistent `~/archives/agentsview/sessions.db`
+  plus a version/size/SHA-256/integrity manifest; that staging directory remains
+  included.
 - **Client-side encryption** via rclone `crypt` (standard filename + directory
   name encryption). Tigris stores ciphertext only.
 
@@ -96,6 +101,30 @@ rclone copy arch:box    ~/restore/box    --progress
   reversible for 30 days. List/restore prior versions via the Tigris dashboard or
   the S3 versioning API; the `--max-delete 5000` guard in the nightly also caps
   any single run's deletions.
+
+### AgentsView archive
+
+The backup authority is the staged pair below, not the live `~/.agentsview`
+directory:
+
+```text
+~/archives/agentsview/sessions.db
+~/archives/agentsview/manifest.json
+```
+
+After restoring `home/archives/agentsview/`, verify the manifest, SHA-256,
+SQLite integrity, and a clean UI/API open without touching the live collector:
+
+```bash
+~/dotfiles/backup/agentsview-restore-check.sh \
+  ~/restore/home/archives/agentsview
+```
+
+The check copies the database into a temporary data directory, starts an
+isolated loopback-only AgentsView server with sync disabled, queries its API,
+and removes the temporary server/data. The first local staging restore passed
+on July 22, 2026; the later Phase 3 gate must repeat this from ciphertext pulled
+back from Tigris.
 
 ## Verify integrity / restore drill
 
