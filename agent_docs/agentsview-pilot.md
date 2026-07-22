@@ -247,7 +247,7 @@ that path. The earlier failure was specific to writing the login Keychain from a
 remote SSH session; from an Aqua GUI session it succeeds. Inventory row and
 rotation procedure: `secrets.md` + `provisioning/keys.manifest`.
 
-### AgentsView Desktop cannot be used on the collector host
+### AgentsView Desktop cannot be used on any fleet host
 
 Tested against a scratch data directory; the production daemon was untouched.
 The desktop app requires a **loopback-bound backend with bearer auth disabled**:
@@ -264,14 +264,31 @@ There is no env var or setting pointing it at a remote collector — neither
 binary exposes one. It is a local-archive viewer, not a client for a central
 collector.
 
-Consequence: on `klundstedt-mini` use the browser UI at
-`http://klundstedt-mini.dojo-sun.ts.net:8080` with the collector token. Running
-the desktop app there would mean dropping `--require-auth` and moving access
-control to the transport (`tailscale serve`, already this host's pattern, or the
-managed caddy's `100.64.0.0/10` ACL). That trades a per-request bearer token for
-tailnet identity, so every tagged VM on the tailnet could read the whole
-archive. Not worth it for a UI convenience; revisit only with a tailnet ACL
-restricting port 8080.
+This is not collector-specific. A source daemon runs the same invocation —
+`serve --host "$TS_IP" --port 8080 --require-auth` against `~/.agentsview` — so
+every one of the three refusal conditions holds on sources too. **The desktop
+app and fleet participation are mutually exclusive on a given host**, whether
+that host is the collector or a source. Its only remaining role is a machine
+deliberately kept outside the fleet.
+
+Consequence for the two Macs: on `klundstedt-mini`, use the browser UI at
+`http://klundstedt-mini.dojo-sun.ts.net:8080` with the collector token. On
+`klundstedt-mbp` the app works today only because no AgentsView daemon runs
+there; enabling a source daemon to collect the mbp ends that. Skip the app on
+both.
+
+Making the app work on a fleet host would mean dropping `--require-auth` and
+moving access control to the transport (`tailscale serve`, already this host's
+pattern, or the managed caddy's `100.64.0.0/10` ACL). That trades a per-request
+bearer token for tailnet identity, so every tagged VM on the tailnet could read
+the whole archive. Not worth it for a UI convenience; revisit only with a
+tailnet ACL restricting port 8080.
+
+The browser UI is no downgrade — it is the same interface the app wraps in a
+webview. Note each source daemon also serves that UI on its own tailnet address
+(`iv-docs`, `iv-sandbox` both answer on `:8080`), gated by that host's own
+token, but showing only that host's sessions. The fleet-wide view exists only on
+the mini, and is reachable from any tailnet device.
 
 Incidental findings: `--proxy caddy` requires `--public-url` (undocumented in
 `--help`), and tailnet port 8443 is already taken by `tailscale serve`. Auth is
@@ -357,7 +374,9 @@ any other host.
 - [ ] Roll out per-host credentials and stable collector names. Six inventoried
       VMs have the unit installed and inactive; start with `kgl-thoughts`.
 - [ ] Decide whether `klundstedt-mbp` is in scope, and enable Tailscale SSH on
-      it if so — it could not be inventoried without that.
+      it if so — it could not be inventoried without that. Enabling a source
+      daemon there also retires AgentsView Desktop on that machine; the two
+      cannot coexist on one host.
 - [ ] Confirm every active host has synced recently; do not rely on a static host
       list because the VM fleet is ephemeral.
 
