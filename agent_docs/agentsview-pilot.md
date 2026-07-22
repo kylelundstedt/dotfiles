@@ -227,17 +227,95 @@ Phase 0 and the two Phase 1 canaries are live:
   minutes. Its optional external healthchecks.io ping URL is not provisioned
   yet, so this is currently a local fail/log check rather than a dead-man alert.
 
-Two temporary bootstrap gaps remain:
+One temporary bootstrap gap remains:
 
-1. Unique tokens are mode-`0600` local secrets (`source.env` on canaries and
-   `config.toml` on the collector). Writing the mini login Keychain from the
-   remote SSH session failed with a Keychain permissions error. Move token
-   authority into 1Password/Keychain from an unlocked GUI login before fleet
-   rollout; no token is committed.
-2. The implementation commits are deployed on the mini and canaries, but the
+1. The implementation commits are deployed on the mini and canaries, but the
    newest dotfiles follow-ups and `iv-image` commit remain ahead of GitHub
    because the mini's GitHub CLI token is invalid. Re-authenticate GitHub CLI
    on the mini and push before treating provisioning as canonical.
+
+## Execution record — 2026-07-22 (later)
+
+### Token authority moved to 1Password
+
+`op://Personal/AgentsView fleet tokens` (industryvault) is now the authority: a
+Secure Note with one concealed field per consumer — `collector` for the mini's
+UI/API token, then one field per source host. The collector field is mirrored to
+login Keychain `agentsview:auth-token`, which `agentsview-service` already
+preferred over its `config.toml` fallback, and the collector was restarted onto
+that path. The earlier failure was specific to writing the login Keychain from a
+remote SSH session; from an Aqua GUI session it succeeds. Inventory row and
+rotation procedure: `secrets.md` + `provisioning/keys.manifest`.
+
+### AgentsView Desktop cannot be used on the collector host
+
+Tested against a scratch data directory; the production daemon was untouched.
+The desktop app requires a **loopback-bound backend with bearer auth disabled**:
+
+| Backend configuration                         | Desktop result                              |
+| --------------------------------------------- | ------------------------------------------- |
+| Tailnet-bound + `--require-auth` (production) | "backend status is unusable"                |
+| Loopback + managed caddy + `--require-auth`   | daemon adopted; "interface did not respond" |
+| Loopback, auth disabled                       | UI loads                                    |
+
+The app's webview loads `http://127.0.0.1:PORT?desktop=1` with no Authorization
+header, so `require_auth` locks out the app itself, not just remote clients.
+There is no env var or setting pointing it at a remote collector — neither
+binary exposes one. It is a local-archive viewer, not a client for a central
+collector.
+
+Consequence: on `klundstedt-mini` use the browser UI at
+`http://klundstedt-mini.dojo-sun.ts.net:8080` with the collector token. Running
+the desktop app there would mean dropping `--require-auth` and moving access
+control to the transport (`tailscale serve`, already this host's pattern, or the
+managed caddy's `100.64.0.0/10` ACL). That trades a per-request bearer token for
+tailnet identity, so every tagged VM on the tailnet could read the whole
+archive. Not worth it for a UI convenience; revisit only with a tailnet ACL
+restricting port 8080.
+
+Incidental findings: `--proxy caddy` requires `--public-url` (undocumented in
+`--help`), and tailnet port 8443 is already taken by `tailscale serve`. Auth is
+preserved end-to-end through the managed caddy — proxied unauthenticated API
+requests return 401.
+
+### Local Shelley source failed every sync since bootstrap
+
+Every collector sync since 2026-07-21 19:45 logged
+`sync error: listing shelley conversations: no such table: conversations`
+(73 occurrences) and reported one failed source. Cause: auto-discovery created a
+zero-byte `~/.config/shelley/shelley.db` on the mini, where Shelley is not
+installed, then failed to read it forever. Removing the empty file fixed it; it
+was not recreated on restart, and syncs are now clean.
+
+The five-minute healthcheck did not catch this — it validates auth, archive
+presence, sync _freshness_, and snapshot freshness, but not per-source sync
+errors. A failing source is silent. Worth adding a per-source error assertion
+before fleet rollout, when there are eight more sources to go wrong.
+
+### Fleet inventory
+
+Every active agent-capable tailnet host, checked 2026-07-22. All six exe.dev VMs
+already carry the `agentsview-source.service` unit from `iv-image`; none is
+enabled, so none of this history is collected:
+
+| Host                  | Shelley db | Claude jsonl | Codex jsonl | Source daemon |
+| --------------------- | ---------- | ------------ | ----------- | ------------- |
+| `iv-docs`             | present    | 55 sessions  | none        | **active**    |
+| `iv-sandbox`          | present    | none         | none        | **active**    |
+| `kgl-thoughts`        | 49M        | 111          | 7           | inactive      |
+| `iv-gitlake-examples` | 12M        | 4            | 3           | inactive      |
+| `rss-feed`            | 9.9M       | 0            | 0           | inactive      |
+| `iv-gitlake`          | 2.3M       | 0            | 0           | inactive      |
+| `iv-home`             | 908K       | 1            | 0           | inactive      |
+| `iv-ave-adapters`     | 172K       | 1            | 0           | inactive      |
+
+`kgl-thoughts` is the largest uncollected host by an order of magnitude.
+`llm-gateway` is excluded as a service-only appliance (no agent harness, SSH
+refused). `klundstedt-mbp` could not be inventoried — Tailscale SSH is not
+enabled on it — and remains scoped in only if agents run locally there; note
+that running AgentsView Desktop on the mbp builds a _separate local_ archive and
+does not feed the collector. Collecting the mbp requires a source daemon like
+any other host.
 
 ## Rollout plan
 
@@ -247,11 +325,14 @@ Two temporary bootstrap gaps remain:
 - [x] Install AgentsView on `klundstedt-mini`.
 - [x] Create a local-only central data directory with restrictive permissions.
 - [x] Configure central UI/API access over the tailnet only.
-- [ ] Move per-source token authority into 1Password/Keychain. Unique mode-`0600`
-      local tokens are live for the canaries; GUI-unlocked fan-out remains.
+- [x] Move per-source token authority into 1Password/Keychain
+      (`op://Personal/AgentsView fleet tokens`; collector mirrored to Keychain
+      `agentsview:auth-token`, 2026-07-22).
 - [x] Add consistent SQLite snapshot, Tigris inclusion, and restore procedure.
 - [ ] Complete health monitoring by adding the external healthchecks.io ping.
       Local five-minute collector/sync/snapshot checks are active.
+- [ ] Assert per-source sync success in the healthcheck. Freshness alone hid a
+      local source that failed every sync for 73 consecutive runs.
 
 ### Phase 1 — two canaries
 
@@ -271,8 +352,12 @@ Two temporary bootstrap gaps remain:
       `iv-image` to GitHub (deployed commit is currently mini-local).
 - [ ] Push/reconcile the newest dotfiles commits and canonical `iv-image`
       dotfiles pin after mini GitHub CLI re-authentication.
-- [ ] Inventory every active agent-capable tailnet host.
-- [ ] Roll out per-host credentials and stable collector names.
+- [x] Inventory every active agent-capable tailnet host (2026-07-22; table in
+      the execution record above).
+- [ ] Roll out per-host credentials and stable collector names. Six inventoried
+      VMs have the unit installed and inactive; start with `kgl-thoughts`.
+- [ ] Decide whether `klundstedt-mbp` is in scope, and enable Tailscale SSH on
+      it if so — it could not be inventoried without that.
 - [ ] Confirm every active host has synced recently; do not rely on a static host
       list because the VM fleet is ephemeral.
 
