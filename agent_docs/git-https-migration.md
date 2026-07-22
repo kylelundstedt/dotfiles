@@ -1,6 +1,6 @@
 # Git HTTPS migration
 
-Status: **exe.dev fleet complete; MBP validation pending** (2026-07-22).
+Status: **complete** (2026-07-22).
 
 ## Desired end state
 
@@ -92,9 +92,11 @@ GitHub CLI credential or integration scope instead.
   preserved. On `kgl-thoughts`, an install-generated personal-overlay block had
   dirtied the stowed source; it was discarded and only the Git/Zsh stow migration
   was applied to avoid re-running that unrelated overlay path.
-- `klundstedt-mbp` remains the sole validation gap: it was offline/unreachable
-  over Tailscale when checked. When it is online, pull dotfiles, run the
-  installer, and verify HTTPS fetch/push with `SSH_AUTH_SOCK` unset.
+- `klundstedt-mbp` completed the final validation interactively: signing is
+  unset; personal dotfiles fetch and dry-run push succeeded with both
+  `SSH_AUTH_SOCK` and `GITHUB_TOKEN` removed; and an IndustryVault repository
+  (`industryvault-new`) dry-run push succeeded after GitHub CLI was authorized
+  for the organization’s SAML SSO.
 - After the fleet canary completed, `kgl-dotfiles` was moved back to the
   read-only dotfiles endpoint. Both dedicated writer integrations now have no
   attachments and are available only for an explicit, temporary push canary.
