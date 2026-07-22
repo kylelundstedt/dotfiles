@@ -36,6 +36,15 @@ Grace sizing rules (each learned the hard way):
 - **Don't edit a running shell script in place.** Bash can read script input
   incrementally; replacing the file while a long-running command is active can
   make the existing process resume at an invalid offset and fail to parse.
+- **A freshness check does not prove the work happened.** The AgentsView
+  collector finished every sync on schedule for 73 consecutive runs while one
+  source failed every time (2026-07-22) — the check asserted "a sync completed
+  recently", never "every source contributed". Same family as the mcp-server
+  lesson above: assert the dependency, not the wrapper. The check now asserts
+  zero failed sources and probes each configured source itself.
+- **Report the fan-out count in the success line.** Printing "8 source(s)
+  reachable" immediately exposed a config parser that silently covered only 6
+  of 8 — a check that quietly skips half its targets still reports OK.
 
 ## Registry
 
@@ -59,13 +68,6 @@ Monitoring boundaries follow repo/VM boundaries (decided 2026-07-14): a
 service with its own repo on its own VM owns its own check in its own
 project, configured and documented there. Known out-of-registry monitoring:
 
-- **AgentsView pilot collector** (`klundstedt-mini`) — launchd runs
-  `agentsview-healthcheck` every five minutes and verifies authenticated API
-  access, unauthenticated rejection, last coordinated sync age (≤20 minutes),
-  and staged snapshot age (≤30 hours). The script supports Keychain service
-  `agentsview:healthcheck-url`, but no external check/ping URL is provisioned
-  yet; until then failures are local logs/exit status only. Add the live check
-  and `checks.manifest` row together before fleet rollout.
 - **rss-feed** (`kylelundstedt/rss-feed`, rss-feed VM) — a systemd timer runs
   `healthcheck.sh` every ~16 min, validates every generated feed, and pings a
   check in a separate healthchecks.io project (URL in

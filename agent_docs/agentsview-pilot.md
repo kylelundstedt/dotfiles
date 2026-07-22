@@ -416,6 +416,30 @@ Adopt AgentsView as permanent internal fleet infrastructure when:
 
 The pilot may succeed even if Recall is not yet production-worthy.
 
+### Adoption decision deferred to ~2026-08-04
+
+Reviewed 2026-07-22 and held. Three criteria were open: most hosts not yet
+collected, no destruction/restore test, and the system had been live under a
+day against a two-week bar. The day's two silent defects — 73 consecutive
+failed syncs invisible to monitoring, and a client unusable on any fleet host —
+argued for letting the clock run rather than against the tool.
+
+Two structural questions must be answered before the label changes. Neither
+blocks day-to-day use; both get expensive to decide late.
+
+1. **Retention mechanism.** The data policy above says what the archive is, not
+   how it is bounded. There is no retention rule, only the manual
+   `agentsview prune`. The archive was 70 MB from three machines on day one,
+   grows with every host added, holds prompts/tool results/shell commands, and
+   rides the nightly Tigris backup. Decide a rule — by age, by host lifetime,
+   or by explicit prune cadence — while the number is small enough that
+   deleting is not frightening.
+2. **Token fan-out.** `secrets.md` still calls the mode-`0600` `source.env`
+   pattern a temporary pilot delivery mechanism. Permanent infrastructure needs
+   a real provisioning path from `op://Personal/AgentsView fleet tokens` to each
+   host, rather than hand-placement repeated per host. `iv-image` already owns
+   the unit; the token step is the manual remainder.
+
 ## Rollback
 
 AgentsView is additive. Rollback is:
