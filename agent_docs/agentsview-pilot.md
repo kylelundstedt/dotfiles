@@ -227,12 +227,12 @@ Phase 0 and the two Phase 1 canaries are live:
   minutes. Its optional external healthchecks.io ping URL is not provisioned
   yet, so this is currently a local fail/log check rather than a dead-man alert.
 
-One temporary bootstrap gap remains:
-
-1. The implementation commits are deployed on the mini and canaries, but the
-   newest dotfiles follow-ups and `iv-image` commit remain ahead of GitHub
-   because the mini's GitHub CLI token is invalid. Re-authenticate GitHub CLI
-   on the mini and push before treating provisioning as canonical.
+Both bootstrap gaps recorded here are closed as of 2026-07-22 (see the later
+execution record): token authority moved to 1Password, and provisioning is
+canonical on GitHub. The mini's GitHub CLI turned out to be authenticated and
+working — `gh api user` and an authenticated push both succeed — so no
+re-authentication was needed; `dotfiles` is pushed and `iv-image` `main` was
+already in sync with its AgentsView source-daemon work.
 
 ## Execution record — 2026-07-22 (later)
 
@@ -365,10 +365,11 @@ any other host.
 ### Phase 2 — fleet rollout
 
 - [x] Add AgentsView to `provisioning/tools.manifest` and dotfiles installation.
-- [ ] Push the pinned installation, source service, lock field, and tests in
-      `iv-image` to GitHub (deployed commit is currently mini-local).
-- [ ] Push/reconcile the newest dotfiles commits and canonical `iv-image`
-      dotfiles pin after mini GitHub CLI re-authentication.
+- [x] Push the pinned installation, source service, lock field, and tests in
+      `iv-image` to GitHub (`main` in sync; `bin/agentsview-source-daemon`,
+      `systemd/agentsview-source.service`, `tests/test-agentsview-source.sh`).
+- [x] Push/reconcile the newest dotfiles commits (2026-07-22). The mini's
+      GitHub CLI was already valid; no re-authentication was required.
 - [x] Inventory every active agent-capable tailnet host (2026-07-22; table in
       the execution record above).
 - [ ] Roll out per-host credentials and stable collector names. Six inventoried
