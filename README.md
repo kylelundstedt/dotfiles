@@ -10,11 +10,11 @@ One command to set up a fully configured development environment on macOS or Lin
 
 **Modern CLI replacements** — `cat` → [bat](https://github.com/sharkdp/bat), `grep` → [ripgrep](https://github.com/BurntSushi/ripgrep), `cd` → [zoxide](https://github.com/ajeetdsouza/zoxide)
 
-**Dev tools** — Git with 1Password SSH signing, [croc](https://github.com/schollz/croc) for secure device-to-device file transfer, Tigris CLI for object storage, DuckDB, Python via [uv](https://docs.astral.sh/uv/)
+**Dev tools** — Git over HTTPS via GitHub CLI credentials on Macs and scoped exe.dev integrations on VMs, [croc](https://github.com/schollz/croc) for secure device-to-device file transfer, Tigris CLI for object storage, DuckDB, Python via [uv](https://docs.astral.sh/uv/)
 
 **Ops for the always-on Mac mini** — nightly encrypted backup to Tigris (`backup/`), scheduled repo sync and credential-expiry alarms (`launchd/`), and a healthchecks.io monitoring registry with automated drift checks (`provisioning/`)
 
-**Remote development** — Primary platform is [exe.dev](https://exe.dev) VMs, edited from the Mac via Zed [remote development](https://zed.dev/docs/remote-development) over SSH. Tailscale gives every machine a stable hostname, and SSH agent forwarding from the Mac's 1Password agent handles git push and commit signing — no tokens ever live on a VM.
+**Remote development** — Primary platform is [exe.dev](https://exe.dev) VMs, edited from the Mac via Zed [remote development](https://zed.dev/docs/remote-development) over SSH. Tailscale gives every machine a stable hostname. Git uses HTTPS: GitHub CLI credentials on Macs and scoped exe.dev integrations on VMs, so no Git PAT or signing key lives on a VM.
 
 **Two kinds of machines, one installer** — `install.sh` behaves differently depending on what it finds:
 
@@ -92,7 +92,7 @@ Git uses a generated OS include so only one platform-specific file is active:
 ├── ~/.gitconfig_common      # Shared configuration
 ├── ~/.gitconfig_local       # User-specific (name, email) - gitignored
 ├── ~/.gitconfig_os_local    # Managed by install.sh (macOS or Linux include)
-├── ~/.gitconfig_macos       # macOS-specific (1Password SSH signing)
+├── ~/.gitconfig_macos       # macOS-specific editor settings
 └── ~/.gitconfig_linux       # Linux-specific (micro editor)
 ```
 
@@ -183,7 +183,7 @@ Re-run `install.sh` on a VM only when a pull _adds or removes_ files (new skills
 
 **Starship not loading** — Ensure the starship binary is in PATH
 
-**Git SSH signing not working** — Verify 1Password SSH agent is running and the `identityagent` path is correct in `.gitconfig_macos`
+**Git HTTPS authentication not working** — Run `gh auth status`; if needed, re-run `gh auth login --hostname github.com --git-protocol https --web` followed by `gh auth setup-git --hostname github.com`.
 
 **Homebrew failures** — Run `brew doctor` and ensure Xcode Command Line Tools are installed: `xcode-select --install`
 

@@ -70,31 +70,12 @@ token_for() {
     esac
 }
 
-# Run git over HTTPS with a per-owner token — NO SSH. The scheduled job runs in a
-# launchd context where the 1Password SSH agent is unavailable/locked, so any
-# git@github.com SSH op fails ("communication with agent failed"). insteadOf
-# rewrites SSH (and bare-HTTPS) remotes to a tokened HTTPS URL at transport time,
-# so existing repos (SSH origin) and USAA (SSH key not SSO-authorized) all work.
-# The owner-qualified rules are load-bearing: the stowed ~/.gitconfig_macos has
-# url.git@github.com:.insteadOf=https://github.com/ (SSH via 1Password for
-# interactive use), and when both rules match an https origin with equal prefix
-# length, the file rule beats -c — silently flipping https-form origins back to
-# SSH (the 2026-07 healthcheck flapping). The owner-qualified base is a strictly
-# longer match, and longest match always wins.
-# The username is embedded (x-access-token@) so git only prompts for the password,
-# which GIT_ASKPASS supplies from $SYNC_REPOS_TOKEN.
+# Run git over HTTPS with a per-owner token. The scheduled job must not rely on
+# an interactive credential helper: it supplies the token through GIT_ASKPASS.
 git_https() { # tok owner git-args...
     local tok="$1" owner="$2"; shift 2
-    # credential.helper= (empty) resets the helper list so git does NOT consult
-    # the osxkeychain helper (which pops a GUI keychain-unlock prompt that would
-    # hang the unattended job) — the token comes straight from GIT_ASKPASS.
     SYNC_REPOS_TOKEN="$tok" GIT_ASKPASS="$ASKPASS" GIT_TERMINAL_PROMPT=0 \
-        git -c "credential.helper=" \
-            -c "url.https://x-access-token@github.com/.insteadOf=git@github.com:" \
-            -c "url.https://x-access-token@github.com/.insteadOf=https://github.com/" \
-            -c "url.https://x-access-token@github.com/$owner/.insteadOf=git@github.com:$owner/" \
-            -c "url.https://x-access-token@github.com/$owner/.insteadOf=https://github.com/$owner/" \
-            "$@"
+        git -c "credential.helper=" "$@"
 }
 
 sync_repos() {
@@ -147,14 +128,8 @@ sync_repos() {
         if [ -d "$repo_dir/.git" ]; then
             if git -C "$repo_dir" rev-parse HEAD >/dev/null 2>&1; then
                 echo "  fetch $name"
-                # Normalize origin to the canonical https form first. Historical
-                # clones carry ssh-form or case-variant URLs (e.g. lowercase
-                # industryvault/snowflake_usage) that dodge the owner-qualified
-                # insteadOf rules and fall into an equal-length rewrite tie that
-                # the gitconfig_macos ssh rule can win under launchd (observed
-                # 2026-07-07..09: one repo failing every scheduled run while
-                # interactive repros passed). Canonical URL + owner rule =
-                # longest match everywhere, no tie to lose. Idempotent.
+                # Normalize historical SSH/case-variant origins to canonical HTTPS.
+                # This is idempotent and keeps unattended sync independent of SSH.
                 git -C "$repo_dir" remote set-url origin "https://github.com/$owner/$name.git" 2>/dev/null || true
                 if git_https "$tok" "$owner" -C "$repo_dir" fetch --all --quiet; then
                     # Fast-forward default branch so local HEAD stays current.
@@ -180,12 +155,11 @@ sync_repos() {
     done <<< "$listing"
 }
 
-# Clone over HTTPS+token (git_https rewrites the SSH URL). SSH is never attempted:
-# it can't work in the unattended launchd context (no 1Password agent).
+# Clone directly over HTTPS. SSH is never attempted by the scheduled job.
 clone_repo() {
     local owner="$1" name="$2" dir="$3" tok="$4"
     rm -rf "$dir"
-    if ! git_https "$tok" "$owner" clone --quiet "git@github.com:$owner/$name.git" "$dir"; then
+    if ! git_https "$tok" "$owner" clone --quiet "https://github.com/$owner/$name.git" "$dir"; then
         echo "  WARN: clone failed for $owner/$name"; rm -rf "$dir"
         FAILED=$((FAILED+1)); FAILED_REPOS+=("$owner/$name")
     fi

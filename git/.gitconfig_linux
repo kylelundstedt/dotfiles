@@ -1,8 +1,2 @@
 [core]
 editor = micro
-
-[gpg]
-format = ssh
-
-[gpg "ssh"]
-defaultKeyCommand = sh -c 'ssh-add -L | grep -i \"github.*signing\\|signing.*github\" | head -1 | cut -d\" \" -f1-2 || ssh-add -L | grep -E \"^ssh-\" | head -1 | cut -d\" \" -f1-2'

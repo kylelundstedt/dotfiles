@@ -20,7 +20,8 @@ always-on rules live in `AGENTS.md`.
 | ---------------------------- | -------------------------------------------------------------------------------------------- |
 | `hosts.md`                   | Where this runs — the two Macs (mini vs mbp) and the Linux VM fleet + testing                |
 | `exe-dev-web.md`             | exe.dev app/Shelley endpoint model + 2026-07-19 fleet web audit                              |
-| `git-identity.md`            | Repo layout + commit identity across macOS & exe.dev VMs (hasconfig-by-org); transition plan |
+| `git-identity.md`            | Repo layout + commit identity across macOS & exe.dev VMs (hasconfig-by-org)                  |
+| `git-https-migration.md`     | HTTPS-only Git transport migration, canary, fleet rollout, and rollback                       |
 | `agents-recommendations.md`  | Operating patterns, dual-agent workflows, task routing, maintenance checklists               |
 | `model-routing-economics.md` | Subscription strategy, model routing, and Shelley cost-evaluation method                     |
 | `repo-boundaries.md`         | Decision: what belongs in dotfiles, split criteria, multi-tenant trigger                     |

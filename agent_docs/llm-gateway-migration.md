@@ -356,10 +356,10 @@ does not need a GUI session** — completion `SSH-RECOVERY-OK` +
 healthcheck green. Planned reboots are therefore fully remotely
 recoverable; console is only required after power loss. Limitations of
 the pre-console-login state, all verified: (1) **op CLI dead** (1P
-desktop-app integration needs the GUI app) — no secret reads; (2) **1P
-SSH agent down** — commit signing fails (`-c commit.gpgsign=false` to
-commit); (3) **GitHub push blocked** (SSH auth via 1P agent; PAT env
-resolved from 1P at login; gh keyring token stale). iv-sandbox does NOT
+desktop-app integration needs the GUI app) — no secret reads; (2) Git uses
+HTTPS, so commit signing is not a dependency; (3) a GitHub CLI credential
+may still be unavailable until console login, so GitHub pushes should be
+retried after login. iv-sandbox does NOT
 come back in this path (its LaunchAgent needs console login) — boot it
 manually via `container machine run`. One llm-gateway README commit
 (verified reboot model) is committed locally, push pending console login.

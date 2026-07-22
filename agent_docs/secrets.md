@@ -19,7 +19,7 @@ No credentials on VM disk. Integrations are scoped by tag (client/project) or pe
 
 **Tag convention:** VMs are tagged by client (e.g. `iv`, `usaa`). Tag-scoped integrations grant access to the appropriate set of services. When team members join via SSO, personal integrations remain invisible to them; team integrations (`--team` flag) only support `tag:` attachment.
 
-Commit signing uses SSH agent forwarding over Tailscale (`ForwardAgent yes` for `*.ts.net`). The private key stays in 1Password on the Mac.
+Git operations use HTTPS. Macs authenticate through GitHub CLI credentials in the system credential store; exe.dev VMs use scoped GitHub integrations. No Git PAT or commit-signing key is stored on a VM.
 
 ## MCP Servers
 

@@ -13,7 +13,8 @@ know before acting.
 
 ### `klundstedt-mini` — always-on Mac mini
 
-The operational host. Everything scheduled, backed up, or served runs here.
+The operational host and dotfiles author/merge host. Everything scheduled,
+backed up, served, or coordinated across the exe.dev fleet runs here.
 
 - **Tailscale:** open-source `tailscaled` (brew formula, system daemon via
   `sudo brew services`), not the standard app. Needs `--tailscale-ssh` on the
@@ -39,6 +40,9 @@ The operational host. Everything scheduled, backed up, or served runs here.
 - **Monitoring:** the healthchecks.io registry ([monitoring.md](monitoring.md))
   covers this host's scheduled jobs.
 - **External disk:** `OWC8TB` (encrypted; unlocked by `backup/owc8tb-unlock.sh`).
+- **Git ownership:** authors and merges `kylelundstedt/dotfiles`, performs
+  GitHub HTTPS authentication, and coordinates fleet rollout. See
+  [git-https-migration.md](git-https-migration.md).
 
 ### `klundstedt-mbp` — dev laptop
 
@@ -67,12 +71,13 @@ tailnet URL).
 
 ## Linux — exe.dev VMs
 
-Most of the Linux side is an ephemeral, tag-scoped VM fleet. One VM has a
-specific durable role: **`kgl-dotfiles` is the dedicated authoring VM for
-`~/dotfiles` and `~/iv-image`**. It has the repository-writer integrations;
-project VMs consume those repositories through read-only integrations. Account
-control-plane changes (integrations, attachments, and VM lifecycle) are made
-from `klundstedt-mini` or another Mac with the account SSH credential.
+Most of the Linux side is an ephemeral, tag-scoped VM fleet.
+**`kgl-dotfiles` is the dedicated Linux dotfiles canary**, with a writable
+dotfiles integration only for temporary-branch validation. `klundstedt-mini`
+authors and merges dotfiles; ordinary project VMs consume dotfiles and iv-image
+read-only. Account control-plane changes (integrations, attachments, and VM
+lifecycle) are made from `klundstedt-mini` or another Mac with the account SSH
+credential.
 
 Lifecycle (create, join tailnet, upgrade) lives in the `exe-dev` /
 `join-tailnet` / `upgrade-vm` skills, not here.

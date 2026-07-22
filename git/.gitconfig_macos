@@ -1,24 +1,2 @@
 [core]
 editor = zed --wait
-
-[hub]
-protocol = ssh
-
-# Push to GitHub over SSH so 1Password handles auth — but ONLY pushes.
-# Plain `insteadOf` rewrites *all* ops and turns anonymous HTTPS clones of public
-# repos into SSH, which then fail whenever no SSH agent is available (brew taps,
-# `go get`, CI, any non-interactive context — hit 2026-07-18 with `brew tap`).
-# `pushInsteadOf` leaves fetches/clones on HTTPS and only rewrites pushes.
-[url "git@github.com:"]
-    pushInsteadOf = https://github.com/
-
-[gpg]
-format = ssh
-
-[commit]
-gpgsign = true
-
-[gpg "ssh"]
-program = "/Applications/1Password.app/Contents/MacOS/op-ssh-sign"
-# Automatically use GitHub Signing Key from 1Password, or fall back to first available key
-defaultKeyCommand = "sh -c 'SSH_AUTH_SOCK=~/Library/Group\\ Containers/2BUA8C4S2C.com.1password/t/agent.sock ssh-add -L | grep -i \"github.*signing\\|signing.*github\" | head -1 | cut -d\" \" -f1-2 || SSH_AUTH_SOCK=~/Library/Group\\ Containers/2BUA8C4S2C.com.1password/t/agent.sock ssh-add -L | grep -E \"^ssh-\" | head -1 | cut -d\" \" -f1-2'"

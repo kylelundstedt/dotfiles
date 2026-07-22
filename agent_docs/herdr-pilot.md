@@ -145,10 +145,8 @@ herdr server.
       web preview) is **installed on the mini 2026-07-18**: `brew tap rjyo/moshi; brew install
     moshi-hook; brew services start moshi-hook`. Mini-only + a third-party tap that needs
       `brew trust rjyo/moshi`, so it's NOT in the Brewfile (would over-provision the mbp and
-      trip the trust gate) — reinstall by hand on a mini rebuild. Note: `brew tap` over HTTPS
-      only works now because the git rewrite was changed to `pushInsteadOf` (see
-      `git/.gitconfig_macos`); plain `insteadOf` had rewritten it to SSH and it failed
-      non-interactively.
+      trip the trust gate) — reinstall by hand on a mini rebuild. Brew taps use their native
+      HTTPS remotes and do not depend on SSH rewrite rules.
 - [ ] Verify on a throwaway session: detach/reattach, VM suspend/resume survival, `--takeover`
       semantics when Mac + phone attach to the same session
 - [ ] Run one real project per machine for a week (dotfiles on mini, one IV repo on its VM)

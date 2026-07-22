@@ -52,41 +52,33 @@ Git's `hasconfig` treats `/` as a path-component boundary, so a plain `*` won't
 cross the slashes in `https://…exe.xyz/`. Two globs per org are needed to cover
 all remote shapes:
 
-| glob | exe.dev proxy | `git@github.com:` (SSH) | `https://github.com/` |
-| --- | --- | --- | --- |
-| `**/<org>/**` | ✅ | — | ✅ |
-| `**<org>/**` | — | ✅ | — |
+| glob | exe.dev proxy | `https://github.com/` |
+| --- | --- | --- |
+| `**/<org>/**` | ✅ | ✅ |
 
-So each org gets both lines. In `git/.gitconfig`, replace the `gitdir:` block
-with:
+The HTTPS-only transport policy needs one line per org. In `git/.gitconfig`,
+replace the `gitdir:` block with:
 
 ```gitconfig
 # Identity by repo owner-org via remote URL — path-independent, so it works on
 # macOS (~/github/<org>/<repo>) AND exe.dev VMs (flat ~/<repo>) identically.
 #   **/org/**  matches exe.dev proxy + github.com HTTPS (org is a /-segment)
-#   **org/**   matches github.com SSH (git@github.com:org/)
 [includeIf "hasconfig:remote.*.url:**/kylelundstedt/**"]
-    path = ~/.gitconfig_personal
-[includeIf "hasconfig:remote.*.url:**kylelundstedt/**"]
     path = ~/.gitconfig_personal
 [includeIf "hasconfig:remote.*.url:**/IndustryVault/**"]
     path = ~/.gitconfig_work
-[includeIf "hasconfig:remote.*.url:**IndustryVault/**"]
-    path = ~/.gitconfig_work
 [includeIf "hasconfig:remote.*.url:**/industryvault/**"]   # proxy lowercases it
     path = ~/.gitconfig_work
-# …same triple for USAA (**USAA/**, **/USAA/**, **/usaa/**);
-# iv-cmg is already lowercase so 2 globs (**/iv-cmg/**, **iv-cmg/**).
+# …same HTTPS/proxy forms for USAA and iv-cmg.
 ```
 
 Everything not matched falls to `~/.gitconfig_local` (the default, unchanged).
 
 **Case-sensitivity (resolved, tested on iv-docs 2026-07-18): `hasconfig`
-matching is CASE-SENSITIVE.** GitHub direct remotes carry the **canonical** org
+matching is CASE-SENSITIVE.** GitHub HTTPS remotes carry the **canonical** org
 case (`IndustryVault`); the exe.dev proxy **lowercases** it (`…/industryvault/…`).
-So a mixed-case work org needs three globs — `**Org/**` (SSH, canonical),
-`**/Org/**` (HTTPS, canonical), `**/org/**` (proxy, lowercase). Already-lowercase
-orgs (`kylelundstedt`, `iv-cmg`) need only the two.
+A mixed-case work org therefore needs two HTTPS forms: canonical
+`**/Org/**` and proxy-lowercase `**/org/**`. Already-lowercase orgs need one.
 
 **Prerequisite the mechanism depends on — the identity fragments must exist.**
 `~/.gitconfig_personal` / `~/.gitconfig_work` are **gitignored** (they hold the
@@ -110,62 +102,35 @@ committed.
   home-independent; the *same committed gitconfig* works on both. This lets us
   **retire the `gitdir:` includeIf** — `hasconfig` subsumes it on macOS too.
 
-## GitHub integration authoring and consumer boundaries
+## GitHub HTTPS migration ownership and integration boundaries
 
-### Authoring
-
-As of 2026-07-22, **`kgl-dotfiles` is the authoritative writable authoring
-VM for both repositories**:
-
-| Repository | Authoring checkout | Writable integration | Attachment |
-| --- | --- | --- | --- |
-| `kylelundstedt/dotfiles` | `~/dotfiles` | `github-kylelundstedt-dotfiles-writer` | `vm:kgl-dotfiles` |
-| `kylelundstedt/iv-image` | `~/iv-image` | `github-kylelundstedt-iv-image-writer` | `vm:kgl-dotfiles` |
-
-Both authoring checkouts use the generic
-`https://github.int.exe.xyz/kylelundstedt/<repo>.git` remote. On
-`kgl-dotfiles`, that endpoint resolves to the corresponding writer integration.
-This replaces the stale policy that dotfiles is authored from a Mac: the Macs
-may perform account-level exe.dev control-plane work, but repository edits,
-commits, and pushes for these two repositories happen on `kgl-dotfiles`.
+The Git transport migration is owned by **`kylelundstedt/dotfiles`** and is
+implemented, reviewed, merged, and rolled out from `klundstedt-mini`.
+`kgl-dotfiles` is the Linux canary: it verifies that an exe.dev VM can commit
+without signing and push through its scoped HTTPS integration. It is not the
+permanent author/merge host for dotfiles or iv-image. The rollout plan is
+[git-https-migration.md](git-https-migration.md).
 
 ### Read-only project-VM consumers
 
-Project VMs consume the repositories; they do not author either repository.
-The named consumer endpoints are read-only and were created without
-`--act-as-user`:
+Project VMs consume dotfiles and iv-image; they do not author either
+repository. The named consumer integrations are read-only and were created
+without `--act-as-user`:
 
-| Repository | Consumer integration | Mode | Attachments |
-| --- | --- | --- | --- |
-| `kylelundstedt/dotfiles` | `github-kylelundstedt-dotfiles` | `--readonly` | `iv-home`, `iv-docs`, `iv-ave-adapters`, `rss-feed`, `kgl-thoughts`, `iv-gitlake`, `iv-gitlake-examples` |
-| `kylelundstedt/iv-image` | `github-kylelundstedt-iv-image` | `--readonly` | `iv-home`, `iv-docs`, `iv-ave-adapters`, `rss-feed`, `kgl-thoughts`, `iv-gitlake`, `iv-gitlake-examples` |
+| Repository | Consumer integration | Attachments |
+| --- | --- | --- |
+| `kylelundstedt/dotfiles` | `github-kylelundstedt-dotfiles` | `iv-home`, `iv-docs`, `iv-ave-adapters`, `rss-feed`, `kgl-thoughts`, `iv-gitlake`, `iv-gitlake-examples` |
+| `kylelundstedt/iv-image` | `github-kylelundstedt-iv-image` | all ordinary project VMs; `kgl-dotfiles` during its provisioning/canary role |
 
-The prior read/write integrations had been attached `auto:all`, including the
-authoring VM, so they could not safely be converted in place. After the
-read-only replacements were verified, those integrations were retained and
-renamed `github-kylelundstedt-{dotfiles,iv-image}-writer`, then scoped only to
-`vm:kgl-dotfiles`. This preserves the dedicated writer while ensuring that the
-generic `github.int.exe.xyz` remote resolves read-only on project VMs.
-
-The named consumer endpoints are:
-
-```text
-https://github-kylelundstedt-dotfiles.int.exe.xyz/kylelundstedt/dotfiles.git
-https://github-kylelundstedt-iv-image.int.exe.xyz/kylelundstedt/iv-image.git
-```
-
-On 2026-07-22, `iv-docs` successfully fetched both endpoints. A dry-run push
-of `HEAD:refs/heads/__readonly_probe__` to each was rejected with HTTP 403, and
-neither probe branch existed afterward. The same fetch and dry-run-push checks
-through the generic endpoint confirmed that `kgl-dotfiles` retains write access
-while `iv-docs` does not.
+Both named endpoints fetch successfully and reject dry-run pushes. Dedicated
+writer integrations are retained only while the HTTPS canary and Mac
+credential migration are validated; they are not a fleet-wide write grant.
 
 ### Control plane
 
 Use `klundstedt-mini` (or another Mac with the account SSH credential) for
-exe.dev integration, attachment, and VM-lifecycle changes. `kgl-dotfiles` is
-for repository authoring; it intentionally does not hold that control-plane
-credential.
+exe.dev integration, attachment, and VM-lifecycle changes. Git repository
+transport is HTTPS: GitHub CLI on Macs, scoped repo integrations on VMs.
 
 ## Cleanups this unlocks
 

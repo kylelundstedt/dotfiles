@@ -574,11 +574,6 @@ SSHEOF
 
         cat >> "$ssh_config" <<SSHEOF
 
-Host github.com
-  ControlMaster auto
-  ControlPath ~/.ssh/sockets/%r@%h-%p
-  ControlPersist 600
-
 Host exe.dev *.exe.xyz
   ControlMaster auto
   ControlPath ~/.ssh/sockets/%r@%h-%p
@@ -651,11 +646,6 @@ SSHEOF
             fi
             cat <<SSHEOF
 
-Host github.com
-  Hostname ssh.github.com
-  Port 443
-  User git
-
 Host exe.dev *.exe.xyz
   ControlMaster auto
   ControlPath ~/.ssh/sockets/%r@%h-%p
@@ -693,12 +683,6 @@ SSHEOF
         cat "$block_file" "$rest_file" > "$ssh_config"
         rm -f "$block_file" "$rest_file"
         echo "  [+] SSH config (Linux — dotfiles block prepended, foreign blocks preserved)"
-
-        # GitHub known host
-        if ! grep -q 'ssh.github.com' "$HOME/.ssh/known_hosts" 2>/dev/null; then
-            ssh-keyscan -p 443 ssh.github.com >> "$HOME/.ssh/known_hosts" 2>/dev/null
-            echo "  [+] GitHub known host"
-        fi
     fi
 
     chmod 600 "$ssh_config"
@@ -714,8 +698,11 @@ SSHEOF
     echo "*.exe.xyz $exe_rsa_key" >> "$known_hosts"
     echo "  [+] exe.dev host key in known_hosts"
 
-    # Ensure local config exists
+    # Ensure local config exists. Migrate hosts from the retired SSH commit
+    # signing policy; absence is normal on fresh installs.
     touch "$git_config_local"
+    git config --file "$git_config_local" --unset-all commit.gpgsign 2>/dev/null || true
+    git config --file "$git_config_local" --unset-all user.signingkey 2>/dev/null || true
     if [[ -s "$git_config_local" ]]; then
         echo "  Git user config already set"
     elif [[ "$IS_INTERACTIVE" == true ]]; then
@@ -766,7 +753,6 @@ EOF
         echo "  [+] Wrote git/.gitconfig_work"
     fi
 
-    # Commit signing is enabled at login time by .zshrc when SSH agent is forwarded
 }
 
 # --- set_shell ---
@@ -1313,16 +1299,22 @@ setup_agents() {
             echo "  [=] gh already authenticated"
         elif [[ "$IS_INTERACTIVE" == true && "$OS" == "macos" ]]; then
             echo "  Authenticating gh CLI (browser OAuth)..."
-            gh auth login --hostname github.com --git-protocol ssh --web \
-                && echo "  [+] gh CLI auth'd via browser" \
-                || echo "  [!] gh auth login --web failed"
+            if gh auth login --hostname github.com --git-protocol https --web \
+                && gh auth setup-git --hostname github.com; then
+                echo "  [+] gh CLI auth'd for HTTPS Git"
+            else
+                echo "  [!] gh HTTPS auth setup failed"
+            fi
         elif [[ "$op_configured" == true ]]; then
             local pat_home_gh
             pat_home_gh=$(op read "op://Private/GitHub PAT Home/token" --account lundstedts.1password.com 2>/dev/null) || true
             if [[ -n "$pat_home_gh" ]]; then
-                printf '%s\n' "$pat_home_gh" | gh auth login --hostname github.com --with-token \
-                    && echo "  [+] gh CLI auth'd with home PAT" \
-                    || echo "  [!] gh auth login --with-token failed"
+                if printf '%s\n' "$pat_home_gh" | gh auth login --hostname github.com --with-token \
+                    && gh auth setup-git --hostname github.com; then
+                    echo "  [+] gh CLI auth'd with home PAT for HTTPS Git"
+                else
+                    echo "  [!] gh HTTPS auth with home PAT failed"
+                fi
             else
                 echo "  [!] gh auth: home PAT not available from 1Password"
             fi
