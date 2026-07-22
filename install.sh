@@ -1300,7 +1300,7 @@ setup_agents() {
         elif [[ "$IS_INTERACTIVE" == true && "$OS" == "macos" ]]; then
             echo "  Authenticating gh CLI (browser OAuth)..."
             if gh auth login --hostname github.com --git-protocol https --web \
-                && gh auth setup-git --hostname github.com; then
+                && GIT_CONFIG_GLOBAL="$git_config_local" gh auth setup-git --hostname github.com; then
                 echo "  [+] gh CLI auth'd for HTTPS Git"
             else
                 echo "  [!] gh HTTPS auth setup failed"
@@ -1310,7 +1310,7 @@ setup_agents() {
             pat_home_gh=$(op read "op://Private/GitHub PAT Home/token" --account lundstedts.1password.com 2>/dev/null) || true
             if [[ -n "$pat_home_gh" ]]; then
                 if printf '%s\n' "$pat_home_gh" | gh auth login --hostname github.com --with-token \
-                    && gh auth setup-git --hostname github.com; then
+                    && GIT_CONFIG_GLOBAL="$git_config_local" gh auth setup-git --hostname github.com; then
                     echo "  [+] gh CLI auth'd with home PAT for HTTPS Git"
                 else
                     echo "  [!] gh HTTPS auth with home PAT failed"
