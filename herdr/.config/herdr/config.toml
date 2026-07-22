@@ -10,6 +10,7 @@ onboarding = false
 # Stamp detected/reported agent labels onto split-pane borders.
 show_agent_labels_on_pane_borders = true
 
+agent_panel_sort = "priority"
 [theme]
 # solarized: balanced, luminance-distinct palette that reads well for red-green
 # color vision deficiency. (vesper is the near-monochrome ultra-safe fallback.)
