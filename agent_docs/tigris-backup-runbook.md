@@ -96,6 +96,35 @@ rclone copy arch:box    ~/restore/box    --progress
   GLACIER, which is _frozen_ — a restore drill caught it failing to GET — so they
   were re-tiered to GLACIER_IR via `--s3-storage-class GLACIER_IR`. Same $0.004/GB
   storage; a small $0.03/GB fee applies only when you actually restore.)
+
+### Tigris pricing (verified 2026-07-22)
+
+| Tier                           | Storage      | Min duration | Retrieval       | Egress |
+| ------------------------------ | ------------ | ------------ | --------------- | ------ |
+| Standard                       | $0.02/GB-mo  | none         | free            | free   |
+| Infrequent Access (`bkup:`)    | $0.01/GB-mo  | **30 days**  | $0.01/GB        | free   |
+| Archive / Archive IR (`arch:`) | $0.004/GB-mo | **90 days**  | free / $0.03/GB | free   |
+
+Requests: Class A $0.005/1000, Class B $0.0005/1000; DELETE free. Egress is free
+on every tier, so restores cost only the retrieval fee.
+
+**The minimum-duration rule is what makes rewrite-heavy files expensive.** An
+object deleted or overwritten before its tier's minimum is still billed for the
+full minimum. Anything rewritten wholesale each night — a SQLite snapshot, for
+instance, which rclone cannot delta — therefore accumulates ~30 billed copies in
+IA:
+
+> **Nightly full snapshots into IA cost ≈ $0.30 per GB of file, per month**
+> (30 copies × $0.01/GB-mo), versus $0.01 to store it once.
+
+The lever is **snapshot cadence**, not archive retention: ~30 billed copies/month
+nightly, ~4.3 weekly, 1 monthly. Worth revisiting only when a snapshot gets
+large — the AgentsView archive at ~102 MB costs about **$0.03/month** all-in.
+
+Useful corollary: the 30-day soft-delete window below is **effectively free** on
+`bkup:`, because the 30-day IA minimum bills those versions regardless of whether
+soft-delete retains them.
+
 - **Recover a deleted/overwritten object (soft-delete, 30-day window)**: both
   buckets have soft-delete, so a bad sync (ransomware, accidental delete) is
   reversible for 30 days. List/restore prior versions via the Tigris dashboard or

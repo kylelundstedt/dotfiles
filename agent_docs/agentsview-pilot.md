@@ -514,6 +514,18 @@ blocks day-to-day use; both get expensive to decide late.
    rides the nightly Tigris backup. Decide a rule — by age, by host lifetime,
    or by explicit prune cadence — while the number is small enough that
    deleting is not frightening.
+
+   **This is not a cost decision.** Tigris pricing was checked 2026-07-22: the
+   nightly full snapshot into Infrequent Access costs ≈ $0.30 per GB of archive
+   per month (30 billed copies, since IA has a 30-day minimum storage duration
+   and rclone cannot delta a SQLite file), which is about **$0.03/month** at the
+   current 102 MB. Egress is free, so a full restore costs ~$0.001 in retrieval
+   fees. An earlier note here framed backup amplification as a compounding
+   pressure; the mechanism is real but the magnitude is not, and cadence — not
+   archive retention — is the lever if a snapshot ever gets large. Table and
+   rule of thumb: `tigris-backup-runbook.md`. Decide retention on what is worth
+   keeping and how sensitive it is, not on storage spend.
+
 2. **Token fan-out.** `secrets.md` still calls the mode-`0600` `source.env`
    pattern a temporary pilot delivery mechanism. Permanent infrastructure needs
    a real provisioning path from `op://Personal/AgentsView fleet tokens` to each
