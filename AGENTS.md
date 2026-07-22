@@ -13,6 +13,15 @@ GNU Stow–managed dotfiles and AI agent platform for macOS and Linux. Each top-
 - Stow a single package: `stow --no-folding -R -t "$HOME" <package>`
 - Dry-run stow: `stow --no-folding -R -n -t "$HOME" <package>`
 
+## Repository authoring boundary
+
+- GitHub is the canonical source of truth.
+- Author, commit, merge, and push both dotfiles and iv-image only from
+  `klundstedt-mini` (`~/dotfiles` and `~/github/kylelundstedt/iv-image`).
+- exe.dev VMs are read-only consumers or disposable test targets. Do not create
+  source commits there. Create Linux canaries on demand and delete them after
+  validation.
+
 ## Conventions
 
 - Always use `--no-folding` with stow so individual files are symlinked, not directories.

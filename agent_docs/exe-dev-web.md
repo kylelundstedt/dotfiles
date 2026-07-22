@@ -27,7 +27,7 @@ All eight local Shelley endpoints returned HTTP 200 (`Shelley Agent`).
 
 | VM | App proxy | Intended state / finding |
 | --- | --- | --- |
-| `kgl-dotfiles` | **200** (`Dotfiles`) | Healthy private Quarto preview and disposable Linux compatibility canary, not an authoring host. Its repo checkouts are read-only by default. `provision-docsite ~/dotfiles` renders the committed site configuration and serves `_site` through enabled nginx on `0.0.0.0:8000`; Shelley remains independent on its `.shelley.exe.xyz` endpoint. |
+| `kgl-dotfiles` | **Retired 2026-07-22** | At audit time it served a healthy private Quarto preview and Linux canary. Its work and Shelley database were preserved on `klundstedt-mini` before the VM was deleted. |
 | `iv-gitlake` | **200** (`GitLake`) | Healthy private site. Enabled lingering user unit `docsite.service` serves `~/gitlake/_site` on `0.0.0.0:8000`. |
 | `iv-home` | **503 by design** | Healthy closed-door service, intentionally tailnet-only. `ivhome.service` binds only the Tailscale IP on `8000`; its unit explicitly forbids `0.0.0.0` so the exe.dev proxy cannot reach it. |
 | `rss-feed` | **200** (`RSS Feed Service`) | Healthy public Go service. System unit `srv.service` is enabled with restart policy; healthcheck timer is active. |

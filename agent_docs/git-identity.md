@@ -107,8 +107,8 @@ committed.
 The Git transport migration is owned by **`kylelundstedt/dotfiles`** and is
 implemented, reviewed, merged, and rolled out from `klundstedt-mini`. The
 authoritative authoring worktrees for both dotfiles and iv-image live on the
-mini. `kgl-dotfiles` is a read-only Linux compatibility canary; it is not an
-author/merge host. The rollout plan is
+mini. Linux compatibility canaries are created on demand, remain read-only by
+default, and are deleted after validation. The rollout plan is
 [git-https-migration.md](git-https-migration.md).
 
 ### Read-only project-VM consumers
@@ -119,14 +119,13 @@ without `--act-as-user`:
 
 | Repository | Consumer integration | Attachments |
 | --- | --- | --- |
-| `kylelundstedt/dotfiles` | `github-kylelundstedt-dotfiles` | all ordinary project VMs plus the read-only `kgl-dotfiles` canary |
-| `kylelundstedt/iv-image` | `github-kylelundstedt-iv-image` | all ordinary project VMs plus the read-only `kgl-dotfiles` canary |
+| `kylelundstedt/dotfiles` | `github-kylelundstedt-dotfiles` | all ordinary project VMs; ephemeral canaries while under test |
+| `kylelundstedt/iv-image` | `github-kylelundstedt-iv-image` | all ordinary project VMs; ephemeral canaries while under test |
 
 Both named endpoints fetch successfully and reject dry-run pushes. Dedicated
-writer integrations have no attachments by default. Attach one to
-`kgl-dotfiles` only for an explicit temporary push canary, then detach it and
-restore the read-only origin immediately afterward. They are never a
-fleet-wide write grant.
+writer integrations have no attachments by default. Attach one to an explicit
+ephemeral canary only for a temporary push test, then detach it immediately.
+They are never a fleet-wide write grant.
 
 ### Control plane
 

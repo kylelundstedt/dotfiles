@@ -78,20 +78,19 @@ tailnet URL).
 
 ## Linux — exe.dev VMs
 
-Most of the Linux side is an ephemeral, tag-scoped VM fleet.
-**`kgl-dotfiles` is retained as a disposable Linux compatibility canary and
-private Quarto preview for dotfiles**, not as an authoring host. Its dotfiles
-and iv-image checkouts use read-only integrations by default. A dedicated
-writer may be attached only for an explicit temporary-branch canary and must be
-detached immediately afterward. `klundstedt-mini` authors and merges both
-repositories; ordinary project VMs also consume them read-only.
+Most of the Linux side is an ephemeral, tag-scoped VM fleet. There is no
+persistent dotfiles authoring or canary VM: `kgl-dotfiles` was retired on
+2026-07-22 after its AgentsView work was mirrored to `klundstedt-mini` and its
+Shelley database and repository bundles were archived under
+`~/archives/vm-retirements/` on the mini.
 
-Keep `kgl-dotfiles` while it provides the isolated Linux validation target and
-private documentation preview. It may be deleted and recreated after the
-preview is moved or retired and any active Shelley conversation data is
-preserved; no repository state on the VM is authoritative. Account
-control-plane changes (integrations, attachments, and VM lifecycle) are made
-from `klundstedt-mini` or another Mac with the account SSH credential.
+Create Linux compatibility canaries on demand (normally through
+`./test-install.sh exe`) and delete them after validation. Attach a writer
+integration only for an explicit temporary push test and detach it immediately
+afterward. `klundstedt-mini` authors and merges dotfiles and iv-image; ordinary
+project VMs consume both read-only. Account control-plane changes
+(integrations, attachments, and VM lifecycle) are made from
+`klundstedt-mini` or another Mac with the account SSH credential.
 
 Lifecycle (create, join tailnet, upgrade) lives in the `exe-dev` /
 `join-tailnet` / `upgrade-vm` skills, not here.

@@ -24,18 +24,17 @@ that commit messages don't always capture. Newest first. Open work lives in
   opens through an isolated clean AgentsView server. Remaining pilot gates are
   tracked in `agent_docs/agentsview-pilot.md` and `TODO.md`.
 
-## 2026-07-22 — mini authoring boundary; kgl writers detached
+## 2026-07-22 — mini authoring boundary; kgl-dotfiles retired
 
 - Formalized `klundstedt-mini` as the author/merge host for both dotfiles and
-  iv-image. GitHub remains canonical; exe.dev project VMs and `kgl-dotfiles`
-  consume both repositories read-only.
-- Returned `kgl-dotfiles` to the explicit read-only dotfiles endpoint and
-  detached `github-kylelundstedt-dotfiles-writer`. The iv-image writer was
-  already detached, so both dedicated writer integrations now have no
-  attachments and are reserved for explicit temporary push canaries.
-- Retained `kgl-dotfiles` for now as a disposable Linux compatibility canary
-  and private Quarto preview. It can be deleted after replacing or retiring
-  those roles and preserving any active Shelley conversation data.
+  iv-image. GitHub remains canonical; project VMs consume both repositories
+  read-only and Linux canaries are created only on demand.
+- Mirrored the completed AgentsView pilot work to the mini, archived the VM's
+  consistent Shelley database, conversation handoff, and repository bundles
+  under `~/archives/vm-retirements/kgl-dotfiles-2026-07-22/`, detached all repo
+  integrations, and retired `kgl-dotfiles` and its private Quarto preview.
+- Both dedicated writer integrations remain unattached and are reserved for
+  explicit temporary push canaries.
 
 ## 2026-07-21 — fail-closed, bounded Photos backup gate
 
