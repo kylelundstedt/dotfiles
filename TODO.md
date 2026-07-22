@@ -6,12 +6,11 @@ Open work only, grouped by when it can happen. Completed work →
 
 ## Actionable now
 
-- [ ] Complete Git HTTPS fleet rollout — source migration and `kgl-dotfiles`
-  no-agent canary passed 2026-07-22; `iv-ave-adapters`, `rss-feed`,
-  `iv-gitlake`, and `iv-gitlake-examples` updated. Before the remaining hosts:
-  resolve `iv-docs` dotfiles **AHEAD(11)** plus staged project work, preserve or
-  clear `iv-home`'s untracked project `.claude/`, and restore SSH reachability
-  to `kgl-thoughts`. See [agent_docs/git-https-migration.md](agent_docs/git-https-migration.md).
+- [ ] Complete Git HTTPS migration on `klundstedt-mbp` — every exe.dev VM,
+  `kgl-dotfiles` canary, and `klundstedt-mini` are complete as of 2026-07-22;
+  the MBP was offline/unreachable over Tailscale. When online: pull dotfiles,
+  run `install.sh`, and verify HTTPS fetch/push with `SSH_AUTH_SOCK` unset. See
+  [agent_docs/git-https-migration.md](agent_docs/git-https-migration.md).
 - [ ] **Migrate LLM gateway onto an AC appliance VM** — IN EXECUTION 2026-07-21: Phases 1–3 done + gated (repo `kylelundstedt/llm-gateway`, VM live at `https://llm-gateway.dojo-sun.ts.net`, both providers verified, token in 1P); Phase 4 partial. Phases 4–5 GATED AND CLOSED 2026-07-21 (reboot tests ×2 incl. remote SSH recovery, power-loss drill, monitoring live, iv-sandbox cut over — the sole consumer; exe.dev VMs use exe.dev's own gateway). **Burn-in started 2026-07-21**; after 7 clean days → Phase 6 teardown. Full state in [agent_docs/llm-gateway-migration.md](agent_docs/llm-gateway-migration.md) "Execution log"
 - [ ] iv-sandbox reboot resilience — reboot model now FULLY VERIFIED via the llm-gateway drills (llm-gateway-migration.md decision 7 + execution log): auto-login impossible (FileVault On); `authrestart` lands at loginwindow but tailnet SSH is up → remote recovery = SSH in + `container machine run -n iv-sandbox true` (container stack needs no GUI session); physical unlock passes through to login and fires LaunchAgents; power loss halts everything until console unlock. Remaining for iv-sandbox specifically: nothing structural — optionally add its own dead-man check (it has no monitoring; the llm-gateway pattern is reusable)
 - [ ] Update the `apple-containers` skill to the machine-mode approach — it predates this work and still uses `container run` + `ubuntu`; align it with [agent_docs/apple-container-vms.md](agent_docs/apple-container-vms.md)

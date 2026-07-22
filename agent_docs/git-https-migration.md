@@ -1,6 +1,6 @@
 # Git HTTPS migration
 
-Status: **canary passed; fleet rollout partial** (2026-07-22).
+Status: **exe.dev fleet complete; MBP validation pending** (2026-07-22).
 
 ## Desired end state
 
@@ -82,13 +82,17 @@ GitHub CLI credential or integration scope instead.
   `github-kylelundstedt-iv-image` endpoint; fetch succeeded and dry-run push
   returned HTTP 403. The former iv-image writer integration is retained but has
   no attachments.
-- Completed serial rollout: `iv-ave-adapters`, `rss-feed`, `iv-gitlake`, and
-  `iv-gitlake-examples`. Each has signing unset, fetched dotfiles over HTTPS,
-  and completed a dry-run project-repository push through its scoped
-  integration.
-- Deferred safely: `iv-home` has untracked project `.claude/` state; `iv-docs`
-  has 11 unpushed dotfiles commits plus staged project work; `kgl-thoughts` was
-  unreachable over SSH. Resolve those conditions before updating them.
+- Completed serial rollout: `iv-ave-adapters`, `rss-feed`, `iv-gitlake`,
+  `iv-gitlake-examples`, `iv-home`, `iv-docs`, and `kgl-thoughts`. Each has
+  signing unset, fetched dotfiles over HTTPS, and completed a dry-run
+  project-repository push through its scoped integration. `iv-home`'s untracked
+  local `.claude/settings.local.json` and `iv-docs` staged project work were
+  preserved. On `kgl-thoughts`, an install-generated personal-overlay block had
+  dirtied the stowed source; it was discarded and only the Git/Zsh stow migration
+  was applied to avoid re-running that unrelated overlay path.
+- `klundstedt-mbp` remains the sole validation gap: it was offline/unreachable
+  over Tailscale when checked. When it is online, pull dotfiles, run the
+  installer, and verify HTTPS fetch/push with `SSH_AUTH_SOCK` unset.
 
 ## Completion criteria
 
