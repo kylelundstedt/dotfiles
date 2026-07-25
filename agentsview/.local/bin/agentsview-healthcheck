@@ -27,9 +27,12 @@ fi
 TS_BIN=$(command -v tailscale || true)
 [[ -n "$TS_BIN" ]] || [[ ! -x /opt/homebrew/bin/tailscale ]] || TS_BIN=/opt/homebrew/bin/tailscale
 [[ -n "$TS_BIN" ]] || fail "tailscale not installed"
-TS_IP=$($TS_BIN ip -4 2>/dev/null | head -1)
-[[ -n "$TS_IP" ]] || fail "no Tailscale IPv4 address"
-BASE="http://${TS_IP}:8080"
+# Probe the collector through the TLS front (tailscale serve :8443 -> loopback),
+# so this exercises the same path a browser hits — real cert, proxy, and auth —
+# not just the loopback backend. A cert or proxy fault now trips the check.
+TS_FQDN=$($TS_BIN status --json 2>/dev/null | jq -r '.Self.DNSName // empty' | sed 's/\.$//')
+[[ -n "$TS_FQDN" ]] || fail "no Tailscale MagicDNS name"
+BASE="https://${TS_FQDN}:8443"
 
 job_hc /start
 curl -fsS --max-time 15 -H "Authorization: Bearer $TOKEN" \

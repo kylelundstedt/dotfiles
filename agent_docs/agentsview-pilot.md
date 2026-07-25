@@ -163,6 +163,34 @@ not be authoritative backups if they can be rebuilt.
 The pilot is not complete until a snapshot restores into a clean data directory
 and the restored UI can find sessions from a deleted/rebuilt VM.
 
+## TLS front (2026-07-25)
+
+The collector serves at **`https://klundstedt-mini.dojo-sun.ts.net:8443`** with a
+real Let's Encrypt cert, using the mini's existing `tailscale serve` pattern
+(hub-mcp is served the same way on `:443`). The backend binds loopback and
+`tailscale serve` terminates TLS in front of it:
+
+```
+# agentsview-service runs: serve --host 127.0.0.1 --port 8080 \
+#   --public-url https://klundstedt-mini.dojo-sun.ts.net:8443 --require-auth
+tailscale serve --bg --https=8443 http://127.0.0.1:8080
+```
+
+Why loopback + serve rather than binding the tailnet IP with plain HTTP (the
+prior setup): the transport was already WireGuard-encrypted, but the browser
+flagged the naked HTTP "Not Secure" and the bearer token rode the app layer in
+plaintext. Now the token is TLS-encrypted end to end, the backend is not
+directly exposed on the tailnet, and access is gated by Tailscale's own ACLs.
+`--public-url` is required or AgentsView rejects the proxied origin. The
+healthcheck probes the `:8443` front (not loopback) so a cert or proxy fault
+trips it.
+
+`tailscale serve` config is machine state persisted in tailscaled, not in
+`install.sh` (neither is hub-mcp's) — it survives reboots but a full mini
+rebuild must re-run the one command above. The old
+`http://…:8080` tailnet-IP endpoint is gone; update any bookmark, and the new
+origin needs the token pasted once.
+
 ## Repository ownership
 
 ### `dotfiles`
@@ -275,10 +303,10 @@ that host is the collector or a source. Its only remaining role is a machine
 deliberately kept outside the fleet.
 
 Consequence for the two Macs: on `klundstedt-mini`, use the browser UI at
-`http://klundstedt-mini.dojo-sun.ts.net:8080` with the collector token. On
-`klundstedt-mbp` the app works today only because no AgentsView daemon runs
-there; enabling a source daemon to collect the mbp ends that. Skip the app on
-both.
+`https://klundstedt-mini.dojo-sun.ts.net:8443` with the collector token (see the
+TLS section below). On `klundstedt-mbp` the app works today only because no
+AgentsView daemon runs there; enabling a source daemon to collect the mbp ends
+that. Skip the app on both.
 
 Making the app work on a fleet host would mean dropping `--require-auth` and
 moving access control to the transport (`tailscale serve`, already this host's
@@ -294,7 +322,9 @@ token, but showing only that host's sessions. The fleet-wide view exists only on
 the mini, and is reachable from any tailnet device.
 
 Incidental findings: `--proxy caddy` requires `--public-url` (undocumented in
-`--help`), and tailnet port 8443 is already taken by `tailscale serve`. Auth is
+`--help`), and at the time of that test tailnet port 8443 was taken by an
+unrelated `tailscale serve` entry (the since-decommissioned iv-sandbox caddy);
+8443 is now the collector's own TLS front (see below). Auth is
 preserved end-to-end through the managed caddy — proxied unauthenticated API
 requests return 401.
 
