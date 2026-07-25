@@ -6,7 +6,8 @@
 # collect (a service appliance), never to silence a host you simply forgot to
 # enable.
 #
-# One hostname per line (the tailnet HostName, e.g. `llm-gateway`).
-
-# Service-only LLM gateway appliance — no agent harness, no sessions.
-llm-gateway
+# One hostname per line (the tailnet HostName).
+#
+# Currently empty: every online Linux tailnet host is an agent source. The last
+# appliance, llm-gateway, was decommissioned 2026-07-25 (fcacb8a). Add a host
+# here only if it genuinely runs no agent harness.
