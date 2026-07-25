@@ -55,8 +55,13 @@ if grep -q '^\[\[remote_hosts\]\]' "$DATA_DIR/config.toml" 2>/dev/null; then
     [[ -n "$finished" ]] || fail "no completed sync timestamp"
     age=$(python3 - "$finished" <<'PY'
 import datetime as dt
+import re
 import sys
-value = sys.argv[1].replace("Z", "+00:00")
+# Age is integer seconds, so drop sub-second precision entirely. Python < 3.11
+# (launchd resolves python3 to /usr/bin/python3 = 3.9) rejects fromisoformat
+# fractions that aren't 3 or 6 digits, and Postgres strips trailing zeros
+# (e.g. ".571730" -> ".57173", 5 digits) — the intermittent 2026-07-25 flap.
+value = re.sub(r"\.\d+", "", sys.argv[1].replace("Z", "+00:00"))
 when = dt.datetime.fromisoformat(value)
 now = dt.datetime.now(dt.timezone.utc)
 print(max(0, int((now - when).total_seconds())))
@@ -114,8 +119,13 @@ snapshot_created=$(sed -nE \
 [[ -n "$snapshot_created" ]] || fail "snapshot timestamp missing"
 snapshot_age=$(python3 - "$snapshot_created" <<'PY'
 import datetime as dt
+import re
 import sys
-value = sys.argv[1].replace("Z", "+00:00")
+# Age is integer seconds, so drop sub-second precision entirely. Python < 3.11
+# (launchd resolves python3 to /usr/bin/python3 = 3.9) rejects fromisoformat
+# fractions that aren't 3 or 6 digits, and Postgres strips trailing zeros
+# (e.g. ".571730" -> ".57173", 5 digits) — the intermittent 2026-07-25 flap.
+value = re.sub(r"\.\d+", "", sys.argv[1].replace("Z", "+00:00"))
 when = dt.datetime.fromisoformat(value)
 now = dt.datetime.now(dt.timezone.utc)
 print(max(0, int((now - when).total_seconds())))

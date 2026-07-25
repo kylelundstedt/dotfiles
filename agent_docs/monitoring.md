@@ -150,3 +150,12 @@ responsibility.
   instead of starving the check. Cleared the live wedge by killing the Messages
   subsystem (imagent/IMDPersistenceAgent/BlastDoor respawn; readdir recovered
   without a reboot). See the "subprocess's own deadline flag" rule above.
+- 2026-07-25: agentsview flapped (down 13:52, up 13:57) — the healthcheck
+  crashed on `datetime.fromisoformat()`. Under launchd, `bash -l -c` resolves
+  `python3` to `/usr/bin/python3` (3.9), NOT Homebrew 3.14, and 3.9 rejects
+  fromisoformat fractions that aren't 3 or 6 digits. Postgres strips trailing
+  zeros, so `last_sync_finished_at` intermittently serialized as `.57173`
+  (5 digits) → crash → /fail. Fix: strip sub-second precision before parsing
+  (age is integer seconds), so it's python-version-proof. Lesson: launchd
+  jobs get the system python, not your shell's — don't rely on a newer
+  interpreter's leniency.
