@@ -1793,6 +1793,47 @@ install_apps() {
     [[ -n "${sudo_keepalive_pid:-}" ]] && kill "$sudo_keepalive_pid" 2>/dev/null || true
 }
 
+# Power management (klundstedt-mini only): keep the always-on Mac mini viable
+# as a server. System sleep is governed by the authoritative pmset layer, NOT
+# app-level assertions — the old Caffeine.app only prevented *display* sleep,
+# did nothing for system sleep, and thrashed assertions every ~10s (removed
+# 2026-07-25). Idempotent (pmset writes are no-ops when already set) and
+# non-interactive-safe (prints the manual command when passwordless sudo is
+# unavailable, like setup_tailscale).
+#
+# FileVault stays ON (decided 2026-07-25, "option 3"): autorestart reboots INTO
+# the pre-boot unlock screen, so an *unexpected* reboot (outage beyond the UPS,
+# crash) still needs a manual unlock — the accepted availability/security
+# tradeoff. For *planned* reboots use `sudo fdesetup authrestart` to come back
+# unlocked once. The repo's jobs are LaunchAgents, so they only resume once the
+# GUI session is unlocked. See agent_docs/monitoring.md.
+setup_power_management() {
+    [[ "$OS" == "macos" ]] || return 0
+    [[ "$(scutil --get LocalHostName 2>/dev/null)" == "klundstedt-mini" ]] || return 0
+    [[ "$DRY_RUN" == true ]] && return 0
+    echo ""
+    echo "=== Power management (klundstedt-mini) ==="
+    if ! sudo -n true 2>/dev/null; then
+        echo "  [!] sudo required. Run:"
+        echo "      sudo pmset -c sleep 0 autorestart 1 womp 1"
+        echo "      sudo pmset -u sleep 0 haltremain 3 haltlevel 15"
+        return 0
+    fi
+    # AC power (normal operation): never idle-sleep; auto-restart after a power
+    # cut; wake on network. displaysleep is left at the system default — letting
+    # the panel sleep is fine and does not affect the headless server.
+    sudo pmset -c sleep 0 autorestart 1 womp 1 \
+        && echo "  [+] AC: sleep=0 autorestart=1 womp=1" \
+        || echo "  [!] pmset -c failed"
+    # UPS power (power outage): stay awake and reachable on battery, then shut
+    # down CLEANLY before it dies — never sleep on UPS (sleep-then-drain is an
+    # ungraceful loss, and sleep/wake was the 2026-07-25 wedged-vnode class).
+    # Whichever threshold hits first (~3 min runtime left OR 15%) halts.
+    sudo pmset -u sleep 0 haltremain 3 haltlevel 15 \
+        && echo "  [+] UPS: sleep=0, clean shutdown at haltremain=3min / haltlevel=15%" \
+        || echo "  [!] pmset -u failed (no UPS attached?)"
+}
+
 # Load stowed LaunchAgents (macOS). Runs on every macOS install, not just
 # --apps, so scheduled jobs (sync-repos, msgvault-sync, etc.) are active
 # immediately rather than only after the next login.
@@ -1826,6 +1867,7 @@ install_cli_tools
 install_python_clis
 setup_node
 setup_tailscale
+setup_power_management
 setup_git
 set_shell
 run_stow
