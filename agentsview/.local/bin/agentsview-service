@@ -38,6 +38,21 @@ fi
 }
 export AGENTSVIEW_DATA_DIR="$DATA_DIR" AGENTSVIEW_AUTH_TOKEN
 
+# Muzzle every agent root that lives under ~/Library. macOS (Sequoia+) guards
+# other apps' data with a TCC prompt ("access data from other apps"); a launchd
+# background agent that hits it BLOCKS at session discovery and never binds the
+# port — the collector was down ~3 days this way (2026-07-25) with the prompt
+# stuck behind whatever had console focus. The pilot's scope is Claude Code +
+# Codex + Shelley, none of which live under ~/Library, so point the Library-based
+# agents at an empty directory. Same mechanism as the Zed fix in iv-image's
+# source daemon. Re-audit if a new Library-based agent app is installed:
+#   agentsview serve --no-sync + GET /api/v1/settings, look for existing
+#   /Library/ paths in agent_dirs.
+NO_SCAN="$DATA_DIR/no-scan"
+mkdir -p "$NO_SCAN"
+export COWORK_DIR="$NO_SCAN" ZED_DIR="$NO_SCAN" \
+       WARP_DIR="$NO_SCAN" VSCODE_COPILOT_DIR="$NO_SCAN"
+
 exec "$AGENTSVIEW_BIN" serve \
     --host "$TS_IP" \
     --port 8080 \
