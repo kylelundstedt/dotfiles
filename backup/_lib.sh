@@ -71,6 +71,43 @@ job_log() {
     find "$dir" -name '*.log' -type f -mtime +30 -delete 2>/dev/null || true
 }
 
+# run_bounded <limit-secs> <cmd> [args...] — run cmd with a HARD wall-clock cap.
+# macOS ships no timeout(1); this is the portable equivalent. Normally returns
+# cmd's own exit code. If the cap is reached, cmd (and its immediate children —
+# e.g. rclone under `caffeinate`) get SIGTERM, then SIGKILL 20s later if they
+# ignore it, and run_bounded returns 124. Purpose: convert an indefinite
+# subprocess hang into a bounded failure the caller can ping /fail on, instead
+# of the check silently starving. This is the backstop the 2026-07-25 backup
+# lacked: rclone wedged in its post-transfer finalize phase and ran 8h, ignoring
+# its own --max-duration, with nothing external to kill it. Poll granularity is
+# 5s; the marker file distinguishes "cap fired" from cmd's own non-zero exit.
+run_bounded() {
+    local limit="$1"; shift
+    local marker; marker=$(mktemp -t run_bounded) || return 125
+    "$@" &
+    local cmd_pid=$!
+    (
+        waited=0
+        while (( waited < limit )); do
+            kill -0 "$cmd_pid" 2>/dev/null || exit 0   # cmd finished on its own
+            sleep 5; waited=$(( waited + 5 ))
+        done
+        echo 1 > "$marker"                             # record that the cap fired
+        pkill -TERM -P "$cmd_pid" 2>/dev/null; kill -TERM "$cmd_pid" 2>/dev/null
+        sleep 20
+        pkill -KILL -P "$cmd_pid" 2>/dev/null; kill -KILL "$cmd_pid" 2>/dev/null
+    ) &
+    local wd_pid=$!
+    local rc=0
+    wait "$cmd_pid" 2>/dev/null || rc=$?
+    kill -TERM "$wd_pid" 2>/dev/null                    # cmd done -> stop the watchdog
+    wait "$wd_pid" 2>/dev/null || true
+    local fired=""; [[ -s "$marker" ]] && fired=1
+    rm -f "$marker"
+    [[ -n "$fired" ]] && return 124
+    return "$rc"
+}
+
 # tigris_rclone_env — read the tigris-backup:* Keychain creds and export the
 # rclone remotes shared by the nightly backup and the restore drill:
 #   tigris:  S3 base (t3.storage.dev)

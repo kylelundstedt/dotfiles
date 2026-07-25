@@ -52,6 +52,14 @@ Grace sizing rules (each learned the hard way):
 - **Report the fan-out count in the success line.** Printing "8 source(s)
   reachable" immediately exposed a config parser that silently covered only 6
   of 8 — a check that quietly skips half its targets still reports OK.
+- **A subprocess's own deadline flag is not a wall-clock guarantee.** rclone's
+  `--max-duration` bounds its transfer phase, not a wedge in the post-transfer
+  finalize phase — on 2026-07-25 rclone hit 100% then hung there for 8h,
+  ignoring a 2h `--max-duration`, with nothing external to kill it. Any
+  wedge-prone subprocess (rclone, a Go binary reading a stuck path) must run
+  under an external wall-clock cap (`run_bounded`/`pm_run_bounded` — macOS has
+  no `timeout(1)`) so a hang becomes a bounded rc=124 failure that pings /fail,
+  instead of running past the check grace and starving it.
 
 ## Registry
 
@@ -127,3 +135,18 @@ responsibility.
   error as success. Replaced uvx with a persistent Python 3.12 osxphotos tool,
   bounded the entire process group, and made all gate failures skip Photos but
   fail the overall run after the unrelated archive sources continue.
+- 2026-07-25: tigris-backup AND personal-mcp:msgvault-sync both DOWN — two
+  unrelated hangs the same night, both wedged 8–9.5h. (a) tigris-backup: rclone
+  finished the home transfer (100%) then hung in its finalize phase, ignoring
+  its own 2h `--max-duration`; nothing external bounded it. (b) msgvault-sync:
+  the live Messages store wedged — `~/Library/Messages` readdir hung
+  indefinitely (chat.db intact at ~218 MB; a stuck-vnode state held by the
+  Messages processes, not corruption) — so `import-imessage` blocked before
+  its first log line and the sync never reached its success ping. Ruled out:
+  system sleep (machine stayed awake, UPS on AC), disk (SMART Verified, no
+  faults). Fixes: added `run_bounded`/`pm_run_bounded` (bash wall-clock cap;
+  macOS has no `timeout(1)`) as a backstop around rclone (`remaining+180s`) and
+  import-imessage (600s); a cap-fired hang now returns rc=124 → pings /fail
+  instead of starving the check. Cleared the live wedge by killing the Messages
+  subsystem (imagent/IMDPersistenceAgent/BlastDoor respawn; readdir recovered
+  without a reboot). See the "subprocess's own deadline flag" rule above.

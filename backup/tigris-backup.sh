@@ -121,13 +121,19 @@ sync_one() { # label src dest [extra...]
         return 0
     fi
     echo "$(date '+%F %T') sync $label: $src -> $dest"
-    caffeinate -i rclone sync "$src" "$dest" "${FLAGS[@]}" "${MODE_FLAGS[@]}" \
+    # rclone's own --max-duration is the graceful bound (exits rc=10). run_bounded
+    # is the wall-clock BACKSTOP (+180s): if a wedged rclone ignores its own
+    # deadline — as it did 2026-07-25, hung in finalize at 100% for 8h — the
+    # backstop SIGKILLs it (rc=124) so the phase fails bounded instead of hanging
+    # past the check grace. The +180s margin keeps a healthy run on rclone's path.
+    run_bounded $(( remaining + 180 )) \
+        caffeinate -i rclone sync "$src" "$dest" "${FLAGS[@]}" "${MODE_FLAGS[@]}" \
         --max-duration "${remaining}s" "$@"; local rc=$?
     if [[ $rc -ne 0 ]]; then
         echo "WARN $label sync rc=$rc"
         FAILURES+=("$label(rc=$rc)")
-        if [[ $rc -eq 10 ]]; then
-            echo "ABORT remaining phases: $label exceeded the run-wide duration limit"
+        if [[ $rc -eq 10 || $rc -eq 124 ]]; then
+            echo "ABORT remaining phases: $label hit the run-wide duration limit (rc=$rc)"
             ABORT_REMAINING=1
         fi
     fi
