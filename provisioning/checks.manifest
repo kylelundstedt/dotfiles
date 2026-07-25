@@ -24,3 +24,4 @@ personal-mcp: web-archive-refresh | cron:30 3 * * * | America/Los_Angeles | 1080
 personal-mcp: rebuild-hub | cron:0 4 * * * | America/Los_Angeles | 7200 | personal-mcp:com.kylelundstedt.rebuild-hub
 personal-mcp: mcp-server | period:900 | - | 1800 | personal-mcp:com.kylelundstedt.personal-mcp-healthcheck
 personal-mcp: embeddings | period:900 | - | 1800 | personal-mcp:com.kylelundstedt.personal-mcp-healthcheck
+personal-mcp: calendar | cron:15 3 * * * | America/Los_Angeles | 3600 | personal-mcp:com.kylelundstedt.calendar-refresh
