@@ -67,17 +67,18 @@ runs, locks, dated logs) live in `backup/_lib.sh`, sourced by
 tigris-backup.sh, sync-repos.sh, and restore-drill.sh — the rules above are
 library properties, not per-script conventions.
 
-### AgentsView fleet coverage (drafted 2026-07-25, not yet wired)
+### AgentsView fleet coverage (`agentsview-coverage`, live 2026-07-25)
 
-`agentsview/.local/bin/agentsview-coverage` is a **fail-closed** coverage check:
-every online Linux tailnet node must be either a configured AgentsView source or
-listed in `provisioning/agentsview-coverage-exclude.txt` (service-only
-appliances). A new agent-capable VM collected by neither trips it — the gap that
-left six VMs silently uncollected (2026-07-22) and can't be caught by the
-per-source probes, which only see configured hosts. Run `--dry-run` to classify
-without pinging. **Still to wire:** a LaunchAgent (suggest hourly), a
-healthchecks.io check + `checks.manifest` row + Keychain
-`agentsview-coverage:healthcheck-url`. Until then it is a manual/CI check only.
+A **fail-closed** coverage check: every online Linux tailnet node must be either
+a configured AgentsView source or listed in
+`provisioning/agentsview-coverage-exclude.txt` (currently empty — the last
+appliance, llm-gateway, was decommissioned). A new agent-capable VM collected by
+neither trips it — the gap that left six VMs silently uncollected (2026-07-22)
+and that the per-source probes can't catch, since they only see hosts already in
+config. `com.kylelundstedt.agentsview-coverage` runs it hourly and pings the
+`agentsview-coverage` check (period 3600s, grace 7200s, Keychain
+`agentsview-coverage:healthcheck-url`). Run `agentsview-coverage --dry-run` to
+classify without pinging.
 
 ## Scope: this registry covers the klundstedt-mini project only
 

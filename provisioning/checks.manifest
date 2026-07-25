@@ -18,6 +18,7 @@ sync-repos | cron:0 0 * * * | America/Los_Angeles | 21600 | dotfiles:com.kylelun
 tigris-backup | cron:30 4 * * * | America/Los_Angeles | 10800 | dotfiles:com.kylelundstedt.tigris-backup
 tigris-backup-reconcile | cron:0 6 * * 0 | America/Los_Angeles | 72000 | dotfiles:com.kylelundstedt.tigris-backup-reconcile
 agentsview | period:300 | - | 600 | dotfiles:com.kylelundstedt.agentsview-healthcheck
+agentsview-coverage | period:3600 | - | 7200 | dotfiles:com.kylelundstedt.agentsview-coverage
 personal-mcp: msgvault-sync | cron:0 3 * * * | America/Los_Angeles | 10800 | personal-mcp:com.kylelundstedt.msgvault-sync
 personal-mcp: web-archive-refresh | cron:30 3 * * * | America/Los_Angeles | 10800 | personal-mcp:com.kylelundstedt.web-archive-refresh
 personal-mcp: rebuild-hub | cron:0 4 * * * | America/Los_Angeles | 7200 | personal-mcp:com.kylelundstedt.rebuild-hub
