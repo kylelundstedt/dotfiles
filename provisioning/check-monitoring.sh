@@ -52,6 +52,12 @@ while IFS='|' read -r name sched tz grace job; do
     esac
     got_grace=$(jq -r '.grace' <<<"$row")
     [[ "$got_grace" == "$grace" ]] && ok "$name grace ${got_grace}s" || drift "$name grace is ${got_grace}s, manifest says ${grace}s"
+    # A check with the right schedule but no notification channel is a dead-man's
+    # switch wired to nothing: it flips to DOWN and tells no one. The agentsview
+    # collector sat DOWN ~3 days this way (2026-07-25). Assert every registered
+    # check routes somewhere.
+    got_ch=$(jq -r '.channels // ""' <<<"$row")
+    [[ -n "$got_ch" ]] && ok "$name has a notification channel" || drift "$name has NO notification channel (alerts go nowhere)"
 done < <(grep -vE '^[[:space:]]*#|^[[:space:]]*$' "$MANIFEST")
 
 # Reverse: every live check must be in the manifest (unmonitored-by-registry)

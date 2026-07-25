@@ -1,0 +1,12 @@
+# AgentsView fleet-coverage exclusions — tailnet hosts that are online and Linux
+# but legitimately do NOT run an AgentsView source. agentsview-coverage fails
+# closed: any online Linux tailnet node that is neither a configured source nor
+# listed here trips the check, so a new agent-capable VM cannot be silently
+# uncollected. Add a host here ONLY if it genuinely has no agent history to
+# collect (a service appliance), never to silence a host you simply forgot to
+# enable.
+#
+# One hostname per line (the tailnet HostName, e.g. `llm-gateway`).
+
+# Service-only LLM gateway appliance — no agent harness, no sessions.
+llm-gateway

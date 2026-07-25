@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# Fail-closed AgentsView fleet-coverage check for the mini collector.
+#
+# The per-source assertions in agentsview-healthcheck verify that CONFIGURED
+# sources are reachable. They cannot see a host that was never configured — the
+# gap that left six agent-capable VMs silently uncollected until they were added
+# by hand (2026-07-22). This check closes that: every online Linux node on the
+# tailnet must be EITHER a configured AgentsView source OR explicitly excused in
+# provisioning/agentsview-coverage-exclude.txt. A new agent-capable VM that is
+# neither trips the check — turning "should be collected" into "verified
+# collected", per the pilot's own "do not rely on a static host list".
+#
+# Runs on the mini; self-skips elsewhere. Pings an optional healthchecks.io check
+# (Keychain agentsview-coverage:healthcheck-url); until that URL exists it is a
+# local pass/fail only. Pass --dry-run to print classification without pinging.
+set -uo pipefail
+umask 077
+
+DRY_RUN=0
+[[ "${1:-}" == "--dry-run" ]] && DRY_RUN=1
+
+source "$HOME/dotfiles/backup/_lib.sh"
+job_require_mini agentsview-coverage
+[[ $DRY_RUN -eq 1 ]] || { job_hc_init "agentsview-coverage:healthcheck-url"; job_log "$HOME/Library/Logs/agentsview-coverage"; }
+
+fail() {
+    local reason=$1
+    echo "FAIL: $reason"
+    [[ $DRY_RUN -eq 1 ]] || job_hc /fail --data-raw "agentsview-coverage $(date '+%F %T') $reason"
+    exit 1
+}
+
+command -v jq >/dev/null 2>&1 || fail "jq not found"
+
+TS_BIN=$(command -v tailscale || true)
+[[ -n "$TS_BIN" ]] || [[ ! -x /opt/homebrew/bin/tailscale ]] || TS_BIN=/opt/homebrew/bin/tailscale
+[[ -n "$TS_BIN" ]] || fail "tailscale not installed"
+
+CONFIG="${AGENTSVIEW_COVERAGE_CONFIG:-$HOME/.agentsview/config.toml}"  # override for tests
+[[ -f "$CONFIG" ]] || fail "collector config.toml missing"
+EXCLUDE_FILE="$HOME/dotfiles/provisioning/agentsview-coverage-exclude.txt"
+
+# bash 3.2 (the mini's /bin/bash) has no mapfile and errors on empty-array
+# expansion under set -u, so append via read loops and expand with the
+# ${arr[@]+"${arr[@]}"} guard throughout.
+CONFIGURED=() EXCLUDED=() ONLINE=() uncovered=()
+
+# Configured sources (host names from every [[remote_hosts]] block).
+while IFS= read -r h; do [[ -n "$h" ]] && CONFIGURED+=("$h"); done < <(
+    grep -oE 'host[[:space:]]*=[[:space:]]*"[^"]+"' "$CONFIG" | sed -E 's/.*"([^"]+)".*/\1/')
+
+# Explicit exclusions (service-only appliances).
+if [[ -f "$EXCLUDE_FILE" ]]; then
+    while IFS= read -r h; do [[ -n "$h" ]] && EXCLUDED+=("$h"); done < <(
+        grep -vE '^[[:space:]]*#|^[[:space:]]*$' "$EXCLUDE_FILE")
+fi
+
+# Online Linux tailnet peers — the set that COULD be agent-capable sources.
+# macOS/iOS peers (the mini itself, mbp, phones) are not remote sources and are
+# out of scope here; the collector's own health is agentsview-healthcheck's job.
+TS_JSON=$($TS_BIN status --json 2>/dev/null) || fail "tailscale status unavailable"
+while IFS= read -r h; do [[ -n "$h" ]] && ONLINE+=("$h"); done < <(
+    jq -r '.Peer[]? | select(.Online == true and .OS == "linux") | .HostName' <<<"$TS_JSON" | sort -u)
+
+in_list() { local h=$1; shift; local x; for x in "$@"; do [[ "$x" == "$h" ]] && return 0; done; return 1; }
+
+covered=0 excused=0
+for h in ${ONLINE[@]+"${ONLINE[@]}"}; do
+    if in_list "$h" ${CONFIGURED[@]+"${CONFIGURED[@]}"}; then
+        covered=$((covered + 1)); [[ $DRY_RUN -eq 1 ]] && echo "  source    $h"
+    elif in_list "$h" ${EXCLUDED[@]+"${EXCLUDED[@]}"}; then
+        excused=$((excused + 1)); [[ $DRY_RUN -eq 1 ]] && echo "  excused   $h"
+    else
+        uncovered+=("$h"); [[ $DRY_RUN -eq 1 ]] && echo "  UNCOVERED $h"
+    fi
+done
+
+if [[ ${#uncovered[@]} -gt 0 ]]; then
+    fail "online Linux tailnet host(s) neither configured nor excused: ${uncovered[*]} — enable a source or add to agentsview-coverage-exclude.txt"
+fi
+
+# Reverse drift: an excluded name that is not actually online is stale — worth a
+# nudge (a deleted appliance still listed), but not an outage. Report, don't fail.
+for e in ${EXCLUDED[@]+"${EXCLUDED[@]}"}; do
+    in_list "$e" ${ONLINE[@]+"${ONLINE[@]}"} || echo "  note: excluded host '$e' is not currently online (stale exclusion?)"
+done
+
+[[ $DRY_RUN -eq 1 ]] || job_hc
+echo "OK: ${covered} configured source(s), ${excused} excused, 0 uncovered (${#ONLINE[@]} online Linux hosts)"

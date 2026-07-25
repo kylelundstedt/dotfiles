@@ -442,6 +442,37 @@ cuts their worst case by two thirds. Every other host stays at 5m.
 > Amend the criterion or the intervals before adoption; do not let them silently
 > disagree.
 
+### Collector outage + monitoring hardening (2026-07-25)
+
+The mini collector was found DOWN for ~3 days. Proximate cause: a launchd
+background agent that hits macOS TCC ("access data from other apps") during
+session discovery BLOCKS and never binds its port. Discovery walked four agent
+roots under `~/Library` — cowork, Zed, Warp, VS Code — none in the Claude Code +
+Codex + Shelley scope. Fixed by pointing those four at an empty dir in
+`agentsview-service` (`COWORK_DIR`/`ZED_DIR`/`WARP_DIR`/`VSCODE_COPILOT_DIR`), so
+the collector never touches `~/Library`, never prompts, and is headless-safe. On
+recovery the per-source healthcheck immediately caught a second casualty —
+`iv-docs`'s source daemon had also died — which was restarted.
+
+The real lesson was not the block but that **nobody was told**. The
+`agentsview` healthchecks.io check had correct schedule and grace but **no
+notification channel**, so its DOWN state alerted no one for three days; it was
+found via the macOS popup. Two guardrails added:
+
+- The `agentsview` check (and the identically-mute `personal-mcp: embeddings`)
+  are wired to the email channel, and `check-monitoring.sh` now asserts every
+  registered check routes somewhere — a right-config-no-channel check reads as
+  covered while being silent.
+- `agentsview-coverage` (drafted, see `monitoring.md`) makes fleet coverage
+  fail-closed: an online Linux tailnet host that is neither a configured source
+  nor an explicit appliance exclusion trips the check. This is the enforcement
+  the "every agent-capable host is collected" criterion needs — the per-source
+  probes only see hosts already in the config.
+
+Retirement worked as designed through all this: `iv-sandbox` was deleted, its
+`[[remote_hosts]]` block correctly gone, and its 4 sessions remain in the
+archive — the Phase 3 guarantee holding in real operation, not a drill.
+
 ### Fleet inventory
 
 Every active agent-capable tailnet host, checked 2026-07-22. All six exe.dev VMs
@@ -466,6 +497,52 @@ enabled on it — and remains scoped in only if agents run locally there; note
 that running AgentsView Desktop on the mbp builds a _separate local_ archive and
 does not feed the collector. Collecting the mbp requires a source daemon like
 any other host.
+
+## Execution record — 2026-07-24
+
+### Collector down since 2026-07-22 — two independent faults
+
+The mini's central collector stopped serving on 2026-07-22 15:56 and stayed
+down until diagnosed on 2026-07-24. Two separate faults, both now understood.
+
+**Fault 1 — idle-timeout shutdown is never restarted (recurrence trap).**
+`agentsview serve` self-terminates on an idle timeout with exit code 0
+(`idle timeout elapsed; shutting down daemon` in `/tmp/agentsview.log`). The
+launchd job set `KeepAlive → SuccessfulExit = false`, so launchd treated the
+clean exit as intentional and never restarted it — any idle period took the
+collector down permanently. Fix: `KeepAlive` set to unconditional `<true/>` in
+`launchd/Library/LaunchAgents/com.kylelundstedt.agentsview.plist`. Follow-up:
+find and disable agentsview's daemon-mode idle shutdown so it stays one
+long-lived process instead of restart-churning each idle period (no such flag
+was visible in `serve --help`).
+
+**Fault 2 — discovery deadlocks on an orphaned Warp file-provider container.**
+Once stopped it could not restart: `serve` hangs deterministically at
+"Discovering sessions", fully parked at 0 CPU, never binding 8080 (reproduced
+under launchd and foreground). Bisected to one local input — empty `HOME`
+starts in 23 ms, the real home hangs. Binary search over home → `Library` →
+`Group Containers` → `2BBY89MBSN.dev.warp` (Warp's group container; matches the
+`warp sync` syncer in `debug.log`). Even `ls`, `xattr`, `rename`, and `rm` on
+that directory block forever though `stat` of the entry succeeds and Warp is not
+running. `fileproviderctl dump` shows Warp is **not** a live File Provider
+domain (only iCloud/OneDrive/Dropbox/Box/Photos are), so the container is
+orphaned dataless placeholders left by a removed provider: every access routes
+to a provider that no longer answers. Restarting `fileproviderd` did not heal
+it; moving it aside hangs in `rename()`. Userland cannot clear it. Resolution:
+reboot the mini (resets provider/kernel state), remove the orphaned
+`2BBY89MBSN.dev.warp`, then restart the collector.
+
+Ruled out with evidence: remote sources (all 7 answer 401, zero sync
+connections held while hung), the DB (109 MB, `integrity_check: ok`, reads
+instantly), auth, agentsview version (unchanged v0.38.1), and the Tigris backup
+(ran 04:30 that day, integrity ok — it faithfully snapshotted a frozen DB, so
+no new sessions were captured after 2026-07-22 until service was restored).
+
+**Generalizable risk.** agentsview's local discovery walks broad roots
+(`~/Library/Group Containers`, app databases) with no per-source ignore option
+in `serve --help` or `config.toml`. A single wedged file-provider path anywhere
+under a scanned root hangs the entire collector. Any fleet host with cloud-sync
+placeholders (iCloud/OneDrive/Dropbox/Box) shares this exposure.
 
 ## Rollout plan
 

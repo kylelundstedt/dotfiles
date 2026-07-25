@@ -36,6 +36,13 @@ Grace sizing rules (each learned the hard way):
 - **Don't edit a running shell script in place.** Bash can read script input
   incrementally; replacing the file while a long-running command is active can
   make the existing process resume at an invalid offset and fail to parse.
+- **A dead-man's switch wired to no channel is decoration.** The `agentsview`
+  check (and `personal-mcp: embeddings`) had correct schedule and grace but no
+  notification channel — so when the collector sat DOWN for ~3 days (2026-07-25)
+  the check flipped to DOWN and told no one; it was found via an unrelated macOS
+  popup. `check-monitoring.sh` now asserts every registered check routes to at
+  least one channel. Right config with nowhere to send is worse than no check,
+  because it reads as covered.
 - **A freshness check does not prove the work happened.** The AgentsView
   collector finished every sync on schedule for 73 consecutive runs while one
   source failed every time (2026-07-22) — the check asserted "a sync completed
@@ -59,6 +66,18 @@ Shared job semantics (staleness skip pings success, lastrun only on clean
 runs, locks, dated logs) live in `backup/_lib.sh`, sourced by
 tigris-backup.sh, sync-repos.sh, and restore-drill.sh — the rules above are
 library properties, not per-script conventions.
+
+### AgentsView fleet coverage (drafted 2026-07-25, not yet wired)
+
+`agentsview/.local/bin/agentsview-coverage` is a **fail-closed** coverage check:
+every online Linux tailnet node must be either a configured AgentsView source or
+listed in `provisioning/agentsview-coverage-exclude.txt` (service-only
+appliances). A new agent-capable VM collected by neither trips it — the gap that
+left six VMs silently uncollected (2026-07-22) and can't be caught by the
+per-source probes, which only see configured hosts. Run `--dry-run` to classify
+without pinging. **Still to wire:** a LaunchAgent (suggest hourly), a
+healthchecks.io check + `checks.manifest` row + Keychain
+`agentsview-coverage:healthcheck-url`. Until then it is a manual/CI check only.
 
 ## Scope: this registry covers the klundstedt-mini project only
 
