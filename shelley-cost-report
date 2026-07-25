@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sqlite3
 import sys
 import urllib.error
@@ -143,7 +144,12 @@ def main() -> int:
     print(f"Observed Shelley usage ({scope}last {args.hours:g} hours)")
     db_age_hours: float | None = None
     if db_started:
-        started = datetime.fromisoformat(db_started).replace(tzinfo=timezone.utc)
+        # Drop sub-second precision so this parses under any python3: 3.9's
+        # fromisoformat rejects fractions that aren't 3 or 6 digits, and DB
+        # timestamps strip trailing zeros (e.g. ".57173"). Age is in hours.
+        started = datetime.fromisoformat(
+            re.sub(r"\.\d+", "", db_started)
+        ).replace(tzinfo=timezone.utc)
         db_age_hours = (datetime.now(timezone.utc) - started).total_seconds() / 3600
         print(f"  database age: {db_age_hours:.1f} hours (started {db_started} UTC)")
     print(f"  requests:     {int(usage['requests']):,}")
