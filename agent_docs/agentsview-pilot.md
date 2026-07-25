@@ -83,8 +83,11 @@ used:
 - `klundstedt-mbp` only if agents begin running locally there rather than acting
   solely as a client.
 
-Service-only appliances that do not run an agent harness, such as the target
-LLM gateway appliance, do not need AgentsView.
+Service-only appliances that do not run an agent harness do not need
+AgentsView (the LLM gateway appliance was one such example before it was
+decommissioned 2026-07-25). The `agentsview-coverage` check enforces this line:
+any online Linux tailnet host must be a configured source or an explicit
+appliance exclusion, so a genuinely agent-capable VM cannot be silently omitted.
 
 ## Collection path
 
