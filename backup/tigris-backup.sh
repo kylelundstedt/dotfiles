@@ -126,8 +126,12 @@ sync_one() { # label src dest [extra...]
     # deadline — as it did 2026-07-25, hung in finalize at 100% for 8h — the
     # backstop SIGKILLs it (rc=124) so the phase fails bounded instead of hanging
     # past the check grace. The +180s margin keeps a healthy run on rclone's path.
+    # MODE_FLAGS is empty in reconcile mode, and /bin/bash 3.2 (what launchd runs)
+    # treats "${empty[@]}" as an unbound-variable error under `set -u` — the bug
+    # that killed reconcile's first run 2026-07-26. Guard with the ${a[@]+...}
+    # idiom so an empty array expands to nothing instead of aborting.
     run_bounded $(( remaining + 180 )) \
-        caffeinate -i rclone sync "$src" "$dest" "${FLAGS[@]}" "${MODE_FLAGS[@]}" \
+        caffeinate -i rclone sync "$src" "$dest" "${FLAGS[@]}" ${MODE_FLAGS[@]+"${MODE_FLAGS[@]}"} \
         --max-duration "${remaining}s" "$@"; local rc=$?
     if [[ $rc -ne 0 ]]; then
         echo "WARN $label sync rc=$rc"
