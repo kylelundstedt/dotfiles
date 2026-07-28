@@ -43,6 +43,14 @@ correctly absent from git, and not a gap.
 
 ## Shelley state — covered, with one real caveat
 
+> **Which database to query.** `~/.agentsview/sessions.db` is the collector's
+> **live** database; `~/archives/agentsview/sessions.db` is a periodic
+> **snapshot** staged for backup. Querying the archive to check whether a newly
+> enrolled source is collecting returns nothing and looks like a failure — the
+> data is in the live DB and only reaches the archive at snapshot time. The
+> table below is snapshot-derived, so treat its counts as as-of-last-snapshot,
+> not live.
+
 The reasonable worry is that Shelley sessions live only on the VM. The archive
 says otherwise: AgentsView is collecting Shelley history from every dev VM, and
 for the active ones it is current to today.
@@ -246,6 +254,14 @@ Enrollment notes worth keeping:
   checksum-verified exactly as `provision-iv.sh` does — rather than running the
   full IV layer, which would have put DuckDB, Quarto, the AWS CLI and the rest
   onto a service VM.
+
+Verified collecting, not merely reachable: `iv-foundry-stage2` 20 Shelley
+sessions (newest 2026-07-28 22:40 — the fannie-sflpd milestone work),
+`telnyx-vm` 4, `iv-entire-agent-shelley` 3. Note that "N source(s) reachable"
+from the healthcheck probes each configured host directly; it does **not**
+prove the collector has pulled anything. The three new hosts were reachable
+for ~15 minutes before their first fan-out, so reachability and collection
+must be checked separately.
 
 Result: 9 configured sources, 1 excused (`rss-feed`), 0 uncovered. Coverage
 reports `rss-feed` as "a running exe.dev VM but not an online tailnet peer",
