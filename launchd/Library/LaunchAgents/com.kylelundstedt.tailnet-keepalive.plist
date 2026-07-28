@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.kylelundstedt.tailnet-keepalive</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>-l</string>
+        <string>-c</string>
+        <string>$HOME/dotfiles/provisioning/tailnet-keepalive.sh</string>
+    </array>
+    <!-- Long-running daemon (not scheduled): holds home<->exe.dev tailnet paths
+         direct so they don't idle out to DERP and flap the agentsview
+         healthcheck. KeepAlive so launchd restarts it if it ever exits; the
+         script self-guards to klundstedt-mini only. See provisioning/tailnet-keepalive.sh. -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+    <key>StandardOutPath</key>
+    <string>/tmp/tailnet-keepalive.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/tailnet-keepalive.log</string>
+</dict>
+</plist>
