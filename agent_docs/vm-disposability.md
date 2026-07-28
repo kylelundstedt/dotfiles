@@ -218,12 +218,39 @@ which is precisely where the 8 commits were. The authoritative VM inventory is
 `ssh exe.dev ls --json` ([exe-dev-web.md](exe-dev-web.md)); coverage should be
 driven from that, not from the tailnet.
 
-Two assertions worth adding, both cheap and both aimed at real failure modes:
+Both assertions were implemented on 2026-07-28 and are described below.
 
-- every VM in `ssh exe.dev ls --json` is a configured AgentsView source or
-  explicitly excused — not merely every _online tailnet_ VM;
-- no repo carries unpushed `entire/checkpoints/*` commits, since an unpushed
-  Entire record has no durability at all.
+### Resolution — all VMs enrolled, 2026-07-28
+
+The coverage change flagged three uncovered VMs on its first run, one of which
+(`telnyx-vm`) had been created that same day. All three are now enrolled:
+
+| VM                        | What it is                                                                                              |
+| ------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `iv-entire-agent-shelley` | where the private Shelley adapter for the Entire CLI was built                                          |
+| `iv-foundry-stage2`       | dogfooding the IV CLI against fannie-sflpd; M1–M2 done, M3 halted awaiting Fannie support on API access |
+| `telnyx-vm`               | voicemail/SMS forwarding to email, and the Zoom→Telnyx number port                                      |
+
+Enrollment notes worth keeping:
+
+- `telnyx-vm` was untagged, so it had no `tailscale-api` integration. That
+  integration was attached **on its own** rather than adding the `iv` tag,
+  which would have pulled in every IV-scoped integration onto a telephony box.
+- It was joined with **`--accept-dns=false`**. It runs live voicemail
+  forwarding and an in-flight number port; rewriting `/etc/resolv.conf` on a
+  box that must reach the Telnyx API is a risk with no upside, since the
+  collector resolves _it_, not the reverse. Verified afterwards: resolv.conf
+  still `1.1.1.1`, `telnyx-webhook.service` still active.
+- `telnyx-vm` and `iv-entire-agent-shelley` had no AgentsView binary at all.
+  Only the AgentsView pieces were installed — pinned to 0.38.1 and
+  checksum-verified exactly as `provision-iv.sh` does — rather than running the
+  full IV layer, which would have put DuckDB, Quarto, the AWS CLI and the rest
+  onto a service VM.
+
+Result: 9 configured sources, 1 excused (`rss-feed`), 0 uncovered. Coverage
+reports `rss-feed` as "a running exe.dev VM but not an online tailnet peer",
+which is the correct shape for a deployment-lane VM and is precisely the case
+the old tailnet-only pass could not see.
 
 ## Audit gotcha
 

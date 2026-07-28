@@ -106,8 +106,19 @@ project, configured and documented there. Known out-of-registry monitoring:
   non-zero item count in pure shell, with `xmllint` supplying well-formedness.
   The VM is **no longer an AgentsView source** (no agent harness, not on the
   tailnet): its `[[remote_hosts]]` block was removed from the collector config
-  and it is listed in `provisioning/agentsview-coverage-exclude.txt`, so
-  `agentsview-coverage` reports it as an excused host that is not online.
+  and it is listed in `provisioning/agentsview-coverage-exclude.txt`. Coverage
+  now reports it as `excused` and, via the inventory pass, as the one
+  "running exe.dev VM but not an online tailnet peer" — which is exactly the
+  shape a deployment-lane VM should have.
+
+- **entire-push-check** (`maint/.local/bin/entire-push-check`, mini) — fails if
+  any repo on any fleet host holds commits on `refs/heads/entire/**` that exist
+  on no remote. Entire ships its record on push, so an unpushed checkpoint has
+  zero durability. Currently **local pass/fail only**: it pings the Keychain
+  item `entire-push-check:healthcheck-url`, which does not exist yet, so
+  `job_hc` no-ops. Create the check and store the URL to make it alerting, and
+  register it in the table above at that point. Exclusions:
+  `provisioning/entire-push-exclude.txt`.
 
 `check-monitoring.sh`'s reverse pass ("every live check must be in the
 manifest") only sees the mini project, so out-of-registry checks never

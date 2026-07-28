@@ -6,7 +6,10 @@
 # collect (a service appliance), never to silence a host you simply forgot to
 # enable.
 #
-# One hostname per line (the tailnet HostName).
+# One name per line. Matched against BOTH the tailnet HostName and the exe.dev
+# VM name, since coverage now enumerates the exe.dev inventory as well as
+# online tailnet peers — a VM that never joined the tailnet is not a peer and
+# was previously invisible to this check entirely.
 #
 # The last decommissioned appliance was llm-gateway, 2026-07-25 (fcacb8a). Add a
 # host here only if it genuinely runs no agent harness.
