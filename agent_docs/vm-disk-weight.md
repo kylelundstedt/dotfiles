@@ -1,0 +1,221 @@
+# VM disk weight — deployment lane + overlay pruning
+
+> Measured and decided 2026-07-27, prompted by [`ryanlewis/exeslim`](https://github.com/ryanlewis/exeslim),
+> a minimal exe.dev base image. Two questions came out of it: should
+> deployment-only VMs stop using `boldsoftware/exeuntu`, and is our own
+> `~/.local` overlay carrying too much weight everywhere else?
+>
+> Answers: **yes to a forked slim image for the deployment lane** (starting with
+> `rss-feed`), **yes to pruning** (~20% of measured fleet disk is recoverable
+> garbage), and **no to building a slimmed dev image** — that one trades real
+> operability for a saving that does not exist.
+
+## Why disk is worth attention at all
+
+exe.dev meters **disk usage and outbound bandwidth**; CPU and RAM are not
+billed. On individual plans the disk allowance is **pooled across all your
+VMs**, and overage is charged on average GiB-months, not peak
+(<https://exe.dev/docs/billing/usage.md>). Usage is the ext4 filesystem usage of
+each VM, not its allocated capacity
+(<https://exe.dev/docs/faq/disk-usage.md>).
+
+Two consequences that shape every decision below:
+
+1. Per-VM bloat is a **shared** cost, so it compounds with fleet size.
+2. You are billed for bytes **in your filesystem**. Moving a tool from
+   `~/.local` into a custom image relocates the bytes; it does not remove them.
+   An image only helps by _deleting_ content — which is exactly and only what
+   exeslim does.
+
+## Measured state — 2026-07-27
+
+Seven VMs plus `klundstedt-mini`, measured over the tailnet with a read-only
+script. `iv-foundry-stage2` and `iv-entire-agent-shelley` (both created
+2026-07-26) were **not measured** — they are not tailnet-joined, which is the
+expected default under the no-hook contract ([exe-dev.md](exe-dev.md)).
+
+| Host                  |  used | claude |  node | caches |   zed | quarto | **reclaim** | after |
+| --------------------- | ----: | -----: | ----: | -----: | ----: | -----: | ----------: | ----: |
+| `iv-home`             | 15.2G |   492M |     — |   201M |  327M |      — |   **1.00G** | 14.2G |
+| `iv-gitlake-examples` | 13.0G |   502M |  202M |   650M |  120M |      — |   **1.44G** | 11.6G |
+| `iv-docs`             | 11.8G |   760M |  202M |  1585M |  161M |      — |   **2.64G** |  9.2G |
+| `klundstedt-mini`     | 11.7G |   720M |     — |  6361M |     — |      — |   **6.92G** |  4.8G |
+| `kgl-thoughts`        |  9.7G |   993M |     — |  1058M |  156M |      — |   **2.16G** |  7.5G |
+| `rss-feed`            |  7.8G |      — |  202M |   445M |  318M |   423M |   **1.35G** |  6.4G |
+| `iv-ave-adapters`     |  7.4G |   445M |  202M |   344M |  117M |      — |   **1.08G** |  6.3G |
+| `iv-gitlake`          |  7.1G |      — |  202M |   358M |     — |      — |   **0.55G** |  6.5G |
+| **TOTAL**             | 83.7G |  3911M | 1010M | 11001M | 1198M |   423M |  **17.13G** | 66.6G |
+
+**20% of measured fleet disk is recoverable without removing a single tool
+anyone uses.**
+
+### What each column is, and why it is safe
+
+- **claude** — `~/.local/share/claude/versions/` holds flat per-version
+  binaries at ~250 MB each and is never pruned by the installer.
+  `~/.local/bin/claude` symlinks the one in use; everything else is dead.
+  `kgl-thoughts` retains 5, `iv-docs` 4, the mini 4.
+- **node** — stale fnm versions. `aliases/default` resolves to
+  `node-versions/<v>/installation`, so the in-use version is identifiable;
+  only the others are counted.
+- **caches** — `~/.cache/uv`, `~/.cache/go-build`, `~/.npm`. Pure regenerable
+  cache. The mini dominates at **5488M uv + 874M npm**.
+- **zed** — `~/.zed_server` + `~/.local/share/zed`, re-fetched on the next
+  remote connection.
+- **quarto** — counted only where no real Quarto site exists. Only `rss-feed`
+  qualifies: its sole `_quarto.yml` files belong to the vendored `dotfiles`
+  and `iv-image` clones, not to anything it serves.
+
+Working set (**not** counted as reclaimable): `~/.local/bin` at 640–970 MB per
+VM — `codex` 285M, `tigris` 93M, `carapace` 78M, `uv` 63M, `duckdb` 60M, `op`
+40M, `gh` 39M. These are legitimately-sized static binaries and the honest
+price of the toolchain.
+
+### Measurement caveats
+
+The first pass was wrong in two ways worth recording, because both would have
+produced a destructive prune rule:
+
+- On `rss-feed` and `iv-gitlake` the Claude symlink did not resolve into
+  `versions/`, so the **only installed version** was scored as reclaimable. The
+  rule now falls back to newest-by-mtime and never proposes removing a lone
+  version.
+- The fnm default alias resolves to `.../installation`, not to a version
+  directory, so **every** node version scored as stale. The rule now walks up
+  one level and claims nothing when the default cannot be resolved.
+
+Any prune implementation must keep both guards.
+
+## Decision 1 — fork exeslim for a deployment lane, start with `rss-feed`
+
+`rss-feed` is the clean case. Verified on the box:
+
+- `srv.service` runs `/home/exedev/rss-feed/rss-feed` — one static 10 MB Go
+  binary. `srv.service`, `rss-feed-healthcheck.{service,timer}`, and
+  `healthcheck.sh` are all committed in the repo.
+- No database, no state files.
+- Tags are `["llm"]` — **no `iv` tag**, so it is already outside the
+  `provision-iv.sh` baseline.
+- AgentsView recorded **0 agent sessions**: nobody works there interactively.
+- It is one of only two VMs with `public_proxy: true`, so dropping compilers,
+  git, Python, and Node is a real attack-surface reduction.
+- Yet it currently carries 423M of unused Quarto, 318M of Zed server, stale
+  node, and a stray `~/iv-image` clone — all pure lane leakage.
+
+**Fork rather than consume.** `ghcr.io/ryanlewis/exeslim` is a personal
+account, not boldsoftware, rebuilt weekly by an Action we do not control, and
+the VMs in question are the internet-facing ones. The Dockerfile is ~180 lines
+of systemd masking and exe.dev wiring — cheap to vendor under `kylelundstedt`,
+and consistent with this repo's "GitHub is the canonical source of truth"
+boundary. Pin by immutable build ID (`<date>.<run>.<attempt>`) either way: the
+upstream README is explicit that exe.dev caches mutable tags and can serve a
+stale `:latest`.
+
+Build the Go binary on the mini (`GOOS=linux GOARCH=amd64`) and ship the
+artifact. Building on the production box was never a good idea; exeslim just
+removes the option.
+
+## Decision 2 — prune, and make it recurring
+
+This is the highest-ROI move and needs no architectural change. It must be a
+**timer, not a one-off**: the Claude versions directory regrows on every
+update, which is precisely how it reached 1.3G on `kgl-thoughts`.
+
+Shape it like the existing per-VM healthcheck timers, and decide it together
+with the still-open AgentsView **retention mechanism** in
+[`TODO.md`](../TODO.md) — same problem (unbounded local growth, no mechanism),
+and it would be silly to invent two different answers.
+
+Note the mini is the single biggest target (6.92G, nearly all uv cache) and is
+also the Tigris backup source — pruning there shrinks the nightly backup too
+([tigris-backup-runbook.md](tigris-backup-runbook.md)).
+
+## Decision 3 — rejected: building an `exedev` image from exeslim
+
+Tempting, and wrong on the numbers:
+
+1. **It saves zero billed bytes.** Billing is on your VM's filesystem usage.
+   Baking `duckdb` and `codex` into `/usr` instead of installing them into
+   `~/.local` moves bytes between directories. There is no cross-VM dedup to
+   harvest. The entire exeslim win comes from deleting exeuntu's kitchen sink,
+   and that win is available regardless of how our own tools arrive.
+2. **It trades away in-place upgradability.** The base image is fixed at VM
+   create. `upgrade-vm` works today precisely because the software layer is a
+   re-runnable script — no recreate, no disk wipe. Bake tools in and a DuckDB
+   point bump becomes destroy/recreate on boxes holding Shelley databases,
+   repos, and agent session history.
+3. **`provision-iv.sh` already is the image.** Every tool version-pinned and
+   checksum-verified, arch-aware, idempotent. An image would add faster VM
+   creation and nothing else.
+
+**Revisit trigger:** VM _creation time_ becoming the pain. Disk is not it.
+
+The real defect exposed here is not the image — it is that `install.sh` and
+`provision-iv.sh` have exactly one profile and it is "full dev." That is why
+`rss-feed` has Quarto. **A minimal/deploy profile is the fix**, and it is what
+makes the slim lane coherent:
+
+| Lane       | Base                   | Provisioning   | Upgrade path           |
+| ---------- | ---------------------- | -------------- | ---------------------- |
+| Dev        | `exeuntu`              | full profile   | `upgrade-vm`, in place |
+| Deployment | forked exeslim, pinned | deploy profile | destroy + recreate     |
+
+## Plan
+
+**A. Prune (do first — no architectural risk)**
+
+1. Write the prune script with both guards from "Measurement caveats"; dry-run
+   mode first, reporting per-category bytes.
+2. Dry-run fleet-wide, reconcile against the table above.
+3. Execute on one VM, verify Claude/node/uv still work, then fan out.
+4. Decide the recurring mechanism alongside AgentsView retention; install as a
+   timer. Include the mini.
+
+**B. `rss-feed` → forked exeslim**
+
+1. Fork/vendor the Dockerfile under `kylelundstedt`; own the weekly rebuild.
+2. Add the deploy profile to `install.sh` (no Quarto, no Zed, no fnm, no agent
+   toolchain).
+3. Cross-compile `rss-feed` on the mini; assemble unit + timer + binary as a
+   setup script.
+4. **Update the monitoring registry before cutover** — see gotcha below.
+5. Create the new VM from the pinned build ID, verify the public proxy and the
+   healthcheck timer, then delete the old VM.
+6. Record the result in [`monitoring.md`](monitoring.md) and
+   [`exe-dev-web.md`](exe-dev-web.md).
+
+**C. `kgl-thoughts` — not now**
+
+It is the fleet's busiest agent host (111 Claude sessions, 49M Shelley DB, the
+reason it sits at a 15m AgentsView interval —
+[agentsview-pilot.md](agentsview-pilot.md)) and it carries `lundstedt.us` /
+`www.lundstedt.us`. It is a dev box that happens to serve nginx. It becomes a
+candidate only after authoring moves to the mini and the VM merely serves built
+output. Revisit after B proves the lane.
+
+## Gotchas
+
+- **`agentsview-coverage` is fail-closed and hourly.** Recreating `rss-feed`
+  without the AgentsView source daemon will fire it. Zero sessions means
+  nothing is lost by dropping the source — but the registry edit must land
+  _before_ cutover, not after.
+- **Never prune a lone Claude version**, and never trust the symlink to resolve
+  into `versions/`. See "Measurement caveats".
+- **Several VMs are pinned to an old Claude.** `iv-ave-adapters`, `iv-gitlake`,
+  `kgl-thoughts`, and `rss-feed` all symlink `2.1.212` while newer binaries sit
+  unlinked beside them; `iv-docs` is on `2.1.219`, the mini on `2.1.220`. Worth
+  understanding _why_ before pruning, since the unlinked newer versions are
+  what a naive rule would delete.
+- **Base image is fixed at create.** Any image change is destroy/recreate, so a
+  deployment-lane service must be fully reproducible from repo + setup script.
+  `rss-feed` already is; verify that property before adding a second service to
+  the lane.
+
+## Open questions
+
+- Is Claude Code's version retention configurable, or must pruning be external?
+- Does the deploy profile belong in `install.sh` as a flag, or as a separate
+  thin script? A `--profile=deploy` flag keeps one entry point; a separate
+  script keeps the slim lane free of the full script's assumptions.
+- The two unmeasured VMs (`iv-foundry-stage2`, `iv-entire-agent-shelley`) need
+  a pass once joined, to confirm the 20% figure holds fleet-wide.

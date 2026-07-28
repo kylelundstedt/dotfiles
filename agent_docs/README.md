@@ -38,3 +38,4 @@ always-on rules live in `AGENTS.md`.
 | `herdr-pilot.md`             | herdr + Moshi agent-workflow pilot — topology decisions, boundaries, checklist                      |
 | `agentsview-pilot.md`        | Approved fleet pilot — central Shelley/Claude/Codex history across exe.dev and AC VMs               |
 | `shelley-sovreignty.md`      | Shelley assessment + target architecture for sovereign operating memory                             |
+| `vm-disk-weight.md`          | Measured fleet disk (2026-07-27) — forked-exeslim deployment lane, prune plan, rejected dev image   |
