@@ -143,21 +143,28 @@ also the Tigris backup source — pruning there shrinks the nightly backup too
 **Axis 1 — the base image.** `exeuntu` vs something slim. This is worth real
 money on _both_ lanes, and measurement on `iv-docs` says so:
 
-| In exeuntu's `/usr`                        |  size | do dev boxes need it?                              |
-| ------------------------------------------ | ----: | -------------------------------------------------- |
-| `/usr/local/aws-cli`                       |  533M | **no** — `provision-iv.sh` installs its own        |
-| `/usr/bin/{docker,dockerd,containerd,ctr}` | ~180M | unused on our VMs                                  |
-| `/usr/local/go`                            |  269M | only where a Go service is built                   |
-| `/usr/bin/archil`                          |  207M | only on archil hosts                               |
-| `/usr/lib/snapd` + `/usr/bin/snap`         |  125M | unused                                             |
-| `/usr/bin/gh`                              |   44M | **duplicate** — we install 39M into `~/.local/bin` |
-| `/usr/bin/tailscale`                       |   31M | yes                                                |
-| gcc / lto-dump                             |  ~53M | rarely                                             |
+| In exeuntu's `/usr`                        |  size | do dev boxes need it?                                 |
+| ------------------------------------------ | ----: | ----------------------------------------------------- |
+| `/usr/local/aws-cli`                       |  533M | yes — but see note below, this is **not** a duplicate |
+| `/usr/bin/{docker,dockerd,containerd,ctr}` | ~180M | unused on our VMs                                     |
+| `/usr/local/go`                            |  269M | only where a Go service is built                      |
+| `/usr/bin/archil`                          |  207M | only on archil hosts                                  |
+| `/usr/lib/snapd` + `/usr/bin/snap`         |  125M | unused                                                |
+| `/usr/bin/gh`                              |   44M | **duplicate** — we install 39M into `~/.local/bin`    |
+| `/usr/bin/tailscale`                       |   31M | yes                                                   |
+| gcc / lto-dump                             |  ~53M | rarely                                                |
 
-There is genuine duplication here (`aws-cli` and `gh` exist twice on every dev
-VM), and a couple of gigabytes that nothing on our fleet touches. **A slim base
-for dev VMs is a real saving and is worth pursuing** — likely 2–3G per box, on
-top of what pruning recovers.
+On `aws-cli`, the obvious inference is wrong and was corrected after checking:
+`provision-iv.sh` installs to `/usr/local/bin/aws`, the **same path** the image
+uses, so it replaces the image's copy rather than adding a second one. One
+533M copy, and it is in use. Only `gh` is genuinely duplicated — our 39M in
+`~/.local/bin` shadows the image's 44M — which is a 39M nuisance, not a lever.
+
+The lever is the ~900M of docker, snapd, and compilers that nothing on this
+fleet touches, plus `go` and `archil` on the hosts that don't need them. **A
+slim base for dev VMs is a real saving and worth pursuing** — call it 2–3G per
+box once the apt packages a dev box genuinely needs are added back, on top of
+what pruning recovers.
 
 **Axis 2 — how our tools arrive.** A re-runnable script (`provision-iv.sh`,
 `install.sh`) vs baked into a custom image. **This is the "no."**
@@ -251,6 +258,35 @@ titles identical). `git`, `python3`, `go`, `node`, `docker`, `nginx`, `uv`, and
 6. Still open: a **deploy profile** for `install.sh` (no Quarto, no Zed, no fnm,
    no agent toolchain). Not needed for `rss-feed`, which runs no dotfiles
    overlay at all, but needed before a second service joins the lane.
+
+**D. Slim base for dev VMs — the actual recommendation**
+
+**Adopt it for new VMs only. Never migrate an existing dev box for this.**
+
+The saving is ~2–3G per box. Applying it to an existing dev VM costs a
+destroy/recreate of a machine holding repos, a Shelley database, and agent
+session history — `iv-home` is 15G and `iv-gitlake-examples` 13G, and after
+pruning almost all of that is real work product, not waste. Paying a migration
+of _that_ to recover 3G is a bad trade, and doing it six times is a worse one.
+
+New VMs are a different story: they cost nothing to build slim, and the fleet
+turns over on its own.
+
+So:
+
+1. **Next time a dev VM is created from scratch, build it on the forked
+   exeslim** and make that the pilot. The one real unknown is bootstrap —
+   `provision-iv.sh` assumes stock exeuntu and its documented flow opens with a
+   `git clone`, which a bare base cannot do. Either pre-install `git` via apt
+   in the setup script, or teach the script to self-bootstrap the way
+   `install.sh` already does for `curl | bash`.
+2. **If that pilot is clean, make slim the default base for new dev VMs** and
+   let existing ones age out naturally.
+3. **If it is not clean, stop.** The dev lane's value is `upgrade-vm`'s
+   in-place path; do not trade that for 3G.
+
+Independently and cheaply: drop the redundant `gh` from the personal overlay on
+IV VMs (39M/box, no image change, no migration).
 
 **C. `kgl-thoughts` — not now**
 
