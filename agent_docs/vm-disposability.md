@@ -268,6 +268,37 @@ reports `rss-feed` as "a running exe.dev VM but not an online tailnet peer",
 which is the correct shape for a deployment-lane VM and is precisely the case
 the old tailnet-only pass could not see.
 
+## telnyx-vm — the one VM that is genuinely not disposable
+
+Audited 2026-07-28 only after it joined the tailnet, and it changes the fleet
+picture. Its code **is** in a private repo (`kylelundstedt/telnyx-vm`) and was
+6 commits behind — those commits _were_ the porting record (LOA revisions,
+Zoom account details captured, port submission with SIP/SMS routing). Pushed.
+
+But it runs an **irreversible business process** — an in-flight Zoom→Telnyx
+number port — and three categories of material sat only on that host:
+
+| Item                                                                                                    | Disposition (2026-07-28)                                                                                                                                              |
+| ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `porting-private/` (716K, gitignored): signed LOA, two unsigned revisions, Zoom invoice/number evidence | Copied to `~/Documents/IndustryVault/Telnyx/`, checksums verified. `~/Documents` is not excluded from the Tigris backup, so it goes offsite once that job is healthy. |
+| `/etc/telnyx-webhook.env` — `SMS_WEBHOOK_TOKEN`, mode 0600                                              | Stored in 1Password (`Employee` vault, "Telnyx webhook (telnyx-vm)").                                                                                                 |
+| `provision-state.json`, `logs/*.jsonl` — provisioning state + live delivery logs                        | Still host-only. Operational rather than irreplaceable; left in place.                                                                                                |
+
+**Why the documents do not belong in the repo.** The split the repo already
+uses is the right one and should be kept: `porting-state.json` is committed and
+records _flags_ (`zoom_port_out_pin_saved: true`), never the PIN itself — which
+is exactly why those 6 commits were safe to push. The PDFs are a different
+class: they are PII-bearing legal documents (service address, account holder,
+signature), they are binary, and git is append-only — committing them is a
+one-way door that would require a history rewrite to undo, and the repo is
+cloned onto the VM itself. Keep the record in git, keep the documents out.
+
+**Third audit blind spot, recorded with the other two:** the audit only ever
+scanned `$HOME`. `/etc/telnyx-webhook.env` was invisible to it. Service
+credentials commonly live outside `$HOME`, so a disposability audit that stops
+at the home directory will miss exactly the files that make a service VM
+unrebuildable.
+
 ## Audit gotcha
 
 The first pass reported `AGENTSVIEW_UNIT=inactive` on all six VMs, which

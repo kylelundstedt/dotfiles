@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.kylelundstedt.entire-push-check</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>-l</string>
+        <string>-c</string>
+        <string>$HOME/.local/bin/entire-push-check</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <!-- Daily, not hourly like agentsview-coverage. This check SSHes to every
+         fleet host, and the exe.dev-only hosts are reached over the
+         rate-limited *.exe.xyz path; an unpushed Entire checkpoint is also a
+         slow-moving condition, so hourly would add SSH load for no signal. -->
+    <key>StartInterval</key>
+    <integer>86400</integer>
+    <key>StandardOutPath</key>
+    <string>/tmp/entire-push-check.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/entire-push-check.log</string>
+</dict>
+</plist>

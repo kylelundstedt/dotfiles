@@ -77,16 +77,40 @@ library properties, not per-script conventions.
 
 ### AgentsView fleet coverage (`agentsview-coverage`, live 2026-07-25)
 
-A **fail-closed** coverage check: every online Linux tailnet node must be either
-a configured AgentsView source or listed in
-`provisioning/agentsview-coverage-exclude.txt` (currently empty — the last
-appliance, llm-gateway, was decommissioned). A new agent-capable VM collected by
+A **fail-closed** coverage check: every running exe.dev VM **and** every online
+Linux tailnet node must be either a configured AgentsView source or listed in
+`provisioning/agentsview-coverage-exclude.txt` (currently: `rss-feed`, the
+deployment-lane VM). Since 2026-07-28 it enumerates the exe.dev inventory as
+well as tailnet peers — enumerating peers alone left the guarantee open exactly
+where coverage was most likely missing, because a VM nobody enrolled is not a
+peer. That change immediately surfaced three uncovered VMs, one created the
+same day. A new agent-capable VM collected by
 neither trips it — the gap that left six VMs silently uncollected (2026-07-22)
 and that the per-source probes can't catch, since they only see hosts already in
 config. `com.kylelundstedt.agentsview-coverage` runs it hourly and pings the
 `agentsview-coverage` check (period 3600s, grace 7200s, Keychain
 `agentsview-coverage:healthcheck-url`). Run `agentsview-coverage --dry-run` to
 classify without pinging.
+
+### Entire checkpoint durability (`entire-push-check`, live 2026-07-28)
+
+A **fail-closed** durability check: no repo on any fleet host may hold commits
+on `refs/heads/entire/**` that exist on no remote. Entire records the "why" of
+agent work on that ref and ships it via a `pre-push` hook, so the record is
+durable **only once pushed** — an unpushed checkpoint dies with the host and
+nothing else notices. Found for real on 2026-07-28 (`iv-foundry-stage2` held 5
+on `fannie-sflpd`).
+
+`com.kylelundstedt.entire-push-check` runs it **daily**, not hourly: it SSHes
+to every fleet host and reaches exe.dev-only hosts over the rate-limited
+`*.exe.xyz` path, and an unpushed checkpoint is a slow-moving condition.
+Keychain `entire-push-check:healthcheck-url`; exclusions in
+`provisioning/entire-push-exclude.txt` (empty). `--dry-run` reports without
+pinging.
+
+Host discovery comes from `ssh exe.dev ls --json`, the same authoritative
+inventory `agentsview-coverage` now uses — **not** the tailnet, which cannot
+see a VM that never joined.
 
 ## Scope: this registry covers the klundstedt-mini project only
 
@@ -111,14 +135,7 @@ project, configured and documented there. Known out-of-registry monitoring:
   "running exe.dev VM but not an online tailnet peer" — which is exactly the
   shape a deployment-lane VM should have.
 
-- **entire-push-check** (`maint/.local/bin/entire-push-check`, mini) — fails if
-  any repo on any fleet host holds commits on `refs/heads/entire/**` that exist
-  on no remote. Entire ships its record on push, so an unpushed checkpoint has
-  zero durability. Currently **local pass/fail only**: it pings the Keychain
-  item `entire-push-check:healthcheck-url`, which does not exist yet, so
-  `job_hc` no-ops. Create the check and store the URL to make it alerting, and
-  register it in the table above at that point. Exclusions:
-  `provisioning/entire-push-exclude.txt`.
+(`entire-push-check` moved into the registry proper — see below.)
 
 `check-monitoring.sh`'s reverse pass ("every live check must be in the
 manifest") only sees the mini project, so out-of-registry checks never

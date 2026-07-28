@@ -25,3 +25,4 @@ personal-mcp: rebuild-hub | cron:0 4 * * * | America/Los_Angeles | 7200 | person
 personal-mcp: mcp-server | period:900 | - | 1800 | personal-mcp:com.kylelundstedt.personal-mcp-healthcheck
 personal-mcp: embeddings | period:900 | - | 1800 | personal-mcp:com.kylelundstedt.personal-mcp-healthcheck
 personal-mcp: calendar | cron:15 3 * * * | America/Los_Angeles | 3600 | personal-mcp:com.kylelundstedt.calendar-refresh
+entire-push-check | period:86400 | - | 3600 | dotfiles:com.kylelundstedt.entire-push-check
