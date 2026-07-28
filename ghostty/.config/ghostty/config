@@ -3,3 +3,7 @@ font-size = 15
 split-divider-color = #ffffff
 unfocused-split-opacity = 0.7
 desktop-notifications = true
+
+# Auto-install ghostty terminfo on remote hosts over SSH so Delete/Backspace
+# and other keys work correctly. ssh-env is the fallback TERM if bootstrap fails.
+shell-integration-features = ssh-env,ssh-terminfo
