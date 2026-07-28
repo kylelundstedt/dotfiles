@@ -130,50 +130,97 @@ Note the mini is the single biggest target (6.92G, nearly all uv cache) and is
 also the Tigris backup source — pruning there shrinks the nightly backup too
 ([tigris-backup-runbook.md](tigris-backup-runbook.md)).
 
-## Decision 3 — rejected: building an `exedev` image from exeslim
+## Decision 3 — two separate axes, and only one of them is a "no"
 
-Tempting, and wrong on the numbers:
+> **Corrected 2026-07-28.** The first version of this section rejected "a
+> slimmer dev image" outright. That conflated two independent choices and was
+> wrong on the more interesting one. Both are recorded here because the
+> conflation is easy to repeat.
 
-1. **It saves zero billed bytes.** Billing is on your VM's filesystem usage.
-   Baking `duckdb` and `codex` into `/usr` instead of installing them into
-   `~/.local` moves bytes between directories. There is no cross-VM dedup to
-   harvest. The entire exeslim win comes from deleting exeuntu's kitchen sink,
-   and that win is available regardless of how our own tools arrive.
-2. **It trades away in-place upgradability.** The base image is fixed at VM
+**Axis 1 — the base image.** `exeuntu` vs something slim. This is worth real
+money on _both_ lanes, and measurement on `iv-docs` says so:
+
+| In exeuntu's `/usr`                        |  size | do dev boxes need it?                              |
+| ------------------------------------------ | ----: | -------------------------------------------------- |
+| `/usr/local/aws-cli`                       |  533M | **no** — `provision-iv.sh` installs its own        |
+| `/usr/bin/{docker,dockerd,containerd,ctr}` | ~180M | unused on our VMs                                  |
+| `/usr/local/go`                            |  269M | only where a Go service is built                   |
+| `/usr/bin/archil`                          |  207M | only on archil hosts                               |
+| `/usr/lib/snapd` + `/usr/bin/snap`         |  125M | unused                                             |
+| `/usr/bin/gh`                              |   44M | **duplicate** — we install 39M into `~/.local/bin` |
+| `/usr/bin/tailscale`                       |   31M | yes                                                |
+| gcc / lto-dump                             |  ~53M | rarely                                             |
+
+There is genuine duplication here (`aws-cli` and `gh` exist twice on every dev
+VM), and a couple of gigabytes that nothing on our fleet touches. **A slim base
+for dev VMs is a real saving and is worth pursuing** — likely 2–3G per box, on
+top of what pruning recovers.
+
+**Axis 2 — how our tools arrive.** A re-runnable script (`provision-iv.sh`,
+`install.sh`) vs baked into a custom image. **This is the "no."**
+
+1. **Baking saves zero billed bytes.** Billing is on your VM's filesystem
+   usage. Moving `duckdb` and `codex` from `~/.local` into `/usr` relocates
+   bytes between directories; there is no cross-VM dedup to harvest.
+2. **Baking trades away in-place upgradability.** The base image is fixed at VM
    create. `upgrade-vm` works today precisely because the software layer is a
    re-runnable script — no recreate, no disk wipe. Bake tools in and a DuckDB
    point bump becomes destroy/recreate on boxes holding Shelley databases,
    repos, and agent session history.
 3. **`provision-iv.sh` already is the image.** Every tool version-pinned and
-   checksum-verified, arch-aware, idempotent. An image would add faster VM
+   checksum-verified, arch-aware, idempotent. Baking would add faster VM
    creation and nothing else.
 
-**Revisit trigger:** VM _creation time_ becoming the pain. Disk is not it.
+The two axes are independent, and that is the whole point: **slim base +
+existing provisioning script on top** captures the disk win on dev VMs _while
+keeping `upgrade-vm` exactly as it is._ Nothing has to be baked.
 
-The real defect exposed here is not the image — it is that `install.sh` and
-`provision-iv.sh` have exactly one profile and it is "full dev." That is why
-`rss-feed` has Quarto. **A minimal/deploy profile is the fix**, and it is what
-makes the slim lane coherent:
+**What blocks it today** is not desirability but bootstrap: `provision-iv.sh`
+is written for "a stock exeuntu VM," and the documented flow starts with a
+`git clone` on the VM — exeslim has no git, Python, or Node. Making the dev
+lane slim means making the provisioning script self-bootstrapping from a bare
+base (`install.sh` already does this for `curl | bash`). That is a real piece
+of work, and it should follow the deployment lane rather than lead it, so the
+bootstrap is proven on a box with nothing at stake.
 
-| Lane       | Base                   | Provisioning   | Upgrade path           |
-| ---------- | ---------------------- | -------------- | ---------------------- |
-| Dev        | `exeuntu`              | full profile   | `upgrade-vm`, in place |
-| Deployment | forked exeslim, pinned | deploy profile | destroy + recreate     |
+**Revisit trigger for _baking_:** VM creation time becoming the pain. Disk is
+not it.
+
+Related but separate: `install.sh` and `provision-iv.sh` have exactly one
+profile and it is "full dev." That is why `rss-feed` carries Quarto. A
+minimal/deploy profile is the fix, and it is what makes the slim lane coherent:
+
+| Lane         | Base                   | Provisioning   | Upgrade path           |
+| ------------ | ---------------------- | -------------- | ---------------------- |
+| Dev (today)  | `exeuntu`              | full profile   | `upgrade-vm`, in place |
+| Dev (target) | forked exeslim, pinned | full profile   | `upgrade-vm`, in place |
+| Deployment   | forked exeslim, pinned | deploy profile | destroy + recreate     |
 
 ## Plan
 
-**A. Prune (do first — no architectural risk)**
+**A. Prune** — script done, fan-out pending
 
-1. Write the prune script with both guards from "Measurement caveats"; dry-run
-   mode first, reporting per-category bytes.
-2. Dry-run fleet-wide, reconcile against the table above.
-3. Execute on one VM, verify Claude/node/uv still work, then fan out.
-4. Decide the recurring mechanism alongside AgentsView retention; install as a
-   timer. Include the mini.
+1. ~~Write the prune script with both guards~~ — `maint/.local/bin/prune-disk`,
+   dry-run by default, stowed fleet-wide into `~/.local/bin`.
+2. ~~Dry-run fleet-wide~~ — all seven joined VMs + the mini reconcile against
+   the table above.
+3. ~~Execute on one VM and verify~~ — applied on `rss-feed` 2026-07-28:
+   7.8G → 6.8G, `srv.service` and the healthcheck timer still active, app
+   returns 200, `claude`/`node`/`uv` all still work. Actual 1.06G vs a 1.35G
+   estimate, because `uv cache prune` keeps live entries.
+4. Fan out to the remaining VMs and the mini (**~15G outstanding**, the mini
+   alone 6.9G).
+5. Decide the recurring mechanism alongside AgentsView retention; install as a
+   timer.
 
-**B. `rss-feed` → forked exeslim**
+**B. `rss-feed` → forked exeslim** — image done, migration pending
 
-1. Fork/vendor the Dockerfile under `kylelundstedt`; own the weekly rebuild.
+1. ~~Fork under `kylelundstedt`; own the weekly rebuild~~ —
+   [`kylelundstedt/exeslim`](https://github.com/kylelundstedt/exeslim).
+   Divergence is one owner-relative line in `build.yml` plus `FORK.md`, so
+   upstream merges cleanly. First build published and verified anonymously
+   pullable: **`ghcr.io/kylelundstedt/exeslim:2026-07-28.1.1`** (14 layers,
+   56 MB compressed).
 2. Add the deploy profile to `install.sh` (no Quarto, no Zed, no fnm, no agent
    toolchain).
 3. Cross-compile `rss-feed` on the mini; assemble unit + timer + binary as a
