@@ -201,6 +201,15 @@ regression.
   pays the per-object HEAD cost and catches the daily mode's timestamp edge
   cases. The encrypted remotes expose no hashes, so `--checksum` cannot replace
   this exact pass; `--size-only` would miss same-size changes.
+- **`--ignore-checksum` is set** (both modes). `crypt` encrypts with a fresh
+  random nonce, so a file's ciphertext md5 is non-deterministic; rclone's
+  post-copy checksum verify can then false-positive `corrupted on transfer: md5
+  encrypted hashes differ` on re-uploads and block every changed file from
+  backing up (2026-07-28: 6337 spurious failures, stored data verified byte-exact
+  correct). The check is meaningless for crypt anyway (`Hashes: null`); real
+  integrity is the exact reconcile pass above plus the restore-drill's
+  `cryptcheck` + decrypt-and-compare. rclone still enforces the size check, so a
+  genuinely truncated/torn upload is not masked.
 - Guards: unlock/mount the external drive (fail the run if it can't — see below),
   fail if another rclone/backup mode is running, `--max-delete 5000` backstop,
   shared lock, and independent staleness guards (20h daily / 6d reconcile).
