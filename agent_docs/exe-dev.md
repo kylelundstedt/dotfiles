@@ -54,8 +54,10 @@ ssh exe.dev rm <vm>                            # destroy
 
 - **Names cannot end with `-<digits>`** (`test-123` is rejected, `test-abc`
   works). The name becomes the subdomain `https://<vm>.exe.xyz/`.
-- `--tag=iv` attaches the IV-scoped integrations, including `tailscale-api`,
-  which `join-tailnet` requires.
+- `--tag=iv` attaches the IV-scoped integrations. It **no longer attaches
+  `tailscale-api`** (changed 2026-07-28): that integration is tailnet
+  administration and is now attached on demand by `join-tailnet` and detached
+  again on exit. See [`exe-dev-remediation.md`](exe-dev-remediation.md).
 - Create throwaway canaries on demand and delete them after validation; do not
   keep a persistent canary, and never author source commits on a VM
   (see "Repository authoring boundary" in `CLAUDE.md`).
@@ -71,8 +73,9 @@ curl -s https://reflection.int.exe.xyz/integrations  # name, type, comment, help
 curl -s https://reflection.int.exe.xyz/tags
 ```
 
-`/integrations` is the fastest way to answer "does this VM have `tailscale-api`
-attached?" before running `join-tailnet`, or "which repo can this VM clone?".
+`/integrations` is the fastest way to answer "which repo can this VM clone?".
+It is no longer the check to run before `join-tailnet` — the expected answer for
+`tailscale-api` is now **not attached**, and the script attaches it itself.
 Each entry's `help` field gives the literal command — clone URLs come back as
 `https://github.int.exe.xyz/<org>/<repo>.git`.
 

@@ -66,16 +66,30 @@ The sole exception is a tier-3 bootstrap credential (an `OP_SERVICE_ACCOUNT_TOKE
 scoped to one project vault), used only where no integration can reach the
 target. Integrations are scoped by tag (client/project) or per-VM:
 
-| Integration           | Type       | Scope        | Purpose                                                     |
-| --------------------- | ---------- | ------------ | ----------------------------------------------------------- |
-| `tailscale-api`       | http-proxy | `auto:all`   | OAuth client creds (Basic) → 1h token → ephemeral join keys |
-| `github-mcp-work`     | http-proxy | `tag:iv`     | Work GitHub API (MCP)                                       |
-| `motherduck-mcp`      | http-proxy | `tag:iv`     | MotherDuck SQL (MCP)                                        |
-| `github-mcp-home`     | http-proxy | `vm:` per VM | Personal GitHub API (MCP) — only your VMs                   |
-| `github-<org>-<repo>` | github     | `vm:` per VM | Git clone/push for a single repo                            |
-| `reflection`          | reflection | `auto:all`   | VM metadata                                                 |
-| tigris                | OAuth      | —            | One-time browser dance via `LocalForward 8765`              |
-| readwise              | OAuth      | —            | macOS only                                                  |
+| Integration           | Type       | Scope        | Purpose                                                                                                                         |
+| --------------------- | ---------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `tailscale-api`       | http-proxy | **`(none)`** | OAuth client creds (Basic) → 1h token → ephemeral join keys. Attached on demand by `join-tailnet`, detached on exit — see below |
+| `github-mcp-work`     | http-proxy | `tag:iv`     | Work GitHub API (MCP) — **intent; live state is `auto:all`**                                                                    |
+| `motherduck-mcp`      | http-proxy | `tag:iv`     | MotherDuck SQL (MCP)                                                                                                            |
+| `github-mcp-home`     | http-proxy | `vm:` per VM | Personal GitHub API (MCP) — **intent; live state is `auto:all`**                                                                |
+| `github-<org>-<repo>` | github     | `vm:` per VM | Git clone/push for a single repo                                                                                                |
+| `reflection`          | reflection | `auto:all`   | VM metadata                                                                                                                     |
+| tigris                | OAuth      | —            | One-time browser dance via `LocalForward 8765`                                                                                  |
+| readwise              | OAuth      | —            | macOS only                                                                                                                      |
+
+**Attachment drift is real, and this table is intent — verify against
+`ssh exe.dev integrations list` before trusting it.** As of 2026-07-28 both
+`github-mcp-*` entries were live at `auto:all` rather than the narrower scopes
+recorded above; nobody widened them deliberately. Two related traps:
+
+- An `auto:all` integration lands on **every new VM automatically**, so a
+  replacement VM inherits it on first boot.
+- A `tag:` attachment whose tag no VM carries still appears in
+  `integrations list` and grants nothing — `fannie-token` had exactly this dead
+  `tag:fannie-token` attachment. Prefer `vm:` for singleton or high-risk
+  authority; reserve tags for genuine cohorts.
+
+See [`exe-dev-remediation.md`](exe-dev-remediation.md) for the audit.
 
 **Tag convention:** VMs are tagged by client (e.g. `iv`, `usaa`). Tag-scoped integrations grant access to the appropriate set of services. When team members join via SSO, personal integrations remain invisible to them; team integrations (`--team` flag) only support `tag:` attachment.
 
@@ -164,7 +178,11 @@ Machine-readable expiry dates live in `provisioning/keys.manifest`, checked mont
 1. Admin console → Settings → OAuth clients → regenerate the secret (scopes/tags are editable in place).
 2. Update both fields in 1P `Tailscale OAuth Dev`, then swap the integration:
    `ssh exe.dev integrations remove tailscale-api` and
-   `ssh exe.dev integrations add http-proxy --name=tailscale-api --target=https://api.tailscale.com --header='Authorization:Basic <base64(client_id:client_secret)>' --attach=auto:all`
+   `ssh exe.dev integrations add http-proxy --name=tailscale-api --target=https://api.tailscale.com --header='Authorization:Basic <base64(client_id:client_secret)>'`
+   — **do NOT re-add with `--attach=auto:all`.** This is tailnet administration
+   (mint auth keys, remove nodes, edit ACLs); it was `auto:all` until
+   2026-07-28, which put it on every VM including the public-facing ones.
+   Leave it unattached; `join-tailnet` attaches and detaches per join.
 3. Verify: `join-tailnet` on a throwaway VM.
 
 **GitHub PATs** (fine-grained, per resource owner): regenerate on github.com → update the 1P item → re-run `./install.sh` (re-resolves MCP registrations and re-provisions the sync-repos/tigris-backup Keychain items) → for Home/IV also `ssh exe.dev integrations remove github-mcp-home` (resp. `github-mcp-work`) and re-add with the new token. Record the new expiry in `provisioning/keys.manifest`.

@@ -241,9 +241,12 @@ The coverage change flagged three uncovered VMs on its first run, one of which
 
 Enrollment notes worth keeping:
 
-- `telnyx-vm` was untagged, so it had no `tailscale-api` integration. That
-  integration was attached **on its own** rather than adding the `iv` tag,
+- `telnyx-vm` was untagged, so it had no _tag-scoped_ integrations.
+  `tailscale-api` was attached **directly** rather than adding the `iv` tag,
   which would have pulled in every IV-scoped integration onto a telephony box.
+  (Correction, 2026-07-28: it already had `tailscale-api` anyway via the
+  `auto:all` attachment, so the direct attach was redundant. Both were removed —
+  see [`exe-dev-remediation.md`](exe-dev-remediation.md).)
 - It was joined with **`--accept-dns=false`**. It runs live voicemail
   forwarding and an in-flight number port; rewriting `/etc/resolv.conf` on a
   box that must reach the Telnyx API is a risk with no upside, since the

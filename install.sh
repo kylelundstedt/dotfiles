@@ -663,22 +663,34 @@ Host *.exe.xyz
 # to User exedev (the exe.dev-VM identity). Must precede that match
 # (first-match-wins for User); both patterns cover the name before and after
 # CanonicalizeHostname rewrites it to the FQDN.
+# ForwardAgent lives HERE and nowhere else: the mini is a trusted Mac we own,
+# so forwarding the 1Password agent to it is a deliberate choice. See the
+# exe.dev-VM block below for why it must not be blanket-applied to *.ts.net.
 Host klundstedt-mini klundstedt-mini.*
   User klundstedt
+  ForwardAgent yes
 
 # exe.dev VMs reached by Tailscale name: detected dynamically by tag,
 # so new VMs Just Work without re-running install.sh.
 # Host keys skipped — WireGuard already authenticates the peer.
+#
+# ForwardAgent no is LOAD-BEARING SECURITY, not tidiness. This block used to be
+# followed by a blanket `Host *.ts.net / ForwardAgent yes`, which forwarded the
+# 1Password agent — and with it the exe.dev CONTROL-PLANE key — into every
+# exe.dev VM. Those VMs run autonomous agents (Shelley/Claude/Codex) as the
+# same `exedev` user, so any of them could run `ssh exe.dev rm <vm>` or
+# `integrations attach ... auto:all` against the whole account. Verified
+# 2026-07-28: `ssh iv-docs 'ssh exe.dev whoami'` returned the account identity.
+# The mini keeps forwarding via its own block above (first-match-wins), so the
+# legitimate laptop -> mini case still works.
 Match host *.ts.net exec "$LOCAL_BIN/ssh-tailnet-tagged %h tag:dev"
   User exedev
+  ForwardAgent no
   IdentitiesOnly yes
   IdentityFile ~/.ssh/exe_dev.pub
   StrictHostKeyChecking no
   UserKnownHostsFile /dev/null
   LogLevel ERROR
-
-Host *.ts.net
-  ForwardAgent yes
 SSHEOF
 
         if [[ -S "$HOME/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock" ]]; then
@@ -716,10 +728,15 @@ SSHEOF
             fi
             cat <<SSHEOF
 
+# NO ControlMaster/ControlPersist here, unlike the macOS block. On the Mac,
+# multiplexing is valuable (exe.dev drops repeated SYNs per source IP). On a
+# VM it is an escalation window: if the agent is ever forwarded in, the first
+# exe.dev command leaves an AUTHENTICATED socket at ~/.ssh/sockets/ that any
+# local process can reuse for ControlPersist seconds with no key and no agent.
+# Verified 2026-07-28 on iv-docs: a second `ssh exe.dev whoami` succeeded with
+# SSH_AUTH_SOCK unset, riding the leftover master. Only `ControlPath=none`
+# produced the correct `Permission denied (publickey)`.
 Host exe.dev *.exe.xyz
-  ControlMaster auto
-  ControlPath ~/.ssh/sockets/%r@%h-%p
-  ControlPersist 600
   IdentitiesOnly yes
   IdentityFile ~/.ssh/exe_dev.pub
 

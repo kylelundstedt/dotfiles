@@ -11,7 +11,15 @@
 # Preconditions (all satisfied by iv-image >= 2.0.0 created with --tag=iv):
 #   - tailscaled enabled and running on the VM
 #   - curl + jq present on the VM
-#   - the `tailscale-api` integration attached to the VM
+#
+# ATTACH-THEN-DETACH (2026-07-28). `tailscale-api` used to be attached
+# `auto:all`, so every VM — including the public-facing ones — could mint
+# tailnet auth keys, remove nodes, and edit ACLs at any time. Verified from
+# rss-feed: the proxy returned HTTP 200 on a token exchange. It is now attached
+# by this script for the duration of the join and detached on exit, so the
+# authority exists only while it is being used. The trap fires on error and on
+# interrupt, not just on success — if it ever does leak, `integrations list`
+# will show a stray `vm:` attachment.
 #
 # Env overrides: IV_TAILSCALE_TAG (default tag:dev),
 #                IV_TAILSCALE_API_URL (default https://tailscale-api.int.exe.xyz)
@@ -21,7 +29,28 @@ VM=${1:?usage: join-tailnet.sh <vm-name>}
 TAG=${IV_TAILSCALE_TAG:-tag:dev}
 PROXY=${IV_TAILSCALE_API_URL:-https://tailscale-api.int.exe.xyz}
 
-exec ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new "${VM}.exe.xyz" \
+# Was it already attached before we got here? If so, leave it exactly as found
+# rather than detaching something we did not attach.
+preexisting=false
+if ssh -o ConnectTimeout=30 exe.dev integrations list 2>/dev/null \
+   | awk -v vm="vm:$VM" '$1=="tailscale-api" && index($0, vm) {found=1} END{exit !found}'; then
+  preexisting=true
+  echo "join-tailnet: tailscale-api already attached to $VM — leaving attachment as found" >&2
+else
+  echo "join-tailnet: attaching tailscale-api to $VM for the duration of the join" >&2
+  ssh -o ConnectTimeout=30 exe.dev integrations attach tailscale-api "vm:$VM" >/dev/null \
+    || { echo "join-tailnet: could not attach tailscale-api to $VM" >&2; exit 1; }
+fi
+
+detach() {
+  [ "$preexisting" = true ] && return 0
+  echo "join-tailnet: detaching tailscale-api from $VM" >&2
+  ssh -o ConnectTimeout=30 exe.dev integrations detach tailscale-api "vm:$VM" >/dev/null \
+    || echo "join-tailnet: WARNING — failed to detach tailscale-api from $VM; detach it manually" >&2
+}
+trap detach EXIT INT TERM
+
+ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new "${VM}.exe.xyz" \
   TAG="$TAG" PROXY="$PROXY" 'bash -s' <<'REMOTE'
 set -euo pipefail
 : "${TAG:?}" "${PROXY:?}"

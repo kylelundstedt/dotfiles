@@ -40,3 +40,4 @@ always-on rules live in `AGENTS.md`.
 | `shelley-sovreignty.md`      | Shelley assessment + target architecture for sovereign operating memory                             |
 | `vm-disk-weight.md`          | Measured fleet disk (2026-07-27) — forked-exeslim deployment lane, prune plan, rejected dev image   |
 | `vm-disposability.md`        | Audit (2026-07-28): can we delete any VM? Gap is 10 unpushed commits; Shelley history is covered    |
+| `exe-dev-remediation.md`     | Capability exposure + disk weight, in three tracks. Track 0 (control plane) done; 1 and 2 open      |
