@@ -99,7 +99,15 @@ project, configured and documented there. Known out-of-registry monitoring:
 - **rss-feed** (`kylelundstedt/rss-feed`, rss-feed VM) — a systemd timer runs
   `healthcheck.sh` every ~16 min, validates every generated feed, and pings a
   check in a separate healthchecks.io project (URL in
-  `~/.config/rss-feed/healthchecks.env` on the VM).
+  `~/.config/rss-feed/healthchecks.env` on the VM). Rebuilt 2026-07-28 on the
+  exeslim deployment lane ([vm-disk-weight.md](vm-disk-weight.md)); the timer,
+  the ping URL, and the check are unchanged. The validation no longer uses
+  `python3` (absent from that image) — it asserts an RSS/Atom root and a
+  non-zero item count in pure shell, with `xmllint` supplying well-formedness.
+  The VM is **no longer an AgentsView source** (no agent harness, not on the
+  tailnet): its `[[remote_hosts]]` block was removed from the collector config
+  and it is listed in `provisioning/agentsview-coverage-exclude.txt`, so
+  `agentsview-coverage` reports it as an excused host that is not online.
 
 `check-monitoring.sh`'s reverse pass ("every live check must be in the
 manifest") only sees the mini project, so out-of-registry checks never

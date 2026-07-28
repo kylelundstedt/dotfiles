@@ -8,6 +8,12 @@
 #
 # One hostname per line (the tailnet HostName).
 #
-# Currently empty: every online Linux tailnet host is an agent source. The last
-# appliance, llm-gateway, was decommissioned 2026-07-25 (fcacb8a). Add a host
-# here only if it genuinely runs no agent harness.
+# The last decommissioned appliance was llm-gateway, 2026-07-25 (fcacb8a). Add a
+# host here only if it genuinely runs no agent harness.
+
+# Rebuilt 2026-07-28 on the exeslim deployment lane: a Go binary plus two
+# systemd units, no agent harness and no tailscale, so it collects nothing and
+# is not a tailnet peer. Listed pre-emptively so that joining it to the tailnet
+# later cannot trip the coverage check. Its 10 collected sessions stay in the
+# archive. See agent_docs/vm-disk-weight.md.
+rss-feed

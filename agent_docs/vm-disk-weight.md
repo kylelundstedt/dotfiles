@@ -216,7 +216,21 @@ minimal/deploy profile is the fix, and it is what makes the slim lane coherent:
 5. Decide the recurring mechanism alongside AgentsView retention; install as a
    timer.
 
-**B. `rss-feed` → forked exeslim** — image done, migration pending
+### Outcome — 2026-07-28
+
+**Prune, fleet-wide: ~10.1G actual reclaimed** (vs a 17.13G upper bound; the
+gap is `uv cache prune` keeping live entries, which the estimate could not
+model). Per host: mini 3.10G, `iv-docs` 1.64G, `kgl-thoughts` 1.64G,
+`rss-feed` 1.06G, `iv-gitlake-examples` 859M, `iv-home` 828M,
+`iv-ave-adapters` 799M, `iv-gitlake` 241M. No breakage on any host.
+
+**`rss-feed` cutover: 7.8G → 268M.** Rebuilt on
+`ghcr.io/kylelundstedt/exeslim:2026-07-28.1.1`. Feed output is byte-identical
+to the pre-cutover baseline (motherduck 18 items, archil 19, both HTTP 200,
+titles identical). `git`, `python3`, `go`, `node`, `docker`, `nginx`, `uv`, and
+`claude` are all absent from the box.
+
+**B. `rss-feed` → forked exeslim** — done
 
 1. ~~Fork under `kylelundstedt`; own the weekly rebuild~~ —
    [`kylelundstedt/exeslim`](https://github.com/kylelundstedt/exeslim).
@@ -224,15 +238,19 @@ minimal/deploy profile is the fix, and it is what makes the slim lane coherent:
    upstream merges cleanly. First build published and verified anonymously
    pullable: **`ghcr.io/kylelundstedt/exeslim:2026-07-28.1.1`** (14 layers,
    56 MB compressed).
-2. Add the deploy profile to `install.sh` (no Quarto, no Zed, no fnm, no agent
-   toolchain).
-3. Cross-compile `rss-feed` on the mini; assemble unit + timer + binary as a
-   setup script.
-4. **Update the monitoring registry before cutover** — see gotcha below.
-5. Create the new VM from the pinned build ID, verify the public proxy and the
-   healthcheck timer, then delete the old VM.
-6. Record the result in [`monitoring.md`](monitoring.md) and
-   [`exe-dev-web.md`](exe-dev-web.md).
+2. ~~Cross-compile and ship as an artifact~~ — `deploy.sh` in the service repo
+   does the whole rebuild (cross-compile, ship, enable, verify) in one SSH
+   connection, and is what makes a destroy/recreate lane survivable. Tested
+   end-to-end against the live VM.
+3. ~~Update the monitoring registry~~ — collector `[[remote_hosts]]` block
+   removed, host added to `agentsview-coverage-exclude.txt`; both AgentsView
+   checks re-verified green afterwards.
+4. ~~Create from the pinned build ID, verify, delete the old VM~~ — done.
+5. ~~Record in [`monitoring.md`](monitoring.md) and
+   [`exe-dev-web.md`](exe-dev-web.md)~~ — done.
+6. Still open: a **deploy profile** for `install.sh` (no Quarto, no Zed, no fnm,
+   no agent toolchain). Not needed for `rss-feed`, which runs no dotfiles
+   overlay at all, but needed before a second service joins the lane.
 
 **C. `kgl-thoughts` — not now**
 
@@ -260,6 +278,24 @@ output. Revisit after B proves the lane.
   deployment-lane service must be fully reproducible from repo + setup script.
   `rss-feed` already is; verify that property before adding a second service to
   the lane.
+
+Learned during the cutover, both of which cost time:
+
+- **A recreated VM presents a new SSH host key, and `.exe.xyz` is not covered
+  by the tailnet's `StrictHostKeyChecking no`.** Every routine `ssh <vm>` in
+  this fleet goes over the tailnet, where the `Match host *.ts.net` block skips
+  host keys — so the first `.exe.xyz` connection to a rebuilt VM fails under
+  `BatchMode`. `ssh-keyscan` does not help: exe.dev's sshd offers `ssh-rsa`,
+  which keyscan does not request by default. Use
+  `StrictHostKeyChecking=accept-new`, as `deploy.sh` does. A slim deployment
+  VM has no tailscale, so `.exe.xyz` is the only way in.
+- **The proxy comes back private.** `share set-public <vm>` is a required step
+  after recreating a public service; a new VM does not inherit the old one's
+  sharing. Forgetting it is a silent outage behind a login redirect.
+- **Budget for the SYN-drop backoff.** Failed connections during the rebuild
+  count against the per-source-IP rate, so a fumbled first attempt makes the
+  next few worse. The successful run needed a ~150s pause. Plan the cutover as
+  one scripted pass rather than interactive poking.
 
 ## Open questions
 
