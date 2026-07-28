@@ -1,0 +1,255 @@
+#!/usr/bin/env bash
+# prune-disk — reclaim regenerable disk on a dotfiles-managed host.
+#
+# Dry-run by default. Nothing is deleted without --apply.
+#
+# Removes only things that are provably stale or regenerate on demand:
+#   claude   stale Claude Code version binaries (~250 MB each, never pruned
+#            by the installer) — keeps the one ~/.local/bin/claude points at
+#   node     stale fnm node versions — keeps the `default` alias target
+#   caches   uv / go-build / npm caches, via each tool's own prune command
+#            when available, otherwise by removing the cache directory
+#   zed      ~/.zed_server + ~/.local/share/zed, re-fetched on next connect
+#   quarto   ~/.local/share/quarto, ONLY with --quarto and ONLY when the host
+#            serves no Quarto site (opt-in: this one is lane-dependent)
+#
+# Two guards are load-bearing and must not be relaxed — both come from real
+# measurement bugs (see agent_docs/vm-disk-weight.md, "Measurement caveats"):
+#   1. Never remove the sole Claude version, and never trust the symlink to
+#      resolve into versions/ — fall back to newest-by-mtime.
+#   2. fnm's aliases/default resolves to <version>/installation, not to a
+#      version directory. If it cannot be resolved to a real version, claim
+#      nothing rather than everything.
+#
+# Runs on macOS and Linux. Safe to re-run.
+
+set -uo pipefail
+
+APPLY=false
+DO_QUARTO=false
+
+usage() {
+    cat <<'EOF'
+Usage: prune-disk [--apply] [--quarto] [--help]
+
+  --apply    actually delete (default is a dry run that changes nothing)
+  --quarto   also drop an unused Quarto install (skipped if a site exists)
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --apply)  APPLY=true; shift ;;
+        --quarto) DO_QUARTO=true; shift ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "prune-disk: unknown argument: $1" >&2; usage >&2; exit 2 ;;
+    esac
+done
+
+# --- helpers ---------------------------------------------------------------
+
+# Size of a path in KiB, 0 when absent.
+sz() { [[ -e "$1" ]] && du -sk "$1" 2>/dev/null | awk '{print $1}' || echo 0; }
+
+human() { awk -v k="$1" 'BEGIN{
+    if (k >= 1048576) printf "%.2f GB", k/1048576;
+    else if (k >= 1024) printf "%.0f MB", k/1024;
+    else printf "%d KB", k
+}'; }
+
+TOTAL=0
+declare -a PLAN=()
+
+# note <category> <bytes_kib> <description>
+note() {
+    TOTAL=$((TOTAL + $2))
+    PLAN+=("$(printf '  %-8s %10s  %s' "$1" "$(human "$2")" "$3")")
+}
+
+say() { printf '%s\n' "$*"; }
+
+before_used() { df -k "$HOME" | tail -1 | awk '{print $3}'; }
+
+# --- claude ----------------------------------------------------------------
+
+CLAUDE_DIR="$HOME/.local/share/claude/versions"
+claude_current=""
+claude_stale=()
+
+scan_claude() {
+    [[ -d "$CLAUDE_DIR" ]] || return 0
+
+    local link
+    link="$(readlink -f "$HOME/.local/bin/claude" 2>/dev/null || true)"
+    case "$link" in
+        "$CLAUDE_DIR"/*) claude_current="$(basename "$link")" ;;
+    esac
+    # Guard 1a: symlink did not resolve into versions/ — fall back to newest.
+    [[ -n "$claude_current" ]] || claude_current="$(ls -t "$CLAUDE_DIR" 2>/dev/null | head -1)"
+
+    local count=0 v
+    for v in "$CLAUDE_DIR"/*; do
+        [[ -e "$v" ]] || continue
+        count=$((count + 1))
+    done
+    # Guard 1b: never touch a lone version.
+    if (( count <= 1 )); then
+        return 0
+    fi
+
+    local bytes=0 b
+    for v in "$CLAUDE_DIR"/*; do
+        [[ -e "$v" ]] || continue
+        [[ "$(basename "$v")" == "$claude_current" ]] && continue
+        b=$(sz "$v")
+        bytes=$((bytes + b))
+        claude_stale+=("$v")
+    done
+
+    (( bytes > 0 )) && note claude "$bytes" \
+        "${#claude_stale[@]} stale version(s), keeping $claude_current"
+}
+
+# --- fnm node --------------------------------------------------------------
+
+FNM_DIR="$HOME/.local/share/fnm/node-versions"
+node_stale=()
+
+scan_node() {
+    [[ -d "$FNM_DIR" ]] || return 0
+
+    local dl dflt
+    dl="$(readlink -f "$HOME/.local/share/fnm/aliases/default" 2>/dev/null || true)"
+    # fnm layout: aliases/default -> ../node-versions/<version>/installation
+    [[ "$dl" == */installation ]] && dl="$(dirname "$dl")"
+    dflt="$(basename "${dl:-}" 2>/dev/null || true)"
+
+    # Guard 2: default not resolvable to a real version dir — claim nothing.
+    if [[ -z "$dflt" || ! -d "$FNM_DIR/$dflt" ]]; then
+        say "  note: fnm default unresolved — skipping node (nothing claimed)"
+        return 0
+    fi
+
+    local bytes=0 b v
+    for v in "$FNM_DIR"/*; do
+        [[ -e "$v" ]] || continue
+        [[ "$(basename "$v")" == "$dflt" ]] && continue
+        b=$(sz "$v")
+        bytes=$((bytes + b))
+        node_stale+=("$v")
+    done
+
+    (( bytes > 0 )) && note node "$bytes" \
+        "${#node_stale[@]} stale version(s), keeping $dflt"
+}
+
+# --- caches ----------------------------------------------------------------
+# Prefer each tool's own prune (keeps entries still in use); fall back to
+# removing the directory, which is safe for a cache but less surgical.
+
+cache_paths=()
+
+scan_caches() {
+    local p b
+    for p in "$HOME/.cache/uv" "$HOME/.cache/go-build" "$HOME/.npm"; do
+        b=$(sz "$p")
+        (( b > 0 )) || continue
+        cache_paths+=("$p")
+        note cache "$b" "$(basename "$p") (upper bound — native prune keeps live entries)"
+    done
+}
+
+prune_caches() {
+    local p
+    for p in "${cache_paths[@]}"; do
+        case "$p" in
+            */uv)
+                if command -v uv >/dev/null 2>&1; then uv cache prune >/dev/null 2>&1 || rm -rf "$p"
+                else rm -rf "$p"; fi ;;
+            */go-build)
+                if command -v go >/dev/null 2>&1; then go clean -cache >/dev/null 2>&1 || rm -rf "$p"
+                else rm -rf "$p"; fi ;;
+            */.npm)
+                if command -v npm >/dev/null 2>&1; then npm cache clean --force >/dev/null 2>&1 || rm -rf "$p"
+                else rm -rf "$p"; fi ;;
+        esac
+    done
+}
+
+# --- zed -------------------------------------------------------------------
+
+zed_paths=()
+
+scan_zed() {
+    local p b
+    for p in "$HOME/.zed_server" "$HOME/.local/share/zed"; do
+        b=$(sz "$p")
+        (( b > 0 )) || continue
+        zed_paths+=("$p")
+        note zed "$b" "$(basename "$p") (re-fetched on next remote connect)"
+    done
+}
+
+# --- quarto (opt-in, lane-dependent) ---------------------------------------
+
+quarto_path=""
+
+scan_quarto() {
+    [[ "$DO_QUARTO" == true ]] || return 0
+    local q="$HOME/.local/share/quarto"
+    local b; b=$(sz "$q")
+    (( b > 0 )) || return 0
+
+    # A vendored tooling clone shipping its own _quarto.yml is not a site.
+    local f d
+    for f in "$HOME"/*/_quarto.yml; do
+        [[ -e "$f" ]] || continue
+        d="$(basename "$(dirname "$f")")"
+        case "$d" in iv-image|dotfiles) continue ;; esac
+        say "  note: Quarto site found ($d) — skipping quarto"
+        return 0
+    done
+
+    quarto_path="$q"
+    note quarto "$b" "unused install, no Quarto site on this host"
+}
+
+# --- run -------------------------------------------------------------------
+
+say "prune-disk on $(hostname -s) — $([[ "$APPLY" == true ]] && echo APPLY || echo 'dry run')"
+say ""
+
+scan_claude
+scan_node
+scan_caches
+scan_zed
+scan_quarto
+
+if (( TOTAL == 0 )); then
+    say "  nothing to reclaim"
+    exit 0
+fi
+
+printf '%s\n' "${PLAN[@]}"
+say ""
+say "  $(printf '%-8s %10s' TOTAL "$(human "$TOTAL")")"
+
+if [[ "$APPLY" != true ]]; then
+    say ""
+    say "  dry run — nothing removed. Re-run with --apply."
+    exit 0
+fi
+
+say ""
+used_before=$(before_used)
+
+for v in "${claude_stale[@]+"${claude_stale[@]}"}"; do rm -rf "$v"; done
+for v in "${node_stale[@]+"${node_stale[@]}"}"; do rm -rf "$v"; done
+prune_caches
+for p in "${zed_paths[@]+"${zed_paths[@]}"}"; do rm -rf "$p"; done
+[[ -n "$quarto_path" ]] && rm -rf "$quarto_path"
+
+used_after=$(before_used)
+freed=$((used_before - used_after))
+(( freed < 0 )) && freed=0
+say "  reclaimed $(human "$freed") (filesystem delta)"

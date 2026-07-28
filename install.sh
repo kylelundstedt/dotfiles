@@ -938,8 +938,8 @@ run_stow() {
     fi
     sync_claude_settings_hooks
 
-    # Always stow these (herdr/agentsview: config + operational helpers run on VMs too)
-    local packages=("git" "zsh" "starship" "agents" "herdr" "agentsview")
+    # Always stow these (herdr/agentsview/maint: config + operational helpers run on VMs too)
+    local packages=("git" "zsh" "starship" "agents" "herdr" "agentsview" "maint")
 
     # Platform-specific
     if [[ "$OS" == "macos" ]]; then
