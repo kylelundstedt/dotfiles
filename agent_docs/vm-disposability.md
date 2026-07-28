@@ -5,8 +5,8 @@
 > rebuilding one on a new base image is free and no migration plan is needed —
 > the image question dissolves. So the invariant was tested rather than assumed.
 >
-> **Verdict: very nearly true.** The entire gap across six dev VMs is **10
-> unpushed commits on two hosts**. Everything else is pushed, regenerable, or
+> **Verdict: true, once 10 commits were pushed.** The entire gap across six dev
+> VMs was **10 unpushed commits on two hosts**, cleared 2026-07-28. Everything else is pushed, regenerable, or
 > already centralised. The systemic weakness is not on the VMs at all — it is
 > that the mini's Tigris backup is currently failing.
 
@@ -93,8 +93,9 @@ VMs are disposable today and the other two become so immediately after.
 
 So the sequencing is:
 
-1. Push the 10 commits (`iv-gitlake-examples` ×7, `iv-docs` ×3) and give
-   `entire/checkpoints/v1` an upstream or delete it.
+1. ~~Push the 10 commits~~ — **done 2026-07-28**. All six dev VMs now report
+   zero unpushed commits. `entire/checkpoints/v1` was already on the remote;
+   Entire's hook pushes it alongside `main`, so it needed no separate action.
 2. Fix the Tigris backup — the invariant's last hop.
 3. Decide AgentsView adoption (~2026-08-04); until then the Shelley half of
    the invariant rests on a pilot.
@@ -106,6 +107,64 @@ Retiring `kgl-dotfiles` (2026-07-22) required manually archiving its Shelley
 database and repo bundles to `~/archives/vm-retirements/`. That was the
 evidence suggesting the invariant did not hold. It is largely obsolete now:
 AgentsView post-dates it and covers what had to be rescued by hand.
+
+## Two records, two durability models — AgentsView vs Entire
+
+Both capture agent activity, so the instinct is to ask whether both are needed
+on every VM. That framing hides the real difference: **AgentsView is
+host-scoped infrastructure; Entire is repo-scoped configuration.** The useful
+question is "AgentsView on which hosts, Entire on which repos".
+
+|                           | AgentsView                                          | Entire CLI                                                 |
+| ------------------------- | --------------------------------------------------- | ---------------------------------------------------------- |
+| Where the record lives    | external copy on the mini                           | inside the repo, ref `entire/checkpoints/v1`               |
+| How it gets there         | collector **pulls** from a live host on an interval | **pushed** with the code — a hook fires on `git push`      |
+| Survives instant VM death | only what was already synced                        | yes, once pushed — it is just git                          |
+| Scope                     | every agent, every host, including work in no repo  | one repo, only checkpointed work                           |
+| Answers                   | "what did agents do across the fleet"               | "why is this code the way it is"                           |
+| Retention                 | unbounded local growth, **policy but no mechanism** | **permanent** in git history, unprunable without a rewrite |
+
+Verified 2026-07-28: pushing `main` on `iv-docs` emitted
+`[entire] Pushing entire/checkpoints/v1 to origin.... done`. Entire's record
+inherits the code's durability automatically — no daemon, no interval, no
+coverage check. **For the disposability invariant, Entire is strictly stronger
+where it applies.** But it only applies to repo-scoped checkpointed work, which
+is the minority of what happens on these VMs.
+
+Current footprint: Entire is installed on **one** VM (`iv-docs`, CLI 0.8.42),
+with 13 commits / 6 checkpoints / 51 files / 2.9 MB in a 10M `.git` — roughly
+0.5 MB per checkpoint, growing monotonically and permanently.
+
+### Recommendation
+
+- **AgentsView — every host where an agent runs.** It is the catch-all and the
+  safety net: ops work in no repo, exploration, debugging, and above all
+  Shelley, which is the dominant agent here (`iv-docs`: 91 Shelley sessions vs
+  13 Entire checkpoints). Already true today; keep it.
+- **Entire — per repo, not per VM.** Enable it on repos whose "why" is worth
+  keeping for years; skip scratch and canary repos. It follows the repository
+  to whatever machine works on it, which is the point.
+- **Neither on deployment-lane VMs.** `rss-feed` has neither, correctly — no
+  agent work happens there.
+
+They are not redundant. Entire gives provenance a reviewer can read in a PR
+without tailnet access; AgentsView gives fleet-wide recall across everything,
+including work that never became a commit. Dropping either loses something the
+other cannot supply.
+
+### Two sequencing points before any broad Entire rollout
+
+1. **Shelley coverage is still being built.** `kylelundstedt/entire-agent-shelley`
+   is active and unfinished (commits 2026-07-26: "expose plugin to Entire hook
+   subprocess", "resolve Entire outside Shelley PATH"), with `iv-entire-agent-shelley`
+   created the same day for clean-install qualification. Until it lands, Entire
+   covers Claude/Codex but not the bulk of VM agent activity. Rolling it out
+   fleet-wide first would instrument the minority.
+2. **Decide Entire's retention policy before enabling it widely, not after.**
+   AgentsView's retention gap is fixable whenever — it is local files. Entire's
+   record is permanent git history; the decision is effectively irreversible
+   per repo. The two systems need opposite policies, and only one of them
+   forgives a late decision.
 
 ## Audit gotcha
 

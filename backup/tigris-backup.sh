@@ -102,8 +102,19 @@ fi
 # Daily mode uses the S3 upload time for comparisons, avoiding one HEAD request
 # per existing object. Weekly reconcile mode omits those flags and reads rclone's
 # exact source mtime metadata. --max-delete guards against a missing/empty source.
+#
+# --ignore-checksum: skip rclone's POST-COPY checksum check. The bkup:/arch:
+# remotes are rclone `crypt`, which encrypts with a fresh random nonce every time
+# — so a file's ciphertext md5 is non-deterministic and rclone's post-copy verify
+# can false-positive "corrupted on transfer: md5 encrypted hashes differ" on
+# re-uploads (2026-07-28: 6337 spurious failures blocked every changed file from
+# backing up; verified the stored data was byte-exact correct — new/plain
+# uploads verify fine, only crypt re-uploads tripped it). The check is meaningless
+# for crypt anyway (encrypted remotes expose no content hash — `Hashes: null`);
+# real integrity comes from the weekly reconcile (exact size+mtime) and
+# restore-drill (cryptcheck + decrypt-and-compare). See agent_docs/tigris-backup-runbook.md.
 FLAGS=(--fast-list --transfers 8 --checkers 16 --retries 5 --low-level-retries 10
-       --max-delete 5000 --stats 5m --stats-log-level NOTICE --stats-one-line)
+       --ignore-checksum --max-delete 5000 --stats 5m --stats-log-level NOTICE --stats-one-line)
 ABORT_REMAINING=0
 # Keep the whole run inside its check's grace window. Each phase gets only the
 # time remaining in the run-wide budget, so phase limits cannot stack.
