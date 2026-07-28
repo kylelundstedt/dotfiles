@@ -4,6 +4,41 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-07-28 — AgentsView adopted; retention mechanism; slim deployment lane
+
+Closed the AgentsView pilot and adopted it fleet-wide. All 9 running exe.dev
+VMs are configured sources; `rss-feed` is excused as a deployment-lane VM with
+no agent harness. Enrolling the last three (`iv-foundry-stage2`,
+`iv-entire-agent-shelley`, `telnyx-vm`) required care: `telnyx-vm` runs live
+voicemail/SMS forwarding and an in-flight number port, so it got the
+`tailscale-api` integration alone rather than the whole `iv` tag, joined with
+`--accept-dns=false` to leave `/etc/resolv.conf` pointing at 1.1.1.1, and
+received only the AgentsView binaries rather than the full IV layer.
+
+**Retention now has a mechanism, not just a policy.** `agentsview-retention`
+runs weekly: it exports sessions older than 90 days to dated Parquet under
+`~/archives/agentsview/retired/` — which is in the backup path — and only then
+prunes the live SQLite archive. Tiered rather than destructive, because the
+driver is exposure (agent history carries prompts, shell commands, and
+credentials accidentally shown to tools), not the ~3.3 MB/day of storage.
+
+The DuckDB mirror was considered as the long-term store and rejected. It is a
+one-way derived sync from the same SQLite archive, deliberately excluded from
+backup as a rebuildable index, would be erased by a routine
+`duckdb push --full`, and it flattens machine attribution to the pushing host.
+An archive that a documented flag can wipe is not an archive.
+
+First run exported 13 sessions and pruned 11 — two survived with no obvious
+exemption (unpinned, non-empty). The script now reports the residual instead of
+claiming success, since silently re-exporting the same sessions every week
+would look identical to working correctly.
+
+Also in this cycle: ~10.1 GB reclaimed fleet-wide by `prune-disk`; `rss-feed`
+rebuilt on a forked exeslim image at 268 MB versus 7.8 GB; and two fail-closed
+checks added — `agentsview-coverage` now enumerates the exe.dev inventory
+rather than only tailnet peers, and `entire-push-check` asserts no repo holds
+an unpushed Entire checkpoint.
+
 ## 2026-07-22 — LLM gateway and iv-sandbox decommissioned
 
 Retired the self-hosted Claude/Codex subscription gateway entirely, one day into

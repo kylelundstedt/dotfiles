@@ -1,0 +1,147 @@
+#!/usr/bin/env bash
+# AgentsView retention — delete sessions older than the retention window.
+#
+# The pilot had a retention POLICY and no mechanism; this is the mechanism
+# (decided 2026-07-28, adoption). The driver is exposure, not storage: the
+# archive grows only ~3.3 MB/day, but agent history contains prompts, source
+# fragments, shell commands, tool results and credentials accidentally exposed
+# to tools. Old sessions are liability, not asset.
+#
+# Uses `agentsview prune`, the vendor command, rather than SQL against the
+# live database. Hand-editing would have to keep `messages_fts` and
+# `background_migrations` consistent, and would break on any schema change.
+#
+# NOTE ON GRANULARITY: prune deletes WHOLE SESSIONS by end date. It cannot
+# strip tool payloads while keeping message text, which the pilot's own size
+# analysis would have preferred (tool call content is 52.1 MB against 8.2 MB
+# of messages). Whole-session deletion is the coarser tool but the better
+# exposure control, and it is what the vendor supports.
+#
+# TIERED, NOT DESTRUCTIVE: sessions are exported to dated Parquet under
+# ~/archives/agentsview/retired/ BEFORE they are pruned. That path is in the
+# backup (only ~/.agentsview is excluded), the files are immutable and
+# append-only, and DuckDB queries them directly.
+#
+# Why not keep old data in ~/.agentsview/mirror.duckdb instead: it is a
+# one-way derived sync from this same SQLite archive, it is deliberately
+# EXCLUDED from backup as a rebuildable index, `duckdb push --full` would
+# rebuild it from the pruned source and erase the history, and it flattens
+# machine attribution to the pushing host. It is an analytics index, not an
+# archive of record.
+#
+# Dry-run by default. Nothing is deleted without --apply.
+set -uo pipefail
+umask 077
+
+RETENTION_DAYS=${AGENTSVIEW_RETENTION_DAYS:-90}
+APPLY=false
+[[ "${1:-}" == "--apply" ]] && APPLY=true
+
+source "$HOME/dotfiles/backup/_lib.sh"
+job_require_mini agentsview-retention
+if [[ "$APPLY" == true ]]; then
+    job_hc_init "agentsview-retention:healthcheck-url"
+    job_log "$HOME/Library/Logs/agentsview-retention"
+fi
+
+AGENTSVIEW=${AGENTSVIEW_BIN:-/opt/homebrew/bin/agentsview}
+DB="$HOME/.agentsview/sessions.db"
+LABEL=gui/$(id -u)/com.kylelundstedt.agentsview
+
+fail() {
+    echo "FAIL: $1"
+    [[ "$APPLY" == true ]] && job_hc /fail --data-raw "agentsview-retention $(date '+%F %T') $1"
+    exit 1
+}
+
+[[ -x "$AGENTSVIEW" ]] || fail "agentsview not executable at $AGENTSVIEW"
+[[ -f "$DB" ]] || fail "archive missing at $DB"
+
+CUTOFF=$(date -v-"${RETENTION_DAYS}"d +%Y-%m-%d) || fail "could not compute cutoff"
+echo "agentsview-retention: window ${RETENTION_DAYS}d, deleting sessions ended before $CUTOFF"
+
+count_before=$(sqlite3 "$DB" "SELECT count(*) FROM sessions WHERE deleted_at IS NULL;" 2>/dev/null)
+eligible=$(sqlite3 "$DB" "SELECT count(*) FROM sessions WHERE deleted_at IS NULL AND ended_at < '$CUTOFF';" 2>/dev/null)
+[[ -n "$count_before" && -n "$eligible" ]] || fail "could not read session counts"
+echo "  live sessions: $count_before, eligible: $eligible"
+
+if [[ "$eligible" -eq 0 ]]; then
+    echo "OK: nothing older than $CUTOFF"
+    [[ "$APPLY" == true ]] && job_hc --data-raw "agentsview-retention $(date '+%F %T') nothing to prune (live=$count_before)"
+    exit 0
+fi
+
+# One column selected, so ORDER BY must name the expression — `ORDER BY 2`
+# refers to a non-existent second column and silently produced no output.
+sqlite3 "$DB" "SELECT '  ' || machine || ': ' || count(*) || ' session(s), oldest ' || substr(min(ended_at),1,10)
+    FROM sessions WHERE deleted_at IS NULL AND ended_at < '$CUTOFF'
+    GROUP BY machine ORDER BY count(*) DESC;" 2>/dev/null
+
+RETIRED_DIR="$HOME/archives/agentsview/retired/$(date +%Y-%m-%d)"
+
+if [[ "$APPLY" != true ]]; then
+    echo ""
+    echo "  would export to: $RETIRED_DIR"
+    echo "  dry run — nothing exported or deleted. Re-run with --apply."
+    exit 0
+fi
+
+# --- export before prune -------------------------------------------------
+command -v duckdb >/dev/null 2>&1 || fail "duckdb not found — refusing to prune without an export"
+mkdir -p "$RETIRED_DIR" || fail "could not create $RETIRED_DIR"
+echo "  exporting to $RETIRED_DIR ..."
+duckdb -c "
+INSTALL sqlite; LOAD sqlite;
+ATTACH '$DB' AS s (TYPE sqlite, READ_ONLY);
+COPY (SELECT * FROM s.sessions WHERE deleted_at IS NULL AND ended_at < '$CUTOFF')
+  TO '$RETIRED_DIR/sessions.parquet' (FORMAT parquet);
+COPY (SELECT m.* FROM s.messages m
+      WHERE m.session_id IN (SELECT id FROM s.sessions
+                             WHERE deleted_at IS NULL AND ended_at < '$CUTOFF'))
+  TO '$RETIRED_DIR/messages.parquet' (FORMAT parquet);
+" >/dev/null 2>&1 || fail "export failed — nothing pruned"
+
+exported=$(duckdb -noheader -list -c "SELECT count(*) FROM read_parquet('$RETIRED_DIR/sessions.parquet');" 2>/dev/null)
+[[ "$exported" == "$eligible" ]] || fail "export wrote $exported session(s) but $eligible were eligible — nothing pruned"
+msgs=$(duckdb -noheader -list -c "SELECT count(*) FROM read_parquet('$RETIRED_DIR/messages.parquet');" 2>/dev/null)
+echo "  exported $exported session(s), $msgs message(s) ($(du -sh "$RETIRED_DIR" | cut -f1))"
+
+# The running collector owns the SQLite archive and prune refuses to write
+# behind its back. Stop the launchd job (not just `daemon stop`, or launchd
+# would restart it underneath us), prune, then bring it back. The collector is
+# down only for the prune; sources keep their own data and the next sync
+# catches up.
+echo "  stopping collector..."
+launchctl bootout "$LABEL" 2>/dev/null
+"$AGENTSVIEW" daemon stop >/dev/null 2>&1 || true
+sleep 3
+
+prune_rc=0
+"$AGENTSVIEW" prune --before "$CUTOFF" --yes 2>&1 | tail -5 || prune_rc=$?
+
+echo "  restarting collector..."
+launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.kylelundstedt.agentsview.plist" 2>/dev/null
+sleep 5
+launchctl list 2>/dev/null | grep -q "com.kylelundstedt.agentsview$" || fail "collector did not come back after prune — restart it manually"
+
+count_after=$(sqlite3 "$DB" "SELECT count(*) FROM sessions WHERE deleted_at IS NULL;" 2>/dev/null)
+removed=$((count_before - count_after))
+[[ $prune_rc -eq 0 ]] || fail "prune exited $prune_rc (collector restarted; live=$count_after)"
+
+# `agentsview prune --before` does not always remove every session this script
+# considers eligible: on 2026-07-28, 13 were exported and 11 pruned, leaving a
+# cowork session and a Shelley session that were unpinned and non-empty. The
+# vendor's date semantics evidently differ from `ended_at < CUTOFF`. That is
+# not data loss — the residual stays live AND is exported — but it must be
+# visible, or the same sessions get re-exported into a new dated directory on
+# every run while appearing to succeed.
+residual=$(sqlite3 "$DB" "SELECT count(*) FROM sessions WHERE deleted_at IS NULL AND ended_at < '$CUTOFF';" 2>/dev/null)
+if [[ "${residual:-0}" -gt 0 ]]; then
+    echo "  WARN: $residual session(s) older than $CUTOFF survived prune (exported, still live)"
+    sqlite3 "$DB" "SELECT '    ' || agent || ' / ' || project || ' ended ' || substr(ended_at,1,10)
+        FROM sessions WHERE deleted_at IS NULL AND ended_at < '$CUTOFF';" 2>/dev/null
+fi
+
+msg="pruned $removed session(s) older than $CUTOFF (exported to $RETIRED_DIR); live $count_before -> $count_after; residual ${residual:-0}"
+echo "OK: $msg"
+job_hc --data-raw "agentsview-retention $(date '+%F %T') $msg"
