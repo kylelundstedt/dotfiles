@@ -7,8 +7,10 @@
 >
 > Answers: **yes to a forked slim image for the deployment lane** (starting with
 > `rss-feed`), **yes to pruning** (~20% of measured fleet disk is recoverable
-> garbage), and **no to building a slimmed dev image** — that one trades real
-> operability for a saving that does not exist.
+> garbage), and **yes in principle to a slim base for dev VMs too** — but _not_
+> to baking our toolchain into a custom image, which relocates bytes rather
+> than removing them and costs `upgrade-vm`'s in-place path. Those last two are
+> separate axes; see Decision 3.
 
 ## Why disk is worth attention at all
 
@@ -24,8 +26,9 @@ Two consequences that shape every decision below:
 1. Per-VM bloat is a **shared** cost, so it compounds with fleet size.
 2. You are billed for bytes **in your filesystem**. Moving a tool from
    `~/.local` into a custom image relocates the bytes; it does not remove them.
-   An image only helps by _deleting_ content — which is exactly and only what
-   exeslim does.
+   An image only helps by _deleting_ content — which is exactly what exeslim
+   does, and why a slim base pays off on any lane while _baking_ our own tools
+   into an image pays off on none.
 
 ## Measured state — 2026-07-27
 
