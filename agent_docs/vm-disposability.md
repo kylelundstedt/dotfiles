@@ -166,6 +166,65 @@ other cannot supply.
    per repo. The two systems need opposite policies, and only one of them
    forgives a late decision.
 
+## Audit v2 — what v1 missed (2026-07-28)
+
+v1's repo discovery was `find -maxdepth 3 -type d -name .git`. Three structural
+blind spots, and two of them hid real work:
+
+1. **Linked worktrees are invisible to `-type d`** — a worktree's `.git` is a
+   **file**. `iv-docs` has 9 (`~/worktrees/ave-*`), `iv-home` 1,
+   `iv-foundry-stage2` several. v1 saw none of them.
+2. **`maxdepth 3` was too shallow** — it missed
+   `~/github/kylelundstedt/ave-adapters`, which is where those 9 worktrees are
+   anchored.
+3. **Un-joined VMs were never audited at all.** `iv-foundry-stage2` and
+   `iv-entire-agent-shelley` are not on the tailnet, so they were unreachable
+   by name and silently omitted.
+
+v2 also checks stashes, detached-HEAD commits, local-only tags, and notes refs.
+All came back zero fleet-wide — but v1 could not have seen them either.
+
+### What v2 surfaced
+
+- `iv-docs` — **1** genuinely unpushed commit, `e94c04e docs: freeze M1 package
+runtime boundary` on `p1-s1-m1-package-runtime`. **Pushed.** Note the 9
+  worktrees share one object store, so each reported the same count: it was one
+  commit seen ten times, not ten commits.
+- `iv-foundry-stage2` — **8 unpushed commits**: 5 Entire checkpoint transcripts
+  in `worktrees/fannie-sflpd`, and 3 in
+  `worktrees/fannie-sflpd-preauth-20260727` whose `main` is an **unrelated
+  history** (`Initial commit`, `Initialize metadata ref`). Not pushed —
+  pushing that second one at `origin/main` would be wrong, not merely noisy.
+- `iv-entire-agent-shelley` — clean.
+- `.codex/.tmp/plugins` on two VMs — a vendored upstream clone with its remote
+  stripped, not our work. Disposable.
+
+### The structural finding: installed is not the same as working
+
+`iv-foundry-stage2` runs **both** safety nets and gets **neither**:
+
+- **AgentsView** — binary present (v0.38.1 from iv-image), but
+  `~/.config/agentsview/source.env` is absent, so the fail-closed daemon never
+  starts. The VM is also not on the tailnet, so nothing could reach it anyway.
+- **Entire** — installed (`~/.local/bin/entire`, 50M) with its hooks in place
+  (`pre-push`, `post-commit`, …). But Entire ships its record **on push**, and
+  nothing has been pushed since 2026-07-27. Five checkpoints sat local.
+
+And the check that exists to catch exactly this could not see it:
+**`agentsview-coverage` enumerates online Linux _tailnet peers_.** A VM that
+never joined the tailnet is not a peer, so it is not flagged. The fail-closed
+guarantee is closed against joined hosts and **open against un-joined ones** —
+which is precisely where the 8 commits were. The authoritative VM inventory is
+`ssh exe.dev ls --json` ([exe-dev-web.md](exe-dev-web.md)); coverage should be
+driven from that, not from the tailnet.
+
+Two assertions worth adding, both cheap and both aimed at real failure modes:
+
+- every VM in `ssh exe.dev ls --json` is a configured AgentsView source or
+  explicitly excused — not merely every _online tailnet_ VM;
+- no repo carries unpushed `entire/checkpoints/*` commits, since an unpushed
+  Entire record has no durability at all.
+
 ## Audit gotcha
 
 The first pass reported `AGENTSVIEW_UNIT=inactive` on all six VMs, which
@@ -173,3 +232,11 @@ contradicted the collector's own "6 source(s) reachable". The probe was wrong:
 `agentsview-source.service` is a **user** unit, so a system-scope
 `systemctl is-active` misses it. Any fleet probe for it must use
 `systemctl --user`, or check the listener on `:8080` instead.
+
+Second instance, same class: `command -v entire` reported absent on
+`iv-foundry-stage2`, but the binary is there (`~/.local/bin/entire`, 50M).
+Non-interactive SSH gets `PATH=/bin:/usr/bin:/sbin:/usr/sbin:/exe.dev/bin:/usr/local/bin`
+— no `~/.local/bin`. **Any fleet probe over `ssh <host> '<cmd>'` must test
+absolute paths, not `command -v`**, or it will report every user-installed tool
+missing. Both false negatives were caught only because they contradicted
+something already known.
