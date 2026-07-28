@@ -15,10 +15,11 @@
          not fire on every login/reboot. -->
     <key>RunAtLoad</key>
     <false/>
-    <!-- Weekly. A 90-day window does not need daily enforcement, and each run
-         briefly stops the collector. -->
+    <!-- Daily, matching the healthchecks.io check. Each run stops the
+         collector for only a few seconds, and daily keeps the eligible set
+         small instead of letting a week accumulate. -->
     <key>StartInterval</key>
-    <integer>604800</integer>
+    <integer>86400</integer>
     <key>StandardOutPath</key>
     <string>/tmp/agentsview-retention.log</string>
     <key>StandardErrorPath</key>

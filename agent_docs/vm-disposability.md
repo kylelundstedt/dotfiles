@@ -299,6 +299,31 @@ credentials commonly live outside `$HOME`, so a disposability audit that stops
 at the home directory will miss exactly the files that make a service VM
 unrebuildable.
 
+## Audit v3 — re-run after adoption, 2026-07-28
+
+Re-run across all nine tailnet hosts once the last three VMs were enrolled, and
+extended to close the third blind spot: **state outside `$HOME`**. v1 and v2
+only ever walked the home directory, which is how `/etc/telnyx-webhook.env`
+stayed invisible on the one VM running an irreversible process. v3 enumerates
+running system and user units and reports any `EnvironmentFile`/`ExecStart`
+path outside `$HOME` that actually exists.
+
+Result — the fleet is clean:
+
+- **Zero unpushed work.** The only two hits are `.codex/.tmp/plugins` on
+  `iv-gitlake-examples` and `kgl-thoughts`: vendored upstream clones with their
+  remote stripped, sitting in a `.tmp` directory. Regenerable, not our work.
+- **One out-of-`$HOME` secret of ours, already handled:**
+  `/etc/telnyx-webhook.env` (mode 0600), now mirrored in 1Password.
+- **`/exe.dev/shelley.json` (mode 0644) on every VM** is platform-injected by
+  exe.dev, not ours. Keys are `default_model`, `key_generator`, `links`,
+  `llm_gateway`, `terminal_url` — no credential material, and it is recreated
+  when a VM is created. Not a gap, but worth knowing it is world-readable.
+
+The disposability invariant now holds fleet-wide, tested rather than assumed,
+with the audit covering main repos, linked worktrees, stashes, detached HEAD,
+local-only tags, notes refs, un-joined VMs, and service state outside `$HOME`.
+
 ## Audit gotcha
 
 The first pass reported `AGENTSVIEW_UNIT=inactive` on all six VMs, which
