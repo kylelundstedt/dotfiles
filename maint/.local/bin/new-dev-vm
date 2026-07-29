@@ -1,0 +1,249 @@
+#!/usr/bin/env bash
+# new-dev-vm — create an exe.dev dev VM and enroll it in every fleet service.
+#
+# Recreating a VM is the ONLY way to change its base image (exe.dev fixes the
+# image at creation; `cp` clones the disk you already have) and the only way a
+# long-lived VM gets OS security patches — nothing on these boxes patches
+# itself, apt-daily is masked, and `iv-docs` was measured at 77 pending security
+# updates on a 43-day-old VM. So recreate is not an exceptional operation, it is
+# the maintenance model. This script exists to make it cheap enough to actually
+# do on a cycle.
+#
+# The disposability invariant this rests on is tested, not assumed: git and
+# Tigris hold all permanent state, verified fleet-wide including /tmp
+# (agent_docs/vm-disposability.md).
+#
+# What makes recreate expensive is NOT losing data — it is re-enrollment:
+# tailnet, the AgentsView source token AND the matching collector entry,
+# integrations, and the fail-closed monitors that page when a VM is missing.
+# Every one of those is automated here.
+#
+# Deliberately NOT automated: deleting the old VM. That stays a separate,
+# explicit human decision — see `--retire` for the checklist it prints.
+#
+# Usage:
+#   new-dev-vm --name iv-foo --repo kylelundstedt/foo
+#   new-dev-vm --name iv-foo --recreate iv-foo-old
+#   new-dev-vm --name iv-foo --dry-run
+set -euo pipefail
+
+# --- defaults ---------------------------------------------------------------
+IMAGE_DEFAULT="ghcr.io/kylelundstedt/exeslim-dev:2026-07-29.5.1"
+DISK=15GB
+CPU=2
+MEM=8GB
+IV_PIN=""            # iv-image sha/tag; empty = default branch tip
+COLLECTOR_CONF="$HOME/.agentsview/config.toml"
+COLLECTOR_LABEL="gui/$(id -u)/com.kylelundstedt.agentsview"
+TAILNET_DOMAIN="dojo-sun.ts.net"
+
+NAME=""; IMAGE="$IMAGE_DEFAULT"; REPOS=(); TAGS=(); INTEGRATIONS=()
+RECREATE=""; DRY=false; SKIP_OVERLAY=false
+
+die() { echo "new-dev-vm: $*" >&2; exit 1; }
+step() { printf '\n== %s\n' "$*"; }
+run() { if [[ "$DRY" == true ]]; then echo "  [dry-run] $*"; else "$@"; fi; }
+
+usage() {
+    sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
+    exit 0
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --name) NAME="${2:?}"; shift 2 ;;
+        --image) IMAGE="${2:?}"; shift 2 ;;
+        --disk) DISK="${2:?}"; shift 2 ;;
+        --cpu) CPU="${2:?}"; shift 2 ;;
+        --memory) MEM="${2:?}"; shift 2 ;;
+        --iv-pin) IV_PIN="${2:?}"; shift 2 ;;
+        --repo) REPOS+=("${2:?}"); shift 2 ;;
+        --tag) TAGS+=("${2:?}"); shift 2 ;;
+        --integration) INTEGRATIONS+=("${2:?}"); shift 2 ;;
+        --recreate) RECREATE="${2:?}"; shift 2 ;;
+        --skip-overlay) SKIP_OVERLAY=true; shift ;;
+        --dry-run) DRY=true; shift ;;
+        -h|--help) usage ;;
+        *) die "unknown argument: $1" ;;
+    esac
+done
+
+[[ -n "$NAME" ]] || die "--name is required"
+# exe.dev rejects names ending in -<digits> (test-123 fails, test-abc works).
+[[ "$NAME" =~ -[0-9]+$ ]] && die "exe.dev rejects names ending in -<digits>: $NAME"
+
+# --- phase 0: preflight -----------------------------------------------------
+step "preflight"
+
+[[ "$(hostname -s)" == "klundstedt-mini" ]] || \
+    die "control-plane mutations run from klundstedt-mini only (CLAUDE.md)"
+
+for t in ssh jq tailscale python3; do
+    command -v "$t" >/dev/null || die "$t not on PATH"
+done
+[[ -f "$COLLECTOR_CONF" ]] || die "AgentsView collector config missing: $COLLECTOR_CONF"
+
+# exe.dev auth fails silently-ish when 1Password is locked: the agent still
+# LISTS the key but cannot sign with it. `ssh-add -l` therefore proves nothing;
+# only an actual signature does. Cost of skipping this check: the script dies
+# halfway through, after creating a VM.
+if ! ssh-add -T "$HOME/.ssh/exe_dev.pub" >/dev/null 2>&1; then
+    die "1Password agent cannot sign with exe_dev key — unlock 1Password and retry"
+fi
+ssh -o ConnectTimeout=30 exe.dev whoami >/dev/null 2>&1 \
+    || die "cannot authenticate to exe.dev"
+echo "  control plane: ok"
+
+if ssh -o ConnectTimeout=30 exe.dev ls --json 2>/dev/null | jq -e --arg n "$NAME" \
+        '.vms[] | select(.vm_name==$n)' >/dev/null; then
+    die "VM already exists: $NAME"
+fi
+
+if [[ -n "$RECREATE" ]]; then
+    ssh -o ConnectTimeout=30 exe.dev ls --json 2>/dev/null | jq -e --arg n "$RECREATE" \
+        '.vms[] | select(.vm_name==$n)' >/dev/null \
+        || die "--recreate target does not exist: $RECREATE"
+    echo "  recreate source: $RECREATE (will NOT be deleted by this script)"
+fi
+
+# --- phase 1: create --------------------------------------------------------
+step "create $NAME from $IMAGE"
+
+create_args=(new "--name=$NAME" "--image=$IMAGE" "--disk=$DISK" "--cpu=$CPU" "--memory=$MEM")
+for t in "${TAGS[@]+"${TAGS[@]}"}"; do create_args+=("--tag=$t"); done
+# Repo integrations must be attached at creation or the VM cannot clone.
+for r in "${REPOS[@]+"${REPOS[@]}"}"; do
+    INTEGRATIONS+=("github-$(echo "$r" | tr '/' '-')")
+done
+INTEGRATIONS+=("github-kylelundstedt-iv-image" "github-kylelundstedt-dotfiles")
+for i in "${INTEGRATIONS[@]}"; do create_args+=("--integration=$i"); done
+
+run ssh -o ConnectTimeout=60 exe.dev "${create_args[@]}"
+
+# exe.dev drops repeated SYNs per source IP; one attempt, generous timeout.
+[[ "$DRY" == true ]] || { echo "  waiting for boot..."; sleep 25; }
+
+# --- phase 2: tailnet -------------------------------------------------------
+step "join tailnet"
+# join-tailnet attaches tailscale-api for the duration and detaches on exit, so
+# no VM carries standing tailnet-admin authority.
+run "$HOME/.agents/skills/join-tailnet/join-tailnet.sh" "$NAME"
+
+# --- phase 3: team layer ----------------------------------------------------
+step "provision team layer (iv-image)"
+checkout=""
+[[ -n "$IV_PIN" ]] && checkout="&& git -C ~/iv-image checkout --detach $IV_PIN"
+run ssh -o ConnectTimeout=300 "$NAME" "bash -lc '
+    git clone -q https://github-kylelundstedt-iv-image.int.exe.xyz/kylelundstedt/iv-image.git ~/iv-image $checkout
+    ~/iv-image/provision-iv.sh'"
+
+# --- phase 4: personal overlay ---------------------------------------------
+if [[ "$SKIP_OVERLAY" != true ]]; then
+    step "personal overlay (dotfiles)"
+    # provision-iv.sh overwrites ~/.claude/settings.json with the team default,
+    # so the overlay MUST run after it or the SessionStart refresh hook is lost.
+    run ssh -o ConnectTimeout=600 "$NAME" "bash -lc '
+        git clone -q https://github-kylelundstedt-dotfiles.int.exe.xyz/kylelundstedt/dotfiles.git ~/dotfiles
+        cd ~/dotfiles && ./install.sh'"
+fi
+
+# --- phase 5: AgentsView enrollment ----------------------------------------
+step "enroll in AgentsView"
+# Fail-closed by design: the source daemon stays disabled until BOTH a tailnet
+# address and a per-host token exist. Both sides must be written — the token on
+# the VM and a matching [[remote_hosts]] entry on the collector — or the VM
+# collects nothing and agentsview-coverage pages.
+TOKEN="$(openssl rand -base64 48 | tr -d '\n')"
+
+if [[ "$DRY" == true ]]; then
+    echo "  [dry-run] write ~/.config/agentsview/source.env on $NAME (0600)"
+    echo "  [dry-run] append [[remote_hosts]] for $NAME to $COLLECTOR_CONF"
+else
+    ssh -o ConnectTimeout=60 "$NAME" "bash -lc '
+        mkdir -p ~/.config/agentsview
+        umask 077
+        printf \"AGENTSVIEW_AUTH_TOKEN=%s\n\" \"$TOKEN\" > ~/.config/agentsview/source.env
+        chmod 600 ~/.config/agentsview/source.env
+        ~/iv-image/provision-iv.sh >/dev/null'"
+
+    cp "$COLLECTOR_CONF" "$COLLECTOR_CONF.bak-$(date +%Y%m%d%H%M%S)"
+    python3 - "$COLLECTOR_CONF" "$NAME" "$TOKEN" "$TAILNET_DOMAIN" <<'PY'
+import sys, pathlib
+conf, name, token, domain = sys.argv[1:5]
+p = pathlib.Path(conf); s = p.read_text()
+if f'host = "{name}"' in s:
+    sys.exit(f"collector already has an entry for {name}")
+s = s.rstrip("\n") + f'''
+
+[[remote_hosts]]
+  host = "{name}"
+  interval = "15m"
+  transport = "http"
+  url = "http://{name}.{domain}:8080"
+  token = "{token}"
+'''
+p.write_text(s)
+print(f"  collector: added {name}")
+PY
+    launchctl kickstart -k "$COLLECTOR_LABEL" >/dev/null 2>&1 || true
+    sleep 5
+fi
+
+echo "  token: stored on VM + collector. Mirror it in 1Password ('AgentsView fleet tokens')."
+
+# --- phase 6: work repos ----------------------------------------------------
+for r in "${REPOS[@]+"${REPOS[@]}"}"; do
+    step "clone $r"
+    short="${r##*/}"
+    run ssh -o ConnectTimeout=300 "$NAME" "bash -lc '
+        git clone -q https://github-$(echo "$r" | tr '/' '-').int.exe.xyz/$r.git ~/$short'"
+done
+
+# --- phase 7: verify --------------------------------------------------------
+step "verify"
+if [[ "$DRY" == true ]]; then
+    echo "  [dry-run] skipping verification"
+else
+    ssh -o ConnectTimeout=60 "$NAME" "bash -lc '
+        echo \"  provision lock: \$(head -1 ~/iv-provision.lock 2>/dev/null || echo MISSING)\"
+        echo \"  agentsview unit: \$(systemctl --user is-active agentsview-source.service 2>/dev/null)\"
+        echo \"  failed units: \$(systemctl list-units --state=failed --no-legend | wc -l)\"
+        echo \"  disk: \$(df -h / | tail -1 | awk \"{print \\\$3}\")\"'"
+
+    # The control-plane escalation check: a VM must NOT be able to reach
+    # exe.dev. ControlPath=none is REQUIRED — a warm multiplexed socket makes a
+    # plain `ssh exe.dev whoami` pass even when auth would fail.
+    if ssh -o ConnectTimeout=30 "$NAME" \
+        "ssh -o BatchMode=yes -o ConnectTimeout=12 -o ControlPath=none -o ControlMaster=no exe.dev whoami" \
+        >/dev/null 2>&1; then
+        echo "  !! WARNING: $NAME can reach the exe.dev control plane — investigate before use"
+    else
+        echo "  control-plane reachable from VM: no (correct)"
+    fi
+
+    echo "  agentsview coverage:"
+    "$HOME/.local/bin/agentsview-coverage" --dry-run 2>&1 | tail -3 | sed 's/^/    /'
+fi
+
+# --- retirement (never automatic) ------------------------------------------
+if [[ -n "$RECREATE" ]]; then
+    cat <<EOF
+
+== retire $RECREATE — NOT done automatically
+
+Verify the new VM first, then, in this order:
+
+  1. confirm no external dependency uses the old name (custom domains, webhooks,
+     the AgentsView collector, anything pinned to its tailnet hostname)
+  2. remove its collector entry:  edit $COLLECTOR_CONF, drop the
+     [[remote_hosts]] block for $RECREATE, then
+     launchctl kickstart -k $COLLECTOR_LABEL
+  3. check for local-only work:   the disposability audit covers \$HOME AND
+     /tmp — see agent_docs/vm-disposability.md
+  4. delete:                      ssh exe.dev rm $RECREATE
+
+Its tailnet node is ephemeral and disappears on its own once offline.
+EOF
+fi
+
+step "done: $NAME"
