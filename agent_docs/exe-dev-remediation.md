@@ -21,12 +21,40 @@ prerequisite for migrating, not a product of it.
 It also front-loaded a full baseline of the entire fleet before anything could
 move, which gated a live security finding behind weeks of survey work.
 
-| Track                       | Scope                                                       | Status                                 |
-| --------------------------- | ----------------------------------------------------------- | -------------------------------------- |
-| **0 — Control plane**       | Agent forwarding, socket persistence, `auto:all` cleanup    | **Done**                               |
-| **1 — Free reclaim**        | `/tmp`, journal, apt, pip; extend `prune-disk` past `$HOME` | **Done** — ~7.8 GB, fleet 68.9 G       |
-| **2a — Trim our own layer** | aws on-demand, de-duplicate, drop `pi`                      | **Done** — ~6.0 GB, fleet 63.1 G       |
-| **2b — Slim dev base**      | exeslim-dev image, Shelley units, canary-proven             | **Proven** — 276 MB fresh; not adopted |
+| Track                       | Scope                                                       | Status                                    |
+| --------------------------- | ----------------------------------------------------------- | ----------------------------------------- |
+| **0 — Control plane**       | Agent forwarding, socket persistence, `auto:all` cleanup    | **Done**                                  |
+| **1 — Free reclaim**        | `/tmp`, journal, apt, pip; extend `prune-disk` past `$HOME` | **Done** — ~7.8 GB, fleet 68.9 G          |
+| **2a — Trim our own layer** | aws on-demand, de-duplicate, drop `pi`                      | **Done** — ~6.0 GB, fleet 63.1 G          |
+| **2b — Slim dev base**      | exeslim-dev image, Shelley units, canary-proven             | **Proven** — 276 MB fresh; not adopted    |
+| **3 — Recreate cycle**      | `new-dev-vm` automates create + full re-enrollment          | Script written; **never completed a run** |
+
+## Status against the original A/B/C/D plan (2026-07-29, end of session)
+
+**Integration cleanup: complete.** These were in-place and reversible, so A→D
+collapsed into one pass rather than needing staged replacement. `auto:all` went
+6 → 3 (`llm`, `notify`, `reflection`). The control-plane escalation is closed
+and verified `denied` on all ten VMs.
+
+**Disk slimming: Phase A and B done, C and D not started.**
+
+- **A (baseline):** done. Fleet ~81 → **63 GB** via Tracks 1 and 2a.
+- **B (build + validate a replacement):** done. exeslim-dev built, published and
+  canary-proven — 276 MB, Shelley socket-activated on 127.0.0.1:9999,
+  `provision-iv.sh` in 50 s, 0 failed units.
+- **C (cutover):** **not started.** No existing VM has been recreated.
+- **D (retirement):** not started. Nothing deleted.
+
+**Nothing is half-cut-over.** The only changes to live VMs were integration
+detachments (each verified non-breaking) and removal of packages measured
+unused. No VM was recreated, renamed, or repointed.
+
+**`telnyx-vm` is deliberately excluded from all of it** — mid-port, irreversible
+carrier process, registered webhook endpoint. Its only change was dropping a
+redundant `tailscale-api` attachment; `telnyx-test` was kept and verified live
+read-only (`/v2/messaging_profiles` → 200, `/v2/phone_numbers` → 200 with 2
+numbers, webhook active on :8000). It stays on exeuntu and is not a cycle
+candidate.
 
 ---
 
