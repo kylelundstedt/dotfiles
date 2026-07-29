@@ -1,0 +1,147 @@
+#!/usr/bin/env bash
+# recreate-fleet — drive the dev-VM recreates SEQUENTIALLY, one at a time.
+#
+# TRANSITIONAL. Delete once every VM has been migrated to exeslim-dev and the
+# old integration names are gone (see new-dev-vm's migration map).
+#
+# WHY SEQUENTIAL, and not one agent per VM:
+#
+#   1. exe.dev drops TCP SYNs per SOURCE IP. Every recreate opens many
+#      *.exe.xyz connections from this one Mac; running six at once reliably
+#      trips a minutes-long lockout whose symptom is a hang, not an error.
+#      This is a standing rule in CLAUDE.md, not a guess — it was tripped once
+#      on 2026-07-29 just from debugging.
+#
+#   2. new-dev-vm phase 5 does a read-modify-write on the AgentsView collector
+#      config with no locking: read the whole TOML, append a [[remote_hosts]]
+#      block, write it back. Concurrent runs silently drop each other's
+#      entries, and the symptom is a VM that looks fully enrolled while the
+#      collector never scrapes it — precisely the fail-closed guarantee the
+#      monitoring exists to provide.
+#
+#   3. Every cutover so far has surfaced a real bug (a work repo that was never
+#      cloned; a doc-site VM with no renderer). Six in flight means six
+#      half-built VMs when the seventh bug lands.
+#
+# NOTHING IS EVER DELETED. Each old VM is left running and untouched; new-dev-vm
+# prints its retirement checklist and retirement stays a human decision.
+#
+# Usage:
+#   recreate-fleet                      # default queue, checkpoint after 2
+#   recreate-fleet --checkpoint 0       # no checkpoint, run the whole queue
+#   recreate-fleet --dry-run
+#   recreate-fleet iv-docs              # just these
+set -uo pipefail   # deliberately NOT -e: a failure must be caught and reported,
+                   # not abort mid-VM leaving no summary
+
+QUEUE=(iv-gitlake-examples iv-gitlake iv-home iv-foundry-stage2 iv-docs kgl-thoughts)
+CHECKPOINT=2
+DRY=false
+NEWVM="$(dirname "$0")/new-dev-vm"
+
+explicit=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --checkpoint) CHECKPOINT="${2:?}"; shift 2 ;;
+        --dry-run)    DRY=true; shift ;;
+        -h|--help)    sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -*)           echo "unknown flag: $1" >&2; exit 1 ;;
+        *)            explicit+=("$1"); shift ;;
+    esac
+done
+(( ${#explicit[@]} )) && QUEUE=("${explicit[@]}")
+
+[[ -x "$NEWVM" ]] || { echo "new-dev-vm not found next to this script" >&2; exit 1; }
+
+LOGDIR="$HOME/.local/state/recreate-fleet"
+mkdir -p "$LOGDIR"
+LOG="$LOGDIR/$(date -u +%Y%m%dT%H%M%SZ).log"
+echo "log: $LOG"
+
+say() { printf '\n\033[1m%s\033[0m\n' "$*" | tee -a "$LOG"; }
+note() { printf '%s\n' "$*" | tee -a "$LOG"; }
+
+done_vms=(); failed_vm=""
+
+for vm in "${QUEUE[@]}"; do
+    if (( CHECKPOINT > 0 )) && (( ${#done_vms[@]} >= CHECKPOINT )); then
+        say "CHECKPOINT after ${#done_vms[@]}: ${done_vms[*]}"
+        remaining=""
+        for q in "${QUEUE[@]}"; do
+            skip=""
+            for d in ${done_vms[@]+"${done_vms[@]}"}; do [[ "$q" == "$d" ]] && skip=1; done
+            [[ -z "$skip" ]] && remaining+="$q "
+        done
+        note "  remaining: $remaining"
+        note "  resume with: recreate-fleet --checkpoint 0 $remaining"
+        break
+    fi
+
+    new="$vm-next"
+    say "=== $vm -> $new"
+
+    # 1. Discover prep. new-dev-vm refuses (and prints the exact commands) when
+    #    a renamed integration is missing or a renamed tag would grant less than
+    #    the original. Both refusals are the point — they are failures that are
+    #    silent otherwise.
+    prep_out=$("$NEWVM" --name "$new" --recreate "$vm" --dry-run 2>&1)
+    # No mapfile: macOS ships bash 3.2, where it does not exist. Same reason the
+    # summary below indexes from the front rather than using ${a[-1]}.
+    prep_cmds=()
+    while IFS= read -r c; do
+        [[ -n "$c" ]] && prep_cmds+=("$c")
+    done < <(grep -oE 'ssh exe\.dev integrations (add|attach) [^"]*' <<<"$prep_out")
+
+    if (( ${#prep_cmds[@]} )); then
+        note "  prep required (${#prep_cmds[@]} command(s)):"
+        for c in "${prep_cmds[@]}"; do
+            note "    $c"
+            if [[ "$DRY" == true ]]; then continue; fi
+            if ! out=$(bash -c "$c" 2>&1); then
+                note "    FAILED: $out"; failed_vm="$vm"; break
+            fi
+            note "    -> ${out##*$'\n'}"
+        done
+        [[ -n "$failed_vm" ]] && break
+
+        # Re-check: the dry-run must now be clean, or we would create a VM that
+        # is missing authority it had before.
+        if [[ "$DRY" != true ]]; then
+            prep_out=$("$NEWVM" --name "$new" --recreate "$vm" --dry-run 2>&1)
+            if grep -qE 'integrations (add|attach)|would grant less' <<<"$prep_out"; then
+                note "  still not satisfied after prep:"
+                grep -E '!!|integrations (add|attach)|new-dev-vm:' <<<"$prep_out" | sed 's/^/    /' | tee -a "$LOG"
+                failed_vm="$vm"; break
+            fi
+        fi
+    else
+        note "  prep: none needed"
+    fi
+
+    if [[ "$DRY" == true ]]; then
+        note "  [dry-run] would recreate $vm as $new"
+        done_vms+=("$vm"); continue
+    fi
+
+    # 2. The recreate itself.
+    if "$NEWVM" --name "$new" --recreate "$vm" 2>&1 | tee -a "$LOG"; then
+        note "  OK: $new built (old $vm untouched)"
+        done_vms+=("$vm")
+    else
+        note "  FAILED during recreate of $vm — stopping. $new may exist and is left in place."
+        failed_vm="$vm"; break
+    fi
+done
+
+say "=== summary"
+note "  completed: ${done_vms[*]:-none}"
+[[ -n "$failed_vm" ]] && note "  FAILED at: $failed_vm (queue stopped; nothing deleted)"
+note "  log: $LOG"
+note ""
+note "  Retirement of the old VMs is deliberately NOT automated. For each one:"
+note "    1. confirm nothing external depends on the old name"
+note "    2. remove its [[remote_hosts]] block from ~/.agentsview/config.toml"
+note "    3. ssh exe.dev rm <old-vm>"
+
+[[ -n "$failed_vm" ]] && exit 1
+exit 0
