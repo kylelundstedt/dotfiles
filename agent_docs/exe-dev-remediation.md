@@ -484,7 +484,13 @@ The renderer is the easy part; the work is a walk script that mirrors the repo
 tree, rewrites `.md` links to `.html`, and applies include/exclude globs (which
 is all `_quarto-internal.yml` / `_quarto-product.yml` are). The `.md` twins are
 free — the sources are already markdown — and `gen-llms-txt.py` is already
-standalone. What is lost is Quarto's built-in search.
+standalone. What is lost is Quarto's built-in search — tracked in `TODO.md`, and possibly
+not worth building. These sites already co-emit `format: gfm` markdown twins
+and an `llms.txt` index expressly "so AI agents can consume the site as
+markdown rather than HTML" (iv-docs `_quarto.yml`), so the primary consumer may
+be agents rather than browsers. An **IV MCP server** over that markdown would
+serve them directly and reduce in-page search to a human-only nicety. Decide
+that before writing a JSON index and JS.
 
 Do it on `gitlake` or `ave-adapters` first. `iv-docs` is 126 pages across 3
 profiles with a post-render pipeline and is client-facing; it goes last.
