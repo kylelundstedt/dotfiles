@@ -98,6 +98,27 @@ if [ -z "$token" ]; then
   exit 1
 fi
 
+# Clear any node already holding this hostname, or Tailscale hands us
+# "<name>-1" and every consumer that addresses the VM by name silently talks to
+# the wrong node — or to nothing. Hit on 2026-07-29 retiring iv-ave-adapters:
+# the replacement registered as iv-ave-adapters-1 because the deleted VM's
+# ephemeral node had not been reaped yet, and the collector entry pointed at the
+# dead one. install.sh's Linux path has carried this same cleanup for a while
+# ("prevents -2 suffix"); join-tailnet did not.
+#
+# Only nodes whose hostname matches AND which are not this machine are removed.
+want_host=$(hostname)
+myips=$(tailscale status --json 2>/dev/null | jq -r '(.Self.TailscaleIPs // [])[]' | tr '\n' ' ')
+for stale in $(curl -fsSL --max-time 15 -H "Authorization: Bearer $token" \
+      https://api.tailscale.com/api/v2/tailnet/-/devices 2>/dev/null \
+    | jq -r --arg h "$want_host" --arg ips "$myips" \
+        '.devices[] | select(.hostname==$h)
+         | select((.addresses // []) | map(. as $a | ($ips | contains($a))) | any | not) | .id' 2>/dev/null); do
+  echo "join-tailnet: removing stale node holding $want_host (id=$stale)" >&2
+  curl -fsSL --max-time 15 -X DELETE -H "Authorization: Bearer $token" \
+    "https://api.tailscale.com/api/v2/device/$stale" >/dev/null 2>&1 || true
+done
+
 key=$(curl -fsSL --connect-timeout 5 --max-time 15 \
   -H "Authorization: Bearer $token" \
   -H "Content-Type: application/json" \

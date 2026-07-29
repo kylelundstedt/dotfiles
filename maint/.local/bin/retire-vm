@@ -90,11 +90,25 @@ if [[ "$DELETE" == true ]]; then
         # The exe.dev rename does NOT touch the OS or Tailscale hostname, and
         # the collector URL embeds the tailnet name — so all three move together
         # or the VM silently stops being scraped.
-        ssh -o ConnectTimeout=60 "$REPLACED_BY" "bash -lc '
+        #
+        # `tailscale set --hostname` is NOT enough: Tailscale keeps the device
+        # name assigned at registration, so the node stays <name>-1 even after
+        # the stale node is gone and tailscaled restarts. Measured on
+        # iv-ave-adapters, 2026-07-29. The node must re-register, which for
+        # these ephemeral nodes means logout + join-tailnet — and join-tailnet
+        # now clears any node still holding the name first.
+        #
+        # Over the *.exe.xyz edge deliberately: `tailscale logout` would cut a
+        # tailnet SSH mid-command.
+        ssh -o ConnectTimeout=60 -o StrictHostKeyChecking=accept-new "$OLD.exe.xyz" "bash -lc '
             sudo hostnamectl set-hostname $OLD
-            sudo tailscale set --hostname=$OLD'" 2>/dev/null \
-            && echo "  VM: hostname + tailscale hostname set to $OLD" \
-            || echo "  [!] could not set hostname on the VM — do it there, then fix the collector entry"
+            sudo tailscale logout'" >/dev/null 2>&1 \
+            || echo "  [!] could not reset hostname on the VM"
+        if "$HOME/.agents/skills/join-tailnet/join-tailnet.sh" "$OLD" >/dev/null 2>&1; then
+            echo "  VM: re-registered on the tailnet as $OLD"
+        else
+            echo "  [!] tailnet re-join failed — the VM is off the tailnet; run join-tailnet manually"
+        fi
 
         cp "$COLLECTOR_CONF" "$COLLECTOR_CONF.bak-$(date +%Y%m%d%H%M%S)"
         python3 - "$COLLECTOR_CONF" "$REPLACED_BY" "$OLD" <<'PY'
