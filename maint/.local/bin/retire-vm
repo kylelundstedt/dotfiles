@@ -76,6 +76,43 @@ if [[ "$DELETE" == true ]]; then
     echo "== deleting $OLD"
     ssh -o ConnectTimeout=30 exe.dev rm "$OLD"
     echo "  deleted"
+
+    # RESTORE THE CANONICAL NAME. Without this the fleet accretes suffixes —
+    # the next cycle would produce iv-gitlake-next-next — and anything pinned to
+    # a hostname drifts every round. Only fires when the replacement is exactly
+    # <old>-next, so it can never rename something unrelated.
+    if [[ -n "$REPLACED_BY" && "$REPLACED_BY" == "$OLD-next" ]]; then
+        echo "== restoring canonical name: $REPLACED_BY -> $OLD"
+        ssh -o ConnectTimeout=30 exe.dev rename "$REPLACED_BY" "$OLD" >/dev/null \
+            || die "rename failed; VM is still $REPLACED_BY"
+        echo "  exe.dev: renamed"
+
+        # The exe.dev rename does NOT touch the OS or Tailscale hostname, and
+        # the collector URL embeds the tailnet name — so all three move together
+        # or the VM silently stops being scraped.
+        ssh -o ConnectTimeout=60 "$REPLACED_BY" "bash -lc '
+            sudo hostnamectl set-hostname $OLD
+            sudo tailscale set --hostname=$OLD'" 2>/dev/null \
+            && echo "  VM: hostname + tailscale hostname set to $OLD" \
+            || echo "  [!] could not set hostname on the VM — do it there, then fix the collector entry"
+
+        cp "$COLLECTOR_CONF" "$COLLECTOR_CONF.bak-$(date +%Y%m%d%H%M%S)"
+        python3 - "$COLLECTOR_CONF" "$REPLACED_BY" "$OLD" <<'PY'
+import sys, pathlib
+conf, old_name, new_name = sys.argv[1:4]
+p = pathlib.Path(conf); s = p.read_text()
+if f'host = "{old_name}"' not in s:
+    sys.exit(f"  collector: no entry for {old_name} to rename")
+s = s.replace(f'host = "{old_name}"', f'host = "{new_name}"')
+s = s.replace(f'http://{old_name}.', f'http://{new_name}.')
+p.write_text(s)
+print(f"  collector: {old_name} -> {new_name}")
+PY
+        python3 -c "import tomllib; tomllib.load(open('$COLLECTOR_CONF','rb'))" \
+            || die "collector config is no longer valid TOML — restore the .bak beside it"
+        launchctl kickstart -k "$COLLECTOR_LABEL" >/dev/null 2>&1 || true
+        echo "  collector restarted"
+    fi
 else
     echo ""
     echo "NOT deleted. Confirm nothing external depends on the name — custom"
