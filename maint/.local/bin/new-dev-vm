@@ -28,7 +28,7 @@
 set -euo pipefail
 
 # --- defaults ---------------------------------------------------------------
-IMAGE_DEFAULT="ghcr.io/kylelundstedt/exeslim-dev:2026-07-29.5.1"
+IMAGE_DEFAULT="ghcr.io/kylelundstedt/exeslim-dev:2026-07-29.6.1"
 DISK=15GB
 CPU=2
 MEM=8GB
