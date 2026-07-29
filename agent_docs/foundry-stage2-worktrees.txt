@@ -1,3 +1,15 @@
+# iv-foundry-stage2:~/worktrees — name|repo|branch|commit, captured 2026-07-29
+# before any retirement. Nothing parses this file; it is a record.
+#
+# The three rows with empty repo/branch/commit have no .git — but they are NOT
+# unpushed. Verified 2026-07-29, byte-identical to pushed commits:
+#   ave-adapters-p1-s1-m6        == ave-adapters-m6-native @ b5e7c4c (row 1)
+#   entire-agent-shelley-v0.1.0  == tag v0.1.0, kylelundstedt/entire-agent-shelley
+#   iv-foundry-stage2            == origin/iv-foundry-stage2 @ d301642,
+#                                   on kylelundstedt/iv-docs (132/132 files;
+#                                   its 24 MB of _site/.quarto is gitignored)
+# Method: agent_docs/vm-disposability.md -> "Ungit'd is not the same as unpushed".
+#
 ave-adapters-m6-native|kylelundstedt/ave-adapters|HEAD|b5e7c4c555f9ba1a24b4ae29649077f754bb31b5
 ave-adapters-native|kylelundstedt/ave-adapters|main|199234fab163945265b222ef9b2fd402778ded9d
 ave-adapters-p1-s1-m6|||

@@ -416,3 +416,71 @@ VM retires with no special handling. Confirmed with Kyle 2026-07-29.
 sufficient. Look for ignored bulk (`du -shx ~/*/`, compare against `.git` size)
 and ask whether it is reproducible or precious. `/tmp` scratch is always
 disposable — `prune-disk --system` removes it at 3 days anyway.
+
+## Ungit'd is not the same as unpushed (2026-07-29)
+
+`iv-foundry-stage2`'s retirement was held for most of a day on the finding that
+`~/worktrees` contained "~31 MB that exists nowhere else". Re-examined
+end-to-end, **none of it was unique**, and the hold should never have stood.
+
+The measurement was the first error. `~/worktrees/iv-foundry-stage2` is 29 MB,
+but 24 MB of that is rendered Quarto output (`_site` 11 MB, `_site-internal`
+13 MB) plus a 3.7 MB `.quarto` cache — all three named in that tree's own
+`.gitignore`, so already outside the invariant by the section above. Actual
+source: **2.3 MB, 132 files, 118 of them `.md`/`.qmd`.**
+
+The second error was structural, and is the one worth carrying forward. Three
+checks were run and all three were correct about what they measured:
+
+| Check                                       | Result                                            |
+| ------------------------------------------- | ------------------------------------------------- |
+| `[ -d .git ]` in the tree                   | no repo                                           |
+| `kylelundstedt/iv-foundry-stage2` on GitHub | does not exist                                    |
+| depth-2 rescan for nested `.git`            | none (after an earlier miss at depth 2 elsewhere) |
+
+None of them asked the question that decides disposability: **is this content
+already committed somewhere?** It was. All 132 source files are byte-identical
+to `origin/iv-foundry-stage2` (`d301642`, _"docs: reconcile repaired P1-S1
+runtime origin"_) on the **`kylelundstedt/iv-docs`** repo — 0 absent, 0
+differing, by `git hash-object`. A sibling `origin/iv-foundry-stage2-reconciled`
+(`cdd3239`) exists too. The tree is a stale working copy of `iv-docs`, whose own
+`README.md` says so (`title: IndustryVault`); the branch is named after the VM.
+
+Corroborated independently against the git-backed `iv-docs` worktree on the same
+VM (`9a47aeb`, clean, 0 local-only): 14 files differed and **every one is an
+exact historical blob** of `iv-docs`, and the single path missing from that
+worktree — `spikes/23-harness/entire-agent-shelley`, 19,301 bytes — is blob
+`ea34587c`, removed by `9d13bbb "chore: graduate Shelley Entire plugin"` when
+the plugin moved to its own repo. `git show b65d85c:spikes/23-harness/entire-agent-shelley`
+reproduces it byte-for-byte, and `b65d85c` is on `origin/main`.
+
+The two smaller trees were duplicates of pushed commits as well:
+
+- **`ave-adapters-p1-s1-m6`** (1.6 MB) — byte-identical to the git-backed
+  `ave-adapters-m6-native` worktree beside it at `b5e7c4c` (clean, 0 local-only,
+  contained in `origin/main` and `origin/p1-s1-m6-foundry-reference-acceptance`).
+  The only difference is a `.pytest_cache` the git-backed copy has.
+- **`entire-agent-shelley-v0.1.0`** (168 KB, 68 KB of it `__pycache__`) — every
+  file hash-matches the pushed `v0.1.0` tag on `iv-entire-agent-shelley`, which
+  additionally carries a `.github/workflows/test.yml` the copy lacks.
+  `sha256sum -c SHA256SUMS` passes.
+
+**The check to add to `retire-vm`.** Absence of `.git` says a tree is not a
+working copy. It does not say the bytes are unpushed. Before reporting a tree as
+ungit'd:
+
+1. Exclude paths matched by any `.gitignore` in scope — rendered output is not
+   state (see the section above).
+2. `git hash-object` every remaining file.
+3. For each repo cloned anywhere on the same VM, look for those blobs in a
+   **remote-contained** branch or in history (`git rev-parse <ref>:<path>`, and
+   `git cat-file --batch-all-objects --batch-check` for deleted paths).
+4. Report unique-content paths only — and name the branch or commit that covers
+   the rest, so the next reader does not have to redo the search.
+
+Cheap to run, and it converts "needs a human decision" into "retirable" without
+a judgement call. The generalisation of all four blind spots found in this cycle:
+**every negative result so far has been a check that was silent about its own
+scope.** `git status` was silent about ignored files, `[ -d .git ]` about
+worktree files, coverage about scrapes, and "no repo of that name" about
+branches of other repos. State the scope with the result.
