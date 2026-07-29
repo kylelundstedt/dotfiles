@@ -424,14 +424,14 @@ test_overlay() {
     echo ""
     echo "=== IV overlay test (iv-image baseline + dotfiles personal delta) ==="
     local vm="test-iv-overlay"
-    if ! ssh -o ConnectTimeout=30 exe.dev "new --name=$vm --tag=iv --integration=github-kylelundstedt-iv-image" >/dev/null 2>&1; then
+    if ! ssh -o ConnectTimeout=30 exe.dev "new --name=$vm" >/dev/null 2>&1; then
         log_fail "overlay: VM create failed"; return
     fi
     sleep 20   # VM boot + integration propagation (first clone may still 404 — retried below)
     echo "--- provisioning iv-image (team baseline) ---"
     if ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new "$vm.exe.xyz" '
         for i in 1 2 3; do
-            git clone -q https://github-kylelundstedt-iv-image.int.exe.xyz/kylelundstedt/iv-image.git ~/iv-image 2>/dev/null && break
+            git clone -q https://github.com/kylelundstedt/iv-image.git ~/iv-image 2>/dev/null && break
             sleep 20
         done
         [ -d ~/iv-image ] && ~/iv-image/provision-iv.sh > /tmp/provision.log 2>&1 && [ -f ~/iv-provision.lock ]'; then

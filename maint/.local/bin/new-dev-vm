@@ -80,7 +80,7 @@ why_tag() {
 }
 map_int() {
     case "$1" in
-        github-kylelundstedt-iv-image)   echo repo-iv-image-ro ;;
+        github-kylelundstedt-iv-image)   echo "" ;;   # dropped — see why_int
         github-kylelundstedt-dotfiles)   echo "" ;;   # dropped — see why_int
         github-kylelundstedt-iv-docs)    echo repo-iv-docs-rw ;;
         github-kylelundstedt-ave-adapters) echo repo-ave-adapters-rw ;;
@@ -109,8 +109,8 @@ map_int() {
 }
 why_int() {
     case "$1" in
-        github-kylelundstedt-dotfiles)
-            echo "dotfiles is a PUBLIC repo — clones over github.com, needs no credential" ;;
+        github-kylelundstedt-dotfiles|github-kylelundstedt-iv-image)
+            echo "PUBLIC repo — clones over github.com, needs no credential" ;;
         *)  echo "unused" ;;
     esac
 }
@@ -276,22 +276,24 @@ for t in "${TAGS[@]+"${TAGS[@]}"}"; do create_args+=("--tag=$t"); done
 for r in "${REPOS[@]+"${REPOS[@]}"}"; do
     INTEGRATIONS+=("github-$(echo "$r" | tr '/' '-')")
 done
-# iv-image is PRIVATE, so it needs an integration to clone. dotfiles is PUBLIC
-# and clones straight from github.com — it had an integration on all 7 VMs, a
-# credential for a repo that needs none. Not carried forward.
-INTEGRATIONS+=("repo-iv-image-ro")
-# De-duplicate: --recreate inheritance and the two unconditional bootstrap
-# integrations above overlap on any VM that already had them, which is every
-# dev VM. Emitting `--integration=X` twice is at best noise in the audit trail.
+# NO bootstrap integration. Both iv-image and dotfiles are public repos
+# (iv-image was made public 2026-07-29), so a fresh VM clones both straight
+# from github.com and needs no credential at all to provision itself. The two
+# readonly github integrations that used to be attached to all 7 VMs are pure
+# surplus authority now, and are dropped on migration.
+# De-duplicate inherited integrations. Every expansion here is guarded with
+# ${a[@]+...}: with both bootstrap repos public, a plain dev VM can now
+# legitimately need ZERO integrations, and bash 3.2 (macOS) treats an unguarded
+# empty-array expansion as an unbound variable under `set -u`.
 seen_int=" "
 deduped=()
-for i in "${INTEGRATIONS[@]}"; do
+for i in ${INTEGRATIONS[@]+"${INTEGRATIONS[@]}"}; do
     [[ "$seen_int" == *" $i "* ]] && continue
     seen_int+="$i "
     deduped+=("$i")
 done
-INTEGRATIONS=("${deduped[@]}")
-for i in "${INTEGRATIONS[@]}"; do create_args+=("--integration=$i"); done
+INTEGRATIONS=(${deduped[@]+"${deduped[@]}"})
+for i in ${INTEGRATIONS[@]+"${INTEGRATIONS[@]}"}; do create_args+=("--integration=$i"); done
 
 run ssh -o ConnectTimeout=60 exe.dev "${create_args[@]}"
 
@@ -308,7 +310,7 @@ step "provision team layer (iv-image)"
 checkout=""
 [[ -n "$IV_PIN" ]] && checkout="&& git -C ~/iv-image checkout --detach $IV_PIN"
 run ssh -o ConnectTimeout=300 -o StrictHostKeyChecking=accept-new "$EDGE" "bash -lc '
-    git clone -q https://github.int.exe.xyz/kylelundstedt/iv-image.git ~/iv-image $checkout
+    git clone -q https://github.com/kylelundstedt/iv-image.git ~/iv-image $checkout
     ~/iv-image/provision-iv.sh'"
 
 # --- phase 3: personal overlay ---------------------------------------------
