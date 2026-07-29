@@ -21,11 +21,12 @@ prerequisite for migrating, not a product of it.
 It also front-loaded a full baseline of the entire fleet before anything could
 move, which gated a live security finding behind weeks of survey work.
 
-| Track                   | Scope                                                       | Status                           |
-| ----------------------- | ----------------------------------------------------------- | -------------------------------- |
-| **0 — Control plane**   | Agent forwarding, socket persistence, `auto:all` cleanup    | **Done**                         |
-| **1 — Free reclaim**    | `/tmp`, journal, apt, pip; extend `prune-disk` past `$HOME` | **Done** — ~7.8 GB, fleet 68.9 G |
-| **2 — Image migration** | Slim dev base; `telnyx-vm` after the number port completes  | Blocked on bootstrap             |
+| Track                       | Scope                                                       | Status                           |
+| --------------------------- | ----------------------------------------------------------- | -------------------------------- |
+| **0 — Control plane**       | Agent forwarding, socket persistence, `auto:all` cleanup    | **Done**                         |
+| **1 — Free reclaim**        | `/tmp`, journal, apt, pip; extend `prune-disk` past `$HOME` | **Done** — ~7.8 GB, fleet 68.9 G |
+| **2a — Trim our own layer** | aws on-demand, de-duplicate, drop `pi`                      | **Done** — ~6.0 GB, fleet 63.1 G |
+| **2b — Slim dev base**      | exeslim + `git`/`uv`/`jq`/`unzip` + Shelley label           | Premise fixed; label untested    |
 
 ---
 
@@ -307,7 +308,129 @@ Still unscheduled: nothing runs `prune-disk` periodically, so the Claude
 versions directory and these caches regrow. Settle it alongside the
 AgentsView retention timer (see `TODO.md`).
 
-## Track 2 — image migration (blocked)
+## Track 2a — trim our own layer (done 2026-07-28)
+
+The base-image question turned out to be the _smaller_ half. Measured on the
+fleet, our own two layers carried ~6 GB of tooling nobody used.
+
+| Change                                    |       Freed | Evidence                                                              |
+| ----------------------------------------- | ----------: | --------------------------------------------------------------------- |
+| `aws` → on-demand `install-cloud-cli aws` |  **2.9 GB** | 267–533 MB/VM and **not one VM had `~/.aws/config` or credentials**   |
+| De-duplicate shadowed binaries            |  **2.0 GB** | `codex`/`uv`/`claude` installed by _both_ the base image and dotfiles |
+| Drop `pi` (unused)                        | **1.09 GB** | 116–124 MB/VM                                                         |
+
+Fleet went 68.9 G → **63.1 G**. (The billing gauge is a cycle _average_, so it
+lags; do not compare it to an instantaneous total.)
+
+### aws was an inconsistency, not a decision
+
+`install-cloud-cli`'s own header already stated the rule for azure and gcloud —
+"Most VMs never touch Azure or GCP, so they install per-VM, on demand". aws was
+simply exempt from it. The S3 work here targets Tigris over S3-compatible
+endpoints via the `tigris` CLI, boto3 and duckdb httpfs; the `s3://` and `boto3`
+references in `ave-adapters` are Tigris, not AWS.
+
+A second, quieter bug surfaced: `aws/install --update` leaves the superseded
+version under `/usr/local/aws-cli/v2/`, so VMs provisioned more than once
+carried **two** copies — hence 533 MB on four VMs against 267 MB on three. The
+round trip was verified before trusting it: install (sha256-verified) → correct
+version → idempotent re-run → clean removal.
+
+### The duplication is caused by the base image, and 2b removes it at the root
+
+The shadowed copies came from **exeuntu**, not from `iv-image`. Timestamps on
+`iv-docs` (VM created 2026-06-16):
+
+```
+/usr/local/bin/codex  2026-06-15   base image     0.140.0   <- stale, shadowed
+~/.local/bin/codex    2026-07-16   dotfiles       0.144.5   <- PATH winner
+/usr/local/bin/uv     2026-06-11   base image     0.11.21   <- stale, shadowed
+~/.local/bin/uv       2026-07-15   dotfiles       0.11.29   <- PATH winner
+```
+
+So the wasted bytes were the **base's**, frozen at whatever Canonical's rebuild
+shipped, silently shadowed by dotfiles' current copies. Resolution applied in
+both directions: dotfiles owns the agent CLIs and `uv` (it keeps them current,
+and they are per-user authenticated tools that belong in `~/.local/bin`); the
+team layer owns shared data tooling (`duckdb`, `tigris`, `herdr`, …), where
+dotfiles' `want()` already refuses to install on IV VMs via
+`provisioning/tools.manifest` team rows — so the fix is durable without a code
+change.
+
+**This is a symptom of the base, not a design flaw in our layers.** On a base we
+control we simply do not ship agent CLIs, and there is exactly one copy by
+construction — nothing to de-duplicate, no stale shadow, no PATH-order coin
+flip. That is an argument _for_ 2b, independent of bytes.
+
+`/usr/local/go` (269 MB/VM) is likewise base-image — dated before VM creation,
+owned by no dpkg package — so it cannot be moved to on-demand by
+`provision-iv.sh`. It is a 2b item.
+
+## Track 2b — slim dev base
+
+### Sizing, stated plainly
+
+The image is **small**; the saving is what is large. This was miscommunicated
+twice, so in a table:
+
+|                              |        Size |
+| ---------------------------- | ----------: |
+| exeuntu (today's base)       |       ~4 GB |
+| exeslim                      |      175 MB |
+| + `git`, `uv`, `jq`, `unzip` | ~250–300 MB |
+| **Stopped carrying, per VM** | **~3.7 GB** |
+
+`provision-iv.sh` needs `git`, `jq` and `unzip`, which exeslim does not ship
+(`tar` is already essential; the `node` reference is only an echo). `git` is
+also needed to clone `iv-image` in the first place.
+
+### The premise that blocked this was wrong
+
+`iv-image` stated that a custom image "silently disables Shelley", which is why
+the fleet stayed on stock exeuntu. exe.dev documents an opt-in label
+(`ssh exe.dev doc customization`):
+
+> `LABEL exe.dev/install-shelley=true` makes exe.dev automatically install a
+> recent Shelley in `/usr/local/bin` on creation and makes the UI assume that
+> Shelley is installed.
+
+Corrected in `iv-image` (`a107dcc`). **Not yet tested by us** — documentation
+evidence only. Our one exeslim VM (`rss-feed`) was built without the label, so
+it confirms the default-off behaviour and nothing about the opt-in.
+
+### Gating experiment, before any adoption decision
+
+One throwaway canary answers everything: does `shelley_url` appear, does the UI
+button appear, does Shelley _run_ on a base lacking git, does `/headless-shell`
+(Shelley's browser, 252 MB) come along, and is `git`/`jq`/`unzip` enough for
+`provision-iv.sh`.
+
+**AgentsView and Entire do not belong in the image** — `provision-iv.sh` installs
+`agentsview` (pinned) and `install.sh` installs `entire`, both volatile, so the
+same rule that keeps duckdb and quarto in the scripts applies. What the image
+owes them is prerequisites, and AgentsView has a real one: its source daemon is a
+**systemd user unit**, needing `dbus-user-session` and `loginctl enable-linger`
+to survive logout. exeslim ships systemd + dbus-user-session, so it should work —
+which is precisely why the canary must confirm it rather than assume. Same for
+`tailscaled`: exeuntu ships it, exeslim does not, and `install.sh` installs it on
+Linux — but AgentsView binds the tailnet IP, so the ordering has to hold. Also record that a custom image is not recognised as
+"exeuntu", so `EXEUNTU=1` and the `/exe.dev/etc/image.conf` labels the lock file
+reads are absent, and that Shelley credits on a custom image are unverified.
+
+### What stays a script, and why
+
+exe.dev **fixes a VM's image at creation and offers no way to move a live VM
+onto a newer one** — `new`, `rm`, `restart`, `cp`, `resize`, and `cp` clones the
+disk you already have. Baking the version-pinned tools would turn every bump
+into a fleet recreate, against today's in-place ~23 s re-run. And baking saves
+nothing: usage is each VM's own ext4 with no cross-VM dedup, so moving a binary
+into an image layer relocates bytes rather than removing them.
+
+Disposability makes recreate _acceptable_, not _free_ — the cost is
+re-enrollment (tailnet, AgentsView token + collector config, integrations,
+healthchecks), which is the real adoption blocker and wants a scripted bring-up.
+
+## Track 2 — original notes (superseded by 2a/2b above)
 
 Current pooled usage: **81.4 / 100 GB**, `Individual Plan (Small)`, measured as
 filesystem usage averaged over the cycle.
