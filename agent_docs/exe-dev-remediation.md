@@ -226,19 +226,31 @@ failure: the cache lines are labelled upper bounds because `uv cache prune`
 keeps live entries, so most of that was never free. What genuinely moved was the
 journal (`iv-docs` 106 M → 64 M) and old `/tmp` (`kgl-thoughts` 195 M → 31 M).
 
-**Still on the table, and it needs a decision rather than a default.** The large
-`/tmp` consumers are 3–4 days old, so a 7-day window does not touch them:
+Then approved and applied at `--tmp-age 3`, catching the large consumers that
+were 3–4 days old: **a further 1.78 GB** (`iv-gitlake-examples` 1.42 G of
+generated TPC-H data, `iv-docs` 329 MB of pytest fixtures, `kgl-thoughts`
+30 MB). What remains in `/tmp` is all newer than 3 days and in active use.
 
-| Host                  | What                                          | At `--tmp-age 3` |
-| --------------------- | --------------------------------------------- | ---------------: |
-| `iv-gitlake-examples` | generated TPC-H data (`tpchm-*`), smoke tests |           2.05 G |
-| `iv-docs`             | `pytest-of-exedev` fixtures                   |           1.10 G |
-| `kgl-thoughts`        | review sandboxes                              |            603 M |
+**Track 1 total: ~7.8 GB.** Fleet instantaneous total 68.9 G across ten VMs.
 
-All regenerable, but "regenerable" is not "unused" — someone may be mid-way
-through a benchmark run. Guard 3 engages at 3 days on `iv-docs` (2 protected),
-so the shorter window is safe with respect to _work_; the question is only
-whether the data is live.
+### Guard 3 had to be corrected before the 3-day run
+
+The 7-day pass reported five `/tmp` entries holding "local-only" commits,
+headlined by `/tmp/shelley-review` with 9 against `boldsoftware/shelley` — a
+vendor repo we cannot push to. **All of them were false positives**; every
+commit was verified present upstream. Two faults, both in the audit's own
+predicate:
+
+- **`--all` includes `refs/tags`, while `--not --remotes` subtracts only remote
+  _branches_.** An upstream tag pointing at a commit on no remote branch reads
+  as local work. `shelley-review` has 644 tags and all 9 commits hung off the
+  upstream tag `v0.670.946516660`.
+- **Stale remote-tracking refs** report pushed commits as unpushed.
+
+Guard 3 now uses `rev-list --branches HEAD --not --remotes`. Both faults
+over-report, never under-report, so no data was ever at risk and the earlier
+`$HOME` audit conclusion is unaffected. Full write-up:
+[`vm-disposability.md`](vm-disposability.md) → "`/tmp` was a scope gap".
 
 Base-image junk, quantified for the Track 2 case: `snapd` 103 M (`/snap` is
 empty), `pocketsphinx` 37 M (speech recognition), `icons` 47 M, `fonts` 39 M,

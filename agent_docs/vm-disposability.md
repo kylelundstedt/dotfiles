@@ -327,42 +327,57 @@ The disposability invariant now holds fleet-wide, tested rather than assumed,
 with the audit covering main repos, linked worktrees, stashes, detached HEAD,
 local-only tags, notes refs, un-joined VMs, and service state outside `$HOME`.
 
-## Correction — v3's "zero unpushed work" was scoped to `$HOME` and `/tmp` is not empty
+## `/tmp` was a scope gap — investigated 2026-07-28, and the invariant survives it
 
-Found 2026-07-28 while extending `prune-disk` past `$HOME` (Track 1 of
+Found while extending `prune-disk` past `$HOME` (Track 1 of
 [`exe-dev-remediation.md`](exe-dev-remediation.md)). **v3 widened the search for
 _secrets_ outside `$HOME` but kept the search for _unpushed work_ inside it.**
-`/tmp` was never walked, and it holds git repos:
+`/tmp` was never walked, and it does hold git repos — on `iv-docs`,
+`kgl-thoughts` and others.
 
-| Host           | Path                            | State                                             |
-| -------------- | ------------------------------- | ------------------------------------------------- |
-| `iv-docs`      | `/tmp/shelley-review`           | **9 local-only commits → `boldsoftware/shelley`** |
-| `iv-docs`      | `/tmp/entire-cli-review`        | 1, → `entireio/cli`                               |
-| `iv-docs`      | `/tmp/agentsview-eval`          | 1, → `kenn-io/agentsview`                         |
-| `iv-docs`      | `/tmp/pytest-of-exedev/…` (×15) | fixture repos, no remote — genuinely disposable   |
-| `kgl-thoughts` | `/tmp/thoughts-*-review/repo`   | scratch clones of `~/thoughts`, or no remote      |
+A first pass using the audit's own predicate
+(`rev-list --count --all --not --remotes`) reported local-only commits in five
+places, the largest being `/tmp/shelley-review` with **9 commits against
+`boldsoftware/shelley`**, a vendor repo we cannot push to. That looked like the
+"Shelley state falls into the disposability gap" case made concrete.
 
-Most are disposable. **`/tmp/shelley-review` is not**: nine commits recording a
-Shelley session against the vendor's repo, which we cannot push to. That is
-exactly the "Shelley state falls into the disposability gap" case, still open —
-and it would have been lost silently to any `rm -rf /tmp` or VM deletion.
+**It was not. Every one of those commits was verified present upstream.**
 
-Two things this changes:
+```
+boldsoftware/shelley  9a9db0d fa2da1c 273ba2d   -> all exist upstream
+entireio/cli          e009b75                    -> exists upstream
+yaml/libyaml          840b65c                    -> exists upstream
+```
 
-- **The invariant holds for `$HOME`, not for the VM.** Deleting a VM today can
-  still lose local-only work in `/tmp`. Either treat `/tmp` as in scope for the
-  audit, or accept it as explicitly out of scope and say so.
-- **`--not --remotes` over-reports, never under-reports.** A clone with stale
-  remote-tracking refs shows pushed commits as unpushed —
-  `/tmp/entire-agent-shelley-v0.1.0`'s `e7c0008` was flagged and is in fact on
-  GitHub. So v3's "zero unpushed" conclusion for `$HOME` is safe; false
-  positives cost a check, not data.
+Two independent methodology faults produced the false positives, and both
+matter beyond `/tmp`:
 
-`prune-disk --system` now encodes the protection: an entry containing a repo
-with a real (http/ssh) remote and commits on no remote-tracking ref is listed
-as `PROTECTED` and never deleted. Repos with no remote or a local-path remote
-are treated as scratch, which is what makes the rule usable — pytest fixtures
-alone were 920 MB.
+1. **`--all` includes `refs/tags`, and `--not --remotes` only subtracts remote
+   _branches_.** A tag fetched from upstream that points at a commit on no
+   remote branch — tagged on a branch later deleted or never merged — is
+   therefore counted as local work. `shelley-review` has 644 tags; all 9 "local"
+   commits hung off the upstream tag `v0.670.946516660`. The correct predicate
+   is `rev-list --branches HEAD --not --remotes`, which asks the question that
+   actually matters: is there committed work here that no remote has?
+2. **Stale remote-tracking refs.** A clone that has not fetched since a commit
+   was pushed reports that commit as unpushed —
+   `/tmp/entire-agent-shelley-v0.1.0`'s `e7c0008` is on GitHub.
+
+Both fail in the **over-reporting** direction, which is why v3's "zero unpushed"
+conclusion for `$HOME` still stands: a false positive costs a check, never data.
+A zero result cannot be a false negative.
+
+**Net: there is no local-only work in `/tmp` anywhere on the fleet, and the
+disposability invariant holds for the whole VM, not just `$HOME`.** That is now
+tested rather than assumed — but it is a point-in-time result, not a property,
+so the guard stays.
+
+`prune-disk --system` encodes it: a `/tmp` entry containing a repo with a real
+(http/ssh) remote and commits on no remote-tracking branch is listed as
+`PROTECTED` and never deleted. Repos with no remote, or a local-path remote, are
+scratch — that distinction is what makes the rule usable rather than a blanket
+refusal, since pytest fixtures alone were 920 MB. The guard still over-protects
+via fault 2 above, which is the correct direction for a delete guard.
 
 ## Audit gotcha
 

@@ -288,7 +288,17 @@ tmp_is_protected() {
             http://*|https://*|git@*|ssh://*) ;;
             *) continue ;;   # no remote, or a local path -> scratch
         esac
-        n="$(git -C "$r" rev-list --count --all --not --remotes 2>/dev/null || echo 0)"
+        # --branches HEAD, NOT --all. `--all` includes refs/tags, and a tag
+        # FETCHED FROM UPSTREAM can point at a commit that is on no remote
+        # BRANCH (tagged on a branch that was later deleted or never merged).
+        # --not --remotes only subtracts remote-tracking branches, so those
+        # upstream commits get counted as local work. Measured 2026-07-28 on
+        # /tmp/shelley-review: 9 "unpushed" commits, all reachable from the
+        # upstream tag v0.670.946516660 and all present in
+        # boldsoftware/shelley. Zero were ours. Counting branches and HEAD
+        # instead asks the question that actually matters: is there committed
+        # work here that no remote has?
+        n="$(git -C "$r" rev-list --count --branches HEAD --not --remotes 2>/dev/null || echo 0)"
         if [[ "${n:-0}" -gt 0 ]]; then
             tmp_protected+=("$(printf '  %-52s %s unpushed commit(s) -> %s' "$r" "$n" "$url")")
             return 0
