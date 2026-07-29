@@ -141,6 +141,21 @@ Result across all ten VMs, 2026-07-28: `denied (good)` everywhere.
 `rss-feed` has **no ssh client at all** (exeslim ships without one) — an
 unplanned reinforcement of the slim-base security argument.
 
+**A clientless box makes this probe a false pass, though (2026-07-29).** "No
+ssh client" and "denied" are both non-zero exits, and `new-dev-vm`'s verify step
+cannot tell them apart — on a box without a client it prints
+`control-plane reachable from VM: no (correct)` having tested nothing. For
+`rss-feed` the conclusion happens to be right and stronger than the probe knows.
+For a **dev** VM it would be a silent hole, which is why `exeslim-dev` now ships
+`openssh-client` (~2 MB) while `exeslim` deliberately still does not: deployment
+VMs keep the absence as a property, dev VMs need the check to mean something.
+Confirmed on `iv-canary-b`: `/usr/bin/ssh` present, probe returns a real
+`Permission denied (publickey)`.
+
+`/exe.dev/bin` supplies `dtach exe-init sftp-server sh sshd sshd-session` —
+inbound only. exeuntu happened to carry a client via Ubuntu, so the gap only
+appeared once we left exeuntu.
+
 One incidental find: `iv-entire-agent-shelley` holds a private key
 `~/.ssh/id_entire_setup`. Not exe.dev control authority, but it is a key on a
 disposable VM and should be accounted for.
