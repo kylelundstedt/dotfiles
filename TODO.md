@@ -71,3 +71,11 @@ Open work only, grouped by when it can happen. Completed work →
 ## Evaluations (no deadline)
 
 - [ ] Basic Memory: pick hosting model (local/Cloud/Teams), trial 1–2 weeks on one project, then adopt-or-drop with a policy note distinguishing it from Claude/Codex native memory
+
+- [ ] **Revisit commit signing.** The 1Password agent dependency is a recurring
+      operational headache — it locks, and every signing-dependent operation
+      stops. Raised 2026-07-29 while the recreate cycle was blocked by a locked
+      agent. Decide whether commit signing is worth keeping, and if so how it
+      should behave unattended. (Note: the exe.dev control-plane key is SSH
+      _auth_, a separate concern from git commit signing — but both ride the
+      same 1Password agent, so both stop together.)

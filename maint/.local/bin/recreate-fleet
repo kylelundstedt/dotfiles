@@ -53,6 +53,21 @@ done
 
 [[ -x "$NEWVM" ]] || { echo "new-dev-vm not found next to this script" >&2; exit 1; }
 
+# SKIP, don't fail, when the agent cannot sign. 1Password locks on its own, and
+# every control-plane call needs the exe.dev key — so an unattended run finds
+# the whole queue unrunnable through no fault of its own. Exiting 0 keeps that
+# out of the failure channel; exiting non-zero would page for something that is
+# just "the Mac locked". new-dev-vm still refuses individually, so a lock that
+# happens mid-run is caught there.
+#
+# The agent LISTS the key while locked, so `ssh-add -l` proves nothing — only an
+# actual signature does.
+if ! ssh-add -T "$HOME/.ssh/exe_dev.pub" >/dev/null 2>&1; then
+    echo "recreate-fleet: 1Password agent cannot sign with the exe.dev key — skipping this run."
+    echo "  (unlock 1Password on klundstedt-mini; nothing was started)"
+    exit 0
+fi
+
 LOGDIR="$HOME/.local/state/recreate-fleet"
 mkdir -p "$LOGDIR"
 LOG="$LOGDIR/$(date -u +%Y%m%dT%H%M%SZ).log"
