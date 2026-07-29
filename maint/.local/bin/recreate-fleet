@@ -84,16 +84,43 @@ for vm in "${QUEUE[@]}"; do
     #    a renamed integration is missing or a renamed tag would grant less than
     #    the original. Both refusals are the point — they are failures that are
     #    silent otherwise.
-    prep_out=$("$NEWVM" --name "$new" --recreate "$vm" --dry-run 2>&1)
-    # No mapfile: macOS ships bash 3.2, where it does not exist. Same reason the
-    # summary below indexes from the front rather than using ${a[-1]}.
-    prep_cmds=()
-    while IFS= read -r c; do
-        [[ -n "$c" ]] && prep_cmds+=("$c")
-    done < <(grep -oE 'ssh exe\.dev integrations (add|attach) [^"]*' <<<"$prep_out")
+    # LOOP the prep. new-dev-vm refuses in STAGES — it reports a renamed tag
+    # that grants too little, and only once that is fixed does it report a
+    # missing renamed integration. So one prep round can never satisfy a VM
+    # that has both, which is exactly what iv-home hit: the tag attach
+    # succeeded, the re-check surfaced the next refusal, and the queue stopped
+    # having built nothing. Iterate until the dry-run is clean, or until a
+    # round produces no new commands (which means the refusal is something we
+    # cannot fix automatically).
+    prep_round=0
+    while :; do
+        prep_out=$("$NEWVM" --name "$new" --recreate "$vm" --dry-run 2>&1)
 
-    if (( ${#prep_cmds[@]} )); then
-        note "  prep required (${#prep_cmds[@]} command(s)):"
+        # No mapfile: macOS ships bash 3.2, where it does not exist. Same reason
+        # the summary below indexes from the front rather than using ${a[-1]}.
+        prep_cmds=()
+        while IFS= read -r c; do
+            [[ -n "$c" ]] && prep_cmds+=("$c")
+        done < <(grep -oE 'ssh exe\.dev integrations (add|attach) [^"]*' <<<"$prep_out")
+
+        if (( ${#prep_cmds[@]} == 0 )); then
+            if grep -qE '^new-dev-vm:|!!' <<<"$prep_out"; then
+                note "  refused, and no prep command was offered:"
+                grep -E '!!|^new-dev-vm:' <<<"$prep_out" | sed 's/^/    /' | tee -a "$LOG"
+                failed_vm="$vm"
+            else
+                (( prep_round == 0 )) && note "  prep: none needed"
+            fi
+            break
+        fi
+
+        prep_round=$((prep_round+1))
+        if (( prep_round > 4 )); then
+            note "  prep did not converge after 4 rounds — stopping"
+            failed_vm="$vm"; break
+        fi
+
+        note "  prep round $prep_round (${#prep_cmds[@]} command(s)):"
         for c in "${prep_cmds[@]}"; do
             note "    $c"
             if [[ "$DRY" == true ]]; then continue; fi
@@ -103,20 +130,9 @@ for vm in "${QUEUE[@]}"; do
             note "    -> ${out##*$'\n'}"
         done
         [[ -n "$failed_vm" ]] && break
-
-        # Re-check: the dry-run must now be clean, or we would create a VM that
-        # is missing authority it had before.
-        if [[ "$DRY" != true ]]; then
-            prep_out=$("$NEWVM" --name "$new" --recreate "$vm" --dry-run 2>&1)
-            if grep -qE 'integrations (add|attach)|would grant less' <<<"$prep_out"; then
-                note "  still not satisfied after prep:"
-                grep -E '!!|integrations (add|attach)|new-dev-vm:' <<<"$prep_out" | sed 's/^/    /' | tee -a "$LOG"
-                failed_vm="$vm"; break
-            fi
-        fi
-    else
-        note "  prep: none needed"
-    fi
+        [[ "$DRY" == true ]] && break   # dry-run: report round 1 and move on
+    done
+    [[ -n "$failed_vm" ]] && break
 
     if [[ "$DRY" == true ]]; then
         note "  [dry-run] would recreate $vm as $new"
