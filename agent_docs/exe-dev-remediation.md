@@ -21,11 +21,11 @@ prerequisite for migrating, not a product of it.
 It also front-loaded a full baseline of the entire fleet before anything could
 move, which gated a live security finding behind weeks of survey work.
 
-| Track                   | Scope                                                      | Status                           |
-| ----------------------- | ---------------------------------------------------------- | -------------------------------- |
-| **0 — Control plane**   | Agent forwarding, socket persistence, `auto:all` cleanup   | **Done**                         |
-| **1 — Free reclaim**    | `/tmp`, journal, apt; extend `prune-disk` past `$HOME`     | **Done** at 7d (766 MB); 3d open |
-| **2 — Image migration** | Slim dev base; `telnyx-vm` after the number port completes | Blocked on bootstrap             |
+| Track                   | Scope                                                       | Status                           |
+| ----------------------- | ----------------------------------------------------------- | -------------------------------- |
+| **0 — Control plane**   | Agent forwarding, socket persistence, `auto:all` cleanup    | **Done**                         |
+| **1 — Free reclaim**    | `/tmp`, journal, apt, pip; extend `prune-disk` past `$HOME` | **Done** — ~7.8 GB, fleet 68.9 G |
+| **2 — Image migration** | Slim dev base; `telnyx-vm` after the number port completes  | Blocked on bootstrap             |
 
 ---
 
