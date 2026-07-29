@@ -327,6 +327,43 @@ The disposability invariant now holds fleet-wide, tested rather than assumed,
 with the audit covering main repos, linked worktrees, stashes, detached HEAD,
 local-only tags, notes refs, un-joined VMs, and service state outside `$HOME`.
 
+## Correction — v3's "zero unpushed work" was scoped to `$HOME` and `/tmp` is not empty
+
+Found 2026-07-28 while extending `prune-disk` past `$HOME` (Track 1 of
+[`exe-dev-remediation.md`](exe-dev-remediation.md)). **v3 widened the search for
+_secrets_ outside `$HOME` but kept the search for _unpushed work_ inside it.**
+`/tmp` was never walked, and it holds git repos:
+
+| Host           | Path                            | State                                             |
+| -------------- | ------------------------------- | ------------------------------------------------- |
+| `iv-docs`      | `/tmp/shelley-review`           | **9 local-only commits → `boldsoftware/shelley`** |
+| `iv-docs`      | `/tmp/entire-cli-review`        | 1, → `entireio/cli`                               |
+| `iv-docs`      | `/tmp/agentsview-eval`          | 1, → `kenn-io/agentsview`                         |
+| `iv-docs`      | `/tmp/pytest-of-exedev/…` (×15) | fixture repos, no remote — genuinely disposable   |
+| `kgl-thoughts` | `/tmp/thoughts-*-review/repo`   | scratch clones of `~/thoughts`, or no remote      |
+
+Most are disposable. **`/tmp/shelley-review` is not**: nine commits recording a
+Shelley session against the vendor's repo, which we cannot push to. That is
+exactly the "Shelley state falls into the disposability gap" case, still open —
+and it would have been lost silently to any `rm -rf /tmp` or VM deletion.
+
+Two things this changes:
+
+- **The invariant holds for `$HOME`, not for the VM.** Deleting a VM today can
+  still lose local-only work in `/tmp`. Either treat `/tmp` as in scope for the
+  audit, or accept it as explicitly out of scope and say so.
+- **`--not --remotes` over-reports, never under-reports.** A clone with stale
+  remote-tracking refs shows pushed commits as unpushed —
+  `/tmp/entire-agent-shelley-v0.1.0`'s `e7c0008` was flagged and is in fact on
+  GitHub. So v3's "zero unpushed" conclusion for `$HOME` is safe; false
+  positives cost a check, not data.
+
+`prune-disk --system` now encodes the protection: an entry containing a repo
+with a real (http/ssh) remote and commits on no remote-tracking ref is listed
+as `PROTECTED` and never deleted. Repos with no remote or a local-path remote
+are treated as scratch, which is what makes the rule usable — pytest fixtures
+alone were 920 MB.
+
 ## Audit gotcha
 
 The first pass reported `AGENTSVIEW_UNIT=inactive` on all six VMs, which

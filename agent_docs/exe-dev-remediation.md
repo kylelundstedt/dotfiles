@@ -21,11 +21,11 @@ prerequisite for migrating, not a product of it.
 It also front-loaded a full baseline of the entire fleet before anything could
 move, which gated a live security finding behind weeks of survey work.
 
-| Track                   | Scope                                                              | Status                             |
-| ----------------------- | ------------------------------------------------------------------ | ---------------------------------- |
-| **0 — Control plane**   | Agent forwarding, socket persistence, `auto:all` cleanup           | **Done** (except cohort decisions) |
-| **1 — Free reclaim**    | `/tmp`, `/headless-shell`, snapd; extend `prune-disk` past `$HOME` | Not started                        |
-| **2 — Image migration** | Slim dev base; `telnyx-vm` after the number port completes         | Blocked on bootstrap               |
+| Track                   | Scope                                                      | Status                             |
+| ----------------------- | ---------------------------------------------------------- | ---------------------------------- |
+| **0 — Control plane**   | Agent forwarding, socket persistence, `auto:all` cleanup   | **Done** (except cohort decisions) |
+| **1 — Free reclaim**    | `/tmp`, journal, apt; extend `prune-disk` past `$HOME`     | **Done** at 7d (766 MB); 3d open   |
+| **2 — Image migration** | Slim dev base; `telnyx-vm` after the number port completes | Blocked on bootstrap               |
 
 ---
 
@@ -189,26 +189,64 @@ nothing. Prefer `vm:` for singleton authority; reserve tags for genuine cohorts.
 
 ---
 
-## Track 1 — free reclaim (not started)
+## Track 1 — free reclaim (done 2026-07-28, partially)
 
 Measured on `iv-docs`, 11 GB used:
 
-| Path              |      Size | Owner                                  |
-| ----------------- | --------: | -------------------------------------- |
-| `/usr`            |     4.3 G | base image + `/usr/local` 1.5 G (ours) |
-| `/home`           |     3.4 G | our overlay + work                     |
-| **`/tmp`**        | **1.6 G** | **nobody**                             |
-| `/headless-shell` |     252 M | exeuntu Chrome                         |
-| `/opt`, `/var`    |     649 M | mixed                                  |
+| Path              |      Size | Owner                                   |
+| ----------------- | --------: | --------------------------------------- |
+| `/usr`            |     4.3 G | base image + `/usr/local` 1.5 G (ours)  |
+| `/home`           |     3.4 G | our overlay + work                      |
+| **`/tmp`**        | **1.6 G** | mixed — **not scratch**, see below      |
+| `/headless-shell` |     252 M | **in use by Shelley — not reclaimable** |
+| `/opt`, `/var`    |     649 M | mixed                                   |
 
-**`prune-disk` only walks `$HOME`** — the same blind spot the disposability
-audit had until v3, now hit for the third time. `/tmp` alone is 1.6 GB on one
-VM, with nothing pruning it. Extend `prune-disk` past `$HOME` and re-run the
-fan-out; this is free and needs no migration.
+**Correction to the initial survey: `/headless-shell` is not dead weight.** It
+was listed as "exeuntu Chrome" and assumed unused. On `iv-docs` it has three
+running processes and is referenced from `/etc/systemd/system/shelley.service`
+and `shelley.db` — removing it would break Shelley's browser capability. That is
+2.25 GB across the fleet that stays.
+
+**`/tmp` is not scratch either.** It holds git repos with local-only commits,
+including nine on `iv-docs` against a vendor repo we cannot push to. Full
+finding and its consequence for the disposability invariant:
+[`vm-disposability.md`](vm-disposability.md) → "Correction — v3's zero unpushed
+work was scoped to `$HOME`".
+
+`prune-disk` gained `--system` (Linux, opt-in, needs sudo): `/tmp` entries older
+than `--tmp-age` days, systemd journal vacuumed to `--journal-cap`, and apt's
+`.deb` cache. Guard 3 protects any `/tmp` entry containing a repo with a real
+remote and unpushed commits; remote-less and local-path clones count as scratch,
+which is what keeps the rule useful — pytest fixtures alone were 920 MB.
+
+Applied at `--tmp-age 7` across all nine VMs: **766 MB actually reclaimed.**
+
+The planned figure was 4.1 GB, and the difference is honest rather than a
+failure: the cache lines are labelled upper bounds because `uv cache prune`
+keeps live entries, so most of that was never free. What genuinely moved was the
+journal (`iv-docs` 106 M → 64 M) and old `/tmp` (`kgl-thoughts` 195 M → 31 M).
+
+**Still on the table, and it needs a decision rather than a default.** The large
+`/tmp` consumers are 3–4 days old, so a 7-day window does not touch them:
+
+| Host                  | What                                          | At `--tmp-age 3` |
+| --------------------- | --------------------------------------------- | ---------------: |
+| `iv-gitlake-examples` | generated TPC-H data (`tpchm-*`), smoke tests |           2.05 G |
+| `iv-docs`             | `pytest-of-exedev` fixtures                   |           1.10 G |
+| `kgl-thoughts`        | review sandboxes                              |            603 M |
+
+All regenerable, but "regenerable" is not "unused" — someone may be mid-way
+through a benchmark run. Guard 3 engages at 3 days on `iv-docs` (2 protected),
+so the shorter window is safe with respect to _work_; the question is only
+whether the data is live.
 
 Base-image junk, quantified for the Track 2 case: `snapd` 103 M (`/snap` is
 empty), `pocketsphinx` 37 M (speech recognition), `icons` 47 M, `fonts` 39 M,
 `doc` 55 M, `man` 39 M.
+
+Still unscheduled: nothing runs `prune-disk` periodically, so the Claude
+versions directory and these caches regrow. Settle it alongside the
+AgentsView retention timer (see `TODO.md`).
 
 ## Track 2 — image migration (blocked)
 
