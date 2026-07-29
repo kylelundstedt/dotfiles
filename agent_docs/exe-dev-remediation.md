@@ -21,11 +21,11 @@ prerequisite for migrating, not a product of it.
 It also front-loaded a full baseline of the entire fleet before anything could
 move, which gated a live security finding behind weeks of survey work.
 
-| Track                   | Scope                                                      | Status                             |
-| ----------------------- | ---------------------------------------------------------- | ---------------------------------- |
-| **0 — Control plane**   | Agent forwarding, socket persistence, `auto:all` cleanup   | **Done** (except cohort decisions) |
-| **1 — Free reclaim**    | `/tmp`, journal, apt; extend `prune-disk` past `$HOME`     | **Done** at 7d (766 MB); 3d open   |
-| **2 — Image migration** | Slim dev base; `telnyx-vm` after the number port completes | Blocked on bootstrap               |
+| Track                   | Scope                                                      | Status                           |
+| ----------------------- | ---------------------------------------------------------- | -------------------------------- |
+| **0 — Control plane**   | Agent forwarding, socket persistence, `auto:all` cleanup   | **Done**                         |
+| **1 — Free reclaim**    | `/tmp`, journal, apt; extend `prune-disk` past `$HOME`     | **Done** at 7d (766 MB); 3d open |
+| **2 — Image migration** | Slim dev base; `telnyx-vm` after the number port completes | Blocked on bootstrap             |
 
 ---
 
@@ -162,21 +162,68 @@ verbatim rather than skipping the row:
 
 Both filters fixed and now match exactly. `diff-provisioning: no drift`.
 
-Still open, and deliberately not actioned — these are judgment calls about
-intent, not unambiguous over-grants:
+### Finding 4: the remaining four attachments (closed 2026-07-28)
 
-| Integration      | Attachment                                  | Question                                                                                            |
-| ---------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `motherduck-mcp` | `tag:iv`                                    | Broad MotherDuck to everything tagged `iv`. Narrow to a cohort?                                     |
-| `llm`            | `tag:llm` **+** `auto:all`                  | `auto:all` wins; the tag attachment is dead weight. Keep as a deliberate global default, or narrow? |
-| `telnyx-test`    | `vm:iv-home` + `vm:telnyx-vm`               | Why does `iv-home` have Telnyx? Probably a stray.                                                   |
-| `fannie-token`   | `tag:fannie-token` + `vm:iv-foundry-stage2` | **The tag attachment is dead** — no VM carries that tag. Only the `vm:` attach is live.             |
+| Integration      | Was                                         | Now                        | Why                                                                                                                                                   |
+| ---------------- | ------------------------------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `motherduck-api` | `tag:motherduck-api` (3 VMs)                | **`(none)`**               | Same target and auth type as `motherduck-mcp`, referenced by no config, and in no manifest. See the caveat below.                                     |
+| `llm`            | `tag:llm` **+** `auto:all`                  | `auto:all`                 | `auto:all` already covered every VM, so the tag granted nothing. Kept as a deliberate global default.                                                 |
+| `telnyx-test`    | `vm:iv-home` + `vm:telnyx-vm`               | **`vm:telnyx-vm`**         | `iv-home` was a stray — Telnyx appeared only in its `shelley.db` chat history, and it has no telephony work.                                          |
+| `fannie-token`   | `tag:fannie-token` + `vm:iv-foundry-stage2` | **`vm:iv-foundry-stage2`** | The tag attachment was dead: no VM carries `tag:fannie-token`. The `vm:` attach is live and **must stay** — it is how M3 downloads fannie-sflpd data. |
 
-Found incidentally: **`kgl-thoughts` has a dead `motherduck` MCP registration.**
-`motherduck-mcp` is `tag:iv` and `kgl-thoughts` is untagged, so that server has
-been failing since before this work. Left alone — the fix is either attaching
-the integration or dropping the registration, and that is a question about what
-the blog VM is for.
+**403 does not mean "not attached", and this nearly misled the audit.**
+`fannie-token` on `iv-foundry-stage2` returns HTTP 403, but it is attached:
+reflection lists it and the control plane shows `vm:iv-foundry-stage2`. The 403
+comes from Fannie's own SSO, which does not work yet — an upstream problem, not
+an attachment one. exe.dev also returns 403 for an unattached integration, so
+the code alone cannot distinguish the two. Verify with the reflection endpoint
+cross-checked against `integrations list`; every conclusion in this document was
+re-verified that way.
+
+**`telnyx-vm`'s capability was verified intact afterwards, not assumed.** It is
+the one VM running an irreversible external process, so a read-only check
+through the proxy (no traffic, no charges):
+
+```
+GET /v2/messaging_profiles -> HTTP 200   (1 profile)
+GET /v2/phone_numbers      -> HTTP 200   (2 numbers on account)
+telnyx-webhook: active, listening on :8000
+```
+
+**Caveat on `motherduck-api`, worth keeping.** It was not pure drift — it came
+from the local-DuckDB-vs-MotherDuck comparison work. Two things make the detach
+safe:
+
+- `iv-gitlake-examples`, where the `tpch-mortgage` benchmark data actually
+  lives, **never had `motherduck-api` attached** — it carries only `tag:iv`, so
+  that comparison was always running through `motherduck-mcp`.
+- `motherduck-mcp` reports `✔ Connected` on both `iv-docs` and
+  `iv-gitlake-examples`, which is a real authenticated handshake.
+
+What could not be verified is whether the two carry **different tokens**. Both
+target `api.motherduck.com` with a Bearer and returned byte-identical responses
+on every path tried, but token values are server-side. If `motherduck-api` was
+scoped to a different MotherDuck org or database, that access is now gone —
+restore with `integrations attach motherduck-api tag:motherduck-api`. The
+integration is still defined and `tag:motherduck-api` is still on the three VMs;
+**those tags were deliberately left in place as the restore path** rather than
+tidied away.
+
+Also fixed: **`kgl-thoughts` had a dead `motherduck` MCP registration** —
+`motherduck-mcp` is `tag:iv` and `kgl-thoughts` is untagged, so it reported
+`! Needs authentication` every session, from before this work. Registration
+removed (claude + codex); re-add if the blog VM ever needs MotherDuck.
+
+### Resulting `auto:all` set
+
+Six integrations were `auto:all` at the start. Three remain, and they are
+exactly the ones the target model called legitimate global defaults:
+
+```
+llm         auto:all
+notify      auto:all
+reflection  auto:all
+```
 
 Correctly clean already and worth preserving as the pattern:
 `github-kylelundstedt-dotfiles-writer`, `github-kylelundstedt-iv-image-writer`,

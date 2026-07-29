@@ -66,16 +66,20 @@ The sole exception is a tier-3 bootstrap credential (an `OP_SERVICE_ACCOUNT_TOKE
 scoped to one project vault), used only where no integration can reach the
 target. Integrations are scoped by tag (client/project) or per-VM:
 
-| Integration           | Type       | Scope        | Purpose                                                                                                                         |
-| --------------------- | ---------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| `tailscale-api`       | http-proxy | **`(none)`** | OAuth client creds (Basic) → 1h token → ephemeral join keys. Attached on demand by `join-tailnet`, detached on exit — see below |
-| `github-mcp-work`     | http-proxy | `tag:iv`     | Work GitHub API (MCP) — **intent; live state is `auto:all`**                                                                    |
-| `motherduck-mcp`      | http-proxy | `tag:iv`     | MotherDuck SQL (MCP)                                                                                                            |
-| `github-mcp-home`     | http-proxy | `vm:` per VM | Personal GitHub API (MCP) — **intent; live state is `auto:all`**                                                                |
-| `github-<org>-<repo>` | github     | `vm:` per VM | Git clone/push for a single repo                                                                                                |
-| `reflection`          | reflection | `auto:all`   | VM metadata                                                                                                                     |
-| tigris                | OAuth      | —            | One-time browser dance via `LocalForward 8765`                                                                                  |
-| readwise              | OAuth      | —            | macOS only                                                                                                                      |
+| Integration           | Type       | Scope                        | Purpose                                                                                                                                                                                                                                                                                     |
+| --------------------- | ---------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tailscale-api`       | http-proxy | **`(none)`**                 | OAuth client creds (Basic) → 1h token → ephemeral join keys. Attached on demand by `join-tailnet`, detached on exit — see below                                                                                                                                                             |
+| `github-mcp-work`     | http-proxy | **`(none)`**                 | Work GitHub API (MCP). No VM has an IndustryVault/iv-cmg repo, so none needs it; attach per-VM if that changes                                                                                                                                                                              |
+| `motherduck-mcp`      | http-proxy | `tag:iv`                     | MotherDuck SQL (MCP) — the sanctioned one (`mcp.manifest`)                                                                                                                                                                                                                                  |
+| `motherduck-api`      | http-proxy | **`(none)`**                 | Same target/auth as `motherduck-mcp`, no config consumer, in no manifest. Detached 2026-07-28; `tag:motherduck-api` kept as the restore path                                                                                                                                                |
+| `github-mcp-home`     | http-proxy | `tag:iv` + `vm:kgl-thoughts` | Personal GitHub API (MCP) — every VM where agents do GitHub work, minus the two public ones                                                                                                                                                                                                 |
+| `llm`                 | llm        | `auto:all`                   | Keyless LLM gateway. Deliberate global default; the redundant `tag:llm` attachment was dropped                                                                                                                                                                                              |
+| `telnyx-test`         | catalog    | `vm:telnyx-vm`               | Telnyx API (Bearer) for the number port + voicemail/SMS. `vm:iv-home` was a stray, detached 2026-07-28                                                                                                                                                                                      |
+| `fannie-token`        | http-proxy | `vm:iv-foundry-stage2`       | Fannie SSO — **keep attached**: it is how M3 downloads fannie-sflpd data. `tag:fannie-token` was dead (no VM carried it) and was detached; the `vm:` attach is the live one. Currently returns 403 from Fannie's own SSO, i.e. not working upstream yet — that is not an attachment problem |
+| `github-<org>-<repo>` | github     | `vm:` per VM                 | Git clone/push for a single repo                                                                                                                                                                                                                                                            |
+| `reflection`          | reflection | `auto:all`                   | VM metadata                                                                                                                                                                                                                                                                                 |
+| tigris                | OAuth      | —                            | One-time browser dance via `LocalForward 8765`                                                                                                                                                                                                                                              |
+| readwise              | OAuth      | —                            | macOS only                                                                                                                                                                                                                                                                                  |
 
 **Attachment drift is real, and this table is intent — verify against
 `ssh exe.dev integrations list` before trusting it.** As of 2026-07-28 both
@@ -88,6 +92,21 @@ recorded above; nobody widened them deliberately. Two related traps:
   `integrations list` and grants nothing — `fannie-token` had exactly this dead
   `tag:fannie-token` attachment. Prefer `vm:` for singleton or high-risk
   authority; reserve tags for genuine cohorts.
+
+**To check whether a VM has an integration, use the reflection endpoint, not an
+HTTP status code.** `curl https://<name>.int.exe.xyz/` returning 403 is
+ambiguous: exe.dev returns 403 when the integration is _not attached_, and the
+upstream service can also return 403 through a perfectly good proxy.
+`fannie-token` on `iv-foundry-stage2` is attached and returns 403 because
+Fannie's SSO rejects it — an upstream problem, not an attachment one. The
+authoritative VM-side view is:
+
+```bash
+curl -s https://reflection.int.exe.xyz/integrations | jq -r '..|objects|select(has("name"))|.name'
+```
+
+Cross-check it against `ssh exe.dev integrations list` (the control-plane view);
+the two agreeing is the real verification.
 
 See [`exe-dev-remediation.md`](exe-dev-remediation.md) for the audit.
 
