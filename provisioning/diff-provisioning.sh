@@ -152,8 +152,13 @@ if $have_iv; then
     if [[ -f "$servers_json" ]] && command -v jq >/dev/null 2>&1; then
         # Exact-map compare: generated name->url must equal the team rows.
         # (Personal rows sneaking in would break equality too.)
+        # `-` = not registered on VMs, so such rows must be ABSENT from the
+        # generated file. This filter has to match vendor-skills.sh's exactly,
+        # or the two disagree forever: without it, `want` contained
+        # {"github-work": "-"} while a correct generator omitted the key, and
+        # the check reported permanent drift that no re-vendor could clear.
         gen="$(jq -S 'with_entries(.value = .value.url)' "$servers_json")"
-        want="$(rows mcp.manifest | awk -F'|' '$2 ~ /team/ {gsub(/^ +| +$/,"",$1); gsub(/^ +| +$/,"",$3); print $1"\t"$3}' \
+        want="$(rows mcp.manifest | awk -F'|' '$2 ~ /team/ {gsub(/^ +| +$/,"",$1); gsub(/^ +| +$/,"",$3); if ($3 != "-" && $3 != "") print $1"\t"$3}' \
             | jq -RnS 'reduce (inputs | split("\t")) as $r ({}; . + {($r[0]): $r[1]})')"
         if [[ "$gen" == "$want" ]]; then
             ok "iv-image mcp-servers.json matches mcp.manifest team rows"

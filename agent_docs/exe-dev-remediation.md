@@ -112,28 +112,71 @@ is removed and must be re-joined by re-running the script.
 
 `--tag=iv` is no longer sufficient or required for tailnet joining.
 
-### Open decisions — `auto:all` and broad attachments
+### Finding 3: `github-mcp-*` were both `auto:all` (closed)
 
-These were **not** actioned, because they are judgment calls about intent rather
-than unambiguous over-grants.
+The deciding fact: the fleet runs **two GitHub accounts** — `kylelundstedt`
+(home, plus USAA) and `IndustryVault` / `iv-cmg` (work, per `sync-repos.sh`) —
+and **every one of the fleet's 13 GitHub repo integrations is
+`repos=kylelundstedt/*`.** Not one VM has an IndustryVault or iv-cmg repo. Yet
+`github-mcp-work` was `auto:all`, granting work-org API access to all ten VMs
+including the two public ones, with no VM-side consumer.
 
-| Integration       | Attachment                                  | Question                                                                                                       |
-| ----------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `github-mcp-home` | `auto:all`                                  | Live MCP server on `iv-docs`, `iv-home`, `kgl-thoughts`. Which VMs are the personal cohort?                    |
-| `github-mcp-work` | `auto:all`                                  | Live on `iv-docs`, `iv-home`, `iv-foundry-stage2`, `kgl-thoughts`. Does the personal blog VM need work GitHub? |
-| `motherduck-mcp`  | `tag:iv`                                    | Broad MotherDuck to everything tagged `iv`. Narrow to a cohort?                                                |
-| `llm`             | `tag:llm` **+** `auto:all`                  | `auto:all` wins; the tag attachment is dead weight. Keep as a deliberate global default, or narrow?            |
-| `telnyx-test`     | `vm:iv-home` + `vm:telnyx-vm`               | Why does `iv-home` have Telnyx? Probably a stray.                                                              |
-| `fannie-token`    | `tag:fannie-token` + `vm:iv-foundry-stage2` | **The tag attachment is dead** — no VM carries that tag. Only the `vm:` attach is live.                        |
+`secrets.md` already documented these at narrower scopes (`tag:iv` and
+`vm:` per VM). Nobody widened them deliberately — **the drift predates this
+work**, so narrowing restored documented intent rather than setting new policy.
 
-Verified consumers, so a blind detach would break agent MCP:
+Decided and applied 2026-07-28:
+
+| Integration       | Was        | Now                          | Rationale                                                                                                                                     |
+| ----------------- | ---------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `github-mcp-work` | `auto:all` | **`(none)`**                 | No VM has a work-org repo. Attach per-VM if a work-org task ever lands on one.                                                                |
+| `github-mcp-home` | `auto:all` | `tag:iv` + `vm:kgl-thoughts` | Covers every VM where agents do GitHub work; drops public `rss-feed` and `telnyx-vm`. kgl-thoughts is untagged so it needs the direct attach. |
+
+Verified by probe (`404` = attached, proxy forwarded; `403` = not attached):
 
 ```
-iv-docs            github-mcp-home  github-mcp-work  llm  motherduck-mcp
-iv-home            github-mcp-home  github-mcp-work  llm  motherduck-mcp
-iv-foundry-stage2                   github-mcp-work  llm  motherduck-mcp
-kgl-thoughts       github-mcp-home  github-mcp-work  llm  motherduck-mcp
+iv-docs        home=404  work=403      (tag:iv)
+kgl-thoughts   home=404  work=403      (vm: attach)
+telnyx-vm      home=403  work=403      (untagged, public)
+rss-feed       home=403  work=403  tailscale-api=403
 ```
+
+`rss-feed`, the public production VM, now holds zero GitHub and zero Tailscale
+authority.
+
+**Detaching an integration orphans its MCP registration.** Seven VMs were left
+with a `github-work` MCP server whose endpoint 403s — visible as
+`! Needs authentication` in `claude mcp list`, not silent, but noise every
+session. Removed from all seven (`claude` + `codex`), and `mcp.manifest`'s
+vm-url column set to `-` so a re-provision cannot restore it.
+
+That exposed a **latent bug in the `-` convention itself**. The manifest defines
+`-` as "not registered on VMs", but two consumers passed the value through
+verbatim rather than skipping the row:
+
+- `iv-image/vendor-skills.sh` emitted `{"url": "-"}` — a server pointing at a
+  literal dash, worse than the state it was meant to fix.
+- `diff-provisioning.sh` built its expected map the same way, so `want`
+  contained `{"github-work": "-"}` while a correct generator omits the key —
+  **permanent drift that no amount of re-vendoring could clear.**
+
+Both filters fixed and now match exactly. `diff-provisioning: no drift`.
+
+Still open, and deliberately not actioned — these are judgment calls about
+intent, not unambiguous over-grants:
+
+| Integration      | Attachment                                  | Question                                                                                            |
+| ---------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `motherduck-mcp` | `tag:iv`                                    | Broad MotherDuck to everything tagged `iv`. Narrow to a cohort?                                     |
+| `llm`            | `tag:llm` **+** `auto:all`                  | `auto:all` wins; the tag attachment is dead weight. Keep as a deliberate global default, or narrow? |
+| `telnyx-test`    | `vm:iv-home` + `vm:telnyx-vm`               | Why does `iv-home` have Telnyx? Probably a stray.                                                   |
+| `fannie-token`   | `tag:fannie-token` + `vm:iv-foundry-stage2` | **The tag attachment is dead** — no VM carries that tag. Only the `vm:` attach is live.             |
+
+Found incidentally: **`kgl-thoughts` has a dead `motherduck` MCP registration.**
+`motherduck-mcp` is `tag:iv` and `kgl-thoughts` is untagged, so that server has
+been failing since before this work. Left alone — the fix is either attaching
+the integration or dropping the registration, and that is a question about what
+the blog VM is for.
 
 Correctly clean already and worth preserving as the pattern:
 `github-kylelundstedt-dotfiles-writer`, `github-kylelundstedt-iv-image-writer`,
@@ -228,3 +271,41 @@ migration window; that mechanism already exists.
   the fallback also fires). Drop the fallback.
 - `sed` address delimiters need `\|…|`, not `|…|`. An invalid expression makes
   the whole `-e` set a silent no-op — it looked like the edit applied.
+
+## Two more traps, both about work that looks applied and isn't
+
+**`ControlMaster` masks broken auth on the Mac too, not just on VMs.** Every
+`ssh exe.dev` this session rode a single control master opened by the first
+call. When it aged out at `ControlPersist 600`, commands started failing
+`Permission denied (publickey)` — 1Password was locked, so the agent could
+**list** the exe.dev key but not **sign** with it. Mac-side authentication had
+been broken for some time and multiplexing hid it, which is the same masking
+effect this document records as the escalation window on the VMs, seen from the
+other side.
+
+Diagnose locally without touching exe.dev — this distinguishes a locked agent
+from a config or rate-limit problem in one command:
+
+```bash
+ssh-add -l                        # lists keys even when locked — proves nothing
+ssh-add -T ~/.ssh/exe_dev.pub     # actually signs; "communication with agent failed" = locked
+```
+
+**Editing a skill in this repo does not deploy it.** `agents/.stow-local-ignore`
+excludes `.agents/skills` on purpose — "deployed by `npx -y skills add` (not
+stowed) to avoid multi-level symlinks that Codex can't resolve". So
+`agents/.agents/skills/<name>/` is the **source**, and `~/.agents/skills/<name>/`
+holds real files installed **from GitHub**, per `provisioning/skills.manifest`.
+
+The `join-tailnet` fix above was inert until it was committed, pushed, and then
+reinstalled:
+
+```bash
+npx -y skills add -g -y kylelundstedt/dotfiles -s sprites-dev join-tailnet upgrade-vm
+diff ~/.agents/skills/join-tailnet/SKILL.md agents/.agents/skills/join-tailnet/SKILL.md
+```
+
+The live copy was three weeks stale and nothing warned. Verify with `diff`
+after editing any skill. Note `upgrade-vm` fails to install
+("PromptScript does not support global skill installation") — pre-existing, and
+`herdr` fails the same way.
