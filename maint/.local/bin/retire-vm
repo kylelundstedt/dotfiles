@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# retire-vm — retire a dev VM that has been replaced, in the right order.
+#
+# ORDER MATTERS. The collector entry comes out FIRST. Delete the VM first and
+# the collector spends the gap scraping a host that no longer exists, which
+# surfaces as a monitoring failure that looks like a real outage.
+#
+# Deletion is NOT the default and is never implied by a successful cleanup:
+# pass --delete explicitly. Without it this does the reversible half (collector
+# entry, with a timestamped backup) and prints the command for the rest.
+#
+# Usage:
+#   retire-vm iv-ave-adapters                        # collector entry only
+#   retire-vm iv-ave-adapters --replaced-by iv-ave-adapters-next
+#   retire-vm iv-ave-adapters --delete               # ... and delete the VM
+set -euo pipefail
+
+COLLECTOR_CONF="$HOME/.agentsview/config.toml"
+COLLECTOR_LABEL="gui/$(id -u)/com.kylelundstedt.agentsview"
+
+OLD=""; REPLACED_BY=""; DELETE=false
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --replaced-by) REPLACED_BY="${2:?}"; shift 2 ;;
+        --delete)      DELETE=true; shift ;;
+        -h|--help)     sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -*)            echo "unknown flag: $1" >&2; exit 1 ;;
+        *)             OLD="$1"; shift ;;
+    esac
+done
+[[ -n "$OLD" ]] || { echo "usage: retire-vm <old-vm> [--replaced-by <new>] [--delete]" >&2; exit 1; }
+
+die() { echo "retire-vm: $*" >&2; exit 1; }
+
+[[ "$(hostname -s)" == "klundstedt-mini" ]] \
+    || die "control-plane mutations run from klundstedt-mini only (CLAUDE.md)"
+
+# If a replacement is named, it must actually be healthy before we take anything
+# away from the old one. A replacement that is merely *present* is not evidence.
+if [[ -n "$REPLACED_BY" ]]; then
+    echo "== checking replacement $REPLACED_BY"
+    ssh -o ConnectTimeout=30 exe.dev ls --json 2>/dev/null \
+        | jq -e --arg n "$REPLACED_BY" '.vms[] | select(.vm_name==$n and .status=="running")' >/dev/null \
+        || die "$REPLACED_BY is not a running VM"
+    ssh -o ConnectTimeout=30 "$REPLACED_BY" \
+        'systemctl --user is-active agentsview-source.service >/dev/null 2>&1' \
+        || die "$REPLACED_BY is not collecting (agentsview-source inactive) — not retiring $OLD"
+    echo "  running, agentsview-source active"
+fi
+
+echo "== collector entry for $OLD"
+if grep -q "host = \"$OLD\"" "$COLLECTOR_CONF" 2>/dev/null; then
+    cp "$COLLECTOR_CONF" "$COLLECTOR_CONF.bak-$(date +%Y%m%d%H%M%S)"
+    python3 - "$COLLECTOR_CONF" "$OLD" <<'PY'
+import sys, pathlib, re
+conf, name = sys.argv[1:3]
+p = pathlib.Path(conf); s = p.read_text()
+parts = re.split(r'(?m)^\[\[remote_hosts\]\]\s*$', s)
+head, blocks = parts[0], parts[1:]
+kept = [b for b in blocks if f'host = "{name}"' not in b]
+if len(kept) == len(blocks):
+    sys.exit(f"no [[remote_hosts]] block for {name}")
+out = head.rstrip("\n") + "\n" + "".join("\n[[remote_hosts]]" + b.rstrip("\n") + "\n" for b in kept)
+p.write_text(out)
+print(f"  removed {len(blocks)-len(kept)} block(s); {len(kept)} remain")
+PY
+    python3 -c "import tomllib,sys; tomllib.load(open('$COLLECTOR_CONF','rb'))" \
+        || die "collector config is no longer valid TOML — restore the .bak beside it"
+    launchctl kickstart -k "$COLLECTOR_LABEL" >/dev/null 2>&1 || true
+    echo "  collector restarted"
+else
+    echo "  none found (already removed, or never enrolled)"
+fi
+
+if [[ "$DELETE" == true ]]; then
+    echo "== deleting $OLD"
+    ssh -o ConnectTimeout=30 exe.dev rm "$OLD"
+    echo "  deleted"
+else
+    echo ""
+    echo "NOT deleted. Confirm nothing external depends on the name — custom"
+    echo "domains, webhooks, anything pinned to its tailnet hostname — then:"
+    echo "  retire-vm $OLD --delete"
+fi
