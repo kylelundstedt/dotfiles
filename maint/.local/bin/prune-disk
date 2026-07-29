@@ -183,7 +183,12 @@ cache_paths=()
 
 scan_caches() {
     local p b
-    for p in "$HOME/.cache/uv" "$HOME/.cache/go-build" "$HOME/.npm"; do
+    # ~/.cache/pip is here because telnyx-vm carried 2.7 GB of it (2026-07-28)
+    # — a Python box built before the uv-only rule. Its sibling
+    # ~/.cache/whisper (139 MB) is deliberately NOT listed: that is the
+    # transcription model, needed at runtime, and re-downloading it would break
+    # voicemail until it finished.
+    for p in "$HOME/.cache/uv" "$HOME/.cache/go-build" "$HOME/.npm" "$HOME/.cache/pip"; do
         b=$(sz "$p")
         (( b > 0 )) || continue
         cache_paths+=("$p")
@@ -203,6 +208,10 @@ prune_caches() {
                 else rm -rf "$p"; fi ;;
             */.npm)
                 if command -v npm >/dev/null 2>&1; then npm cache clean --force >/dev/null 2>&1 || rm -rf "$p"
+                else rm -rf "$p"; fi ;;
+            */pip)
+                if command -v pip3 >/dev/null 2>&1; then pip3 cache purge >/dev/null 2>&1 || rm -rf "$p"
+                elif command -v pip >/dev/null 2>&1; then pip cache purge >/dev/null 2>&1 || rm -rf "$p"
                 else rm -rf "$p"; fi ;;
         esac
     done
