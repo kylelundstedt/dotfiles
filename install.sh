@@ -656,7 +656,11 @@ CanonicalizeMaxDots 0
 SSHEOF
         fi
 
-        cat >> "$ssh_config" <<SSHEOF
+        # QUOTED heredoc: the comments below contain backticks, and an
+        # unquoted heredoc command-substitutes them — `ssh iv-docs 'ssh
+        # exe.dev whoami'` would actually run on every install. Only the
+        # `Match exec` line needs expansion, so it is printf'd separately.
+        cat >> "$ssh_config" <<'SSHEOF'
 
 Host exe.dev *.exe.xyz
   ControlMaster auto
@@ -697,7 +701,10 @@ Host klundstedt-mini klundstedt-mini.*
 # 2026-07-28: `ssh iv-docs 'ssh exe.dev whoami'` returned the account identity.
 # The mini keeps forwarding via its own block above (first-match-wins), so the
 # legitimate laptop -> mini case still works.
-Match host *.ts.net exec "$LOCAL_BIN/ssh-tailnet-tagged %h tag:dev"
+SSHEOF
+        printf 'Match host *.ts.net exec "%s/ssh-tailnet-tagged %%h tag:dev"\n' \
+            "$LOCAL_BIN" >> "$ssh_config"
+        cat >> "$ssh_config" <<'SSHEOF'
   User exedev
   ForwardAgent no
   IdentitiesOnly yes
@@ -740,7 +747,10 @@ CanonicalDomains $tailnet_domain
 CanonicalizeMaxDots 0
 SSHEOF
             fi
-            cat <<SSHEOF
+            # QUOTED — see the macOS branch: backticks in the comments below
+            # are prose, not command substitution. Observed unquoted on a
+            # fresh VM: `ssh exe.dev whoami` ran (and failed) mid-install.
+            cat <<'SSHEOF'
 
 # NO ControlMaster/ControlPersist here, unlike the macOS block. On the Mac,
 # multiplexing is valuable (exe.dev drops repeated SYNs per source IP). On a
@@ -758,7 +768,10 @@ Host *.exe.xyz
   User exedev
 
 # Cross-VM ssh by Tailscale name: same dynamic tag check as macOS.
-Match host *.ts.net exec "$LOCAL_BIN/ssh-tailnet-tagged %h tag:dev"
+SSHEOF
+            printf 'Match host *.ts.net exec "%s/ssh-tailnet-tagged %%h tag:dev"\n' \
+                "$LOCAL_BIN"
+            cat <<'SSHEOF'
   User exedev
   IdentitiesOnly yes
   IdentityFile ~/.ssh/exe_dev.pub
@@ -1654,8 +1667,12 @@ setup_tailscale() {
             # exchange goes through it; the 1h Bearer token then talks to the
             # public API directly. The exchange doubles as the reachability probe.
             local ts_token ts_api="https://api.tailscale.com"
+            # jq needs its own 2>/dev/null: in a pipeline the redirect binds to
+            # curl only, so an unattached proxy (which answers with a non-JSON
+            # error page) leaked "jq: parse error: Invalid numeric literal".
             ts_token=$(curl -sL --connect-timeout 2 --max-time 15 -X POST -d "grant_type=client_credentials" \
-                "$ts_proxy/api/v2/oauth/token" 2>/dev/null | jq -r '.access_token // empty') || true
+                "$ts_proxy/api/v2/oauth/token" 2>/dev/null \
+                | jq -r '.access_token // empty' 2>/dev/null) || true
             if [[ -n "$ts_token" ]]; then
                 echo "  exe.dev proxy reachable — generating auth key (OAuth)"
                 # Clean stale nodes with same hostname (prevents -2 suffix)
@@ -1676,7 +1693,12 @@ setup_tailscale() {
         if [[ -n "$ts_key" ]]; then
             $SUDO tailscale up --ssh --accept-dns --accept-routes --authkey="$ts_key" --hostname "$TS_HOSTNAME" 2>/dev/null && echo "  [+] Tailscale up (SSH enabled, hostname=$TS_HOSTNAME)" || echo "  [!] tailscale up failed"
         else
-            echo "  No auth key found. Run: sudo tailscale up --ssh"
+            # Expected on a fresh VM: tailscale-api is deliberately NOT attached
+            # at creation (least authority). The control plane attaches it just
+            # for the join and detaches after — see skills/join-tailnet. So this
+            # branch is the normal path during provisioning, not a failure.
+            echo "  Tailscale installed but not joined — no tailscale-api integration"
+            echo "  attached (expected during provisioning; the control plane joins it)."
         fi
     fi
 
