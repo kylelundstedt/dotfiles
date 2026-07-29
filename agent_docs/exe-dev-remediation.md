@@ -45,6 +45,39 @@ and verified `denied` on all ten VMs.
 - **C (cutover):** **not started.** No existing VM has been recreated.
 - **D (retirement):** not started. Nothing deleted.
 
+### The size question, answered (2026-07-29)
+
+A **fully provisioned** exeslim-dev dev VM — base + `provision-iv.sh` +
+dotfiles `install.sh`, no work repos — measures **2.0 GB** (`df -h /` on
+`iv-canary-b`), with 0 failed units and `shelley.socket` active. This replaces
+the ~2.2 GB arithmetic estimate, which was close.
+
+Live exeuntu dev VMs for comparison (`fs_used_gb`, the billing metric):
+`iv-docs` 10.0 GB, `iv-home` 7.2 GB, `iv-gitlake` 6.9 GB. **≈5–8 GB per dev VM.**
+
+Where the 2.0 GB goes:
+
+| Area                    | Size  |
+| ----------------------- | ----- |
+| `/home` total           | 1.1 G |
+| — `.local/share/claude` | 263 M |
+| — `.local/share/uv`     | 234 M |
+| — `.local/share/fnm`    | 212 M |
+| — `.local/bin/carapace` | 78 M  |
+| — `.local/bin/uv`       | 53 M  |
+| — `.local/bin/op`       | 40 M  |
+| `/usr`                  | 812 M |
+| `/var`                  | 76 M  |
+
+Further trims if wanted: `carapace` is the largest single binary at 78 MB and
+only supplies shell completions; `op` (40 MB) matters only where the 1Password
+CLI is actually used. Neither was cut — noting, not doing.
+
+**Caveat:** this is `df` on the VM. exe.dev's own `fs_used_gb` had no datapoint
+for a VM this new, and on existing VMs `fs_used_gb` runs materially higher than
+`disk_used_gb` (iv-docs: 10.0 vs 7.1). Expect the billed figure to exceed 2.0 GB
+somewhat; the ~5–8 GB saving is the robust claim, not the absolute.
+
 **Nothing is half-cut-over.** The only changes to live VMs were integration
 detachments (each verified non-breaking) and removal of packages measured
 unused. No VM was recreated, renamed, or repointed.
