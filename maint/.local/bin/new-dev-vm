@@ -443,9 +443,11 @@ else
         echo \"  disk: \$(df -h / | tail -1 | awk \"{print \\\$3}\")\"
         for q in ~/*/_quarto.yml; do
             [ -e \"\$q\" ] || continue
+            d=\$(basename \$(dirname \"\$q\"))
+            case \"\$d\" in iv-image|dotfiles) continue ;; esac
             command -v quarto >/dev/null \
-                && echo \"  renderer: quarto present (\$(basename \$(dirname \$q)) needs it)\" \
-                || echo \"  !! renderer MISSING: \$(basename \$(dirname \$q)) has _quarto.yml but quarto is not installed\"
+                && echo \"  renderer: quarto present (\$d needs it)\" \
+                || echo \"  !! renderer MISSING: \$d has _quarto.yml but quarto is not installed\"
             break
         done'"
 
