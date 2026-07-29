@@ -192,18 +192,29 @@ install_release_asset() {
 install_github_binary() {
     local repo="$1" pattern="$2" bin_name="$3"
     local inner_path="${4:-$bin_name}"
-    local asset_url api_response
+    local asset_url api_response http_code
     # Resolve latest release asset URL (retry once on 403 rate-limit)
     local gh_api_url="https://api.github.com/repos/${repo}/releases/latest"
     local attempt
+    # NO `-f`. It makes curl exit non-zero on 4xx and DISCARD the body, so the
+    # rate-limit check below was reading curl's own error text ("curl: (22) The
+    # requested URL returned error: 403") instead of GitHub's JSON — it never
+    # matched, and every rate-limited tool was reported as
+    # "no matching release asset". Cost us a silent codex skip on the
+    # 2026-07-29 canary, where the asset existed the whole time. Capture the
+    # status separately and keep the body.
+    local body_file; body_file=$(mktemp)
     for attempt in 1 2; do
         if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-            api_response=$(curl -fsSL -H "Authorization: token $GITHUB_TOKEN" "$gh_api_url" 2>&1) && break
+            http_code=$(curl -sSL -o "$body_file" -w '%{http_code}' \
+                -H "Authorization: token $GITHUB_TOKEN" "$gh_api_url" 2>/dev/null) || http_code=000
         else
-            api_response=$(curl -fsSL "$gh_api_url" 2>&1) && break
+            http_code=$(curl -sSL -o "$body_file" -w '%{http_code}' "$gh_api_url" 2>/dev/null) || http_code=000
         fi
+        [[ "$http_code" == "200" ]] && break
         [[ $attempt -eq 1 ]] && sleep $((RANDOM % 5 + 2))
     done
+    api_response=$(cat "$body_file" 2>/dev/null); rm -f "$body_file"
     # `|| true`: with no match (e.g. rate-limited response) the grep pipeline
     # fails, and under set -euo pipefail the failed assignment would abort the
     # whole script before the empty-check below can report why.
@@ -214,10 +225,13 @@ install_github_binary() {
         | sed 's/"browser_download_url": "//;s/"//' || true)
     if [[ -z "$asset_url" ]]; then
         # Distinguish rate-limit from a genuine missing asset so it's not a silent skip.
-        if echo "$api_response" | grep -q "API rate limit exceeded"; then
-            echo "  [!] $bin_name: GitHub API rate limit hit (unauthenticated) — not installed"
+        # Report the status too: "no matching asset" is only credible on a 200.
+        if echo "$api_response" | grep -q "API rate limit exceeded" || [[ "$http_code" == "403" || "$http_code" == "429" ]]; then
+            echo "  [!] $bin_name: GitHub API rate limit (HTTP $http_code, unauthenticated is 60/hr) — not installed"
+        elif [[ "$http_code" != "200" ]]; then
+            echo "  [!] $bin_name: GitHub API returned HTTP $http_code — not installed"
         else
-            echo "  [!] $bin_name: no matching release asset"
+            echo "  [!] $bin_name: no matching release asset (pattern: $pattern)"
         fi
         return 1
     fi
@@ -519,6 +533,27 @@ install_python_clis() {
         echo "  [!] uv not available, skipping"
         return 0
     fi
+
+    # A `python3` on PATH, for boxes that have none. exeslim(-dev) ships no
+    # Python at all — verified on a canary 2026-07-29, `python3: NONE` — while
+    # exeuntu happened to carry one, so nothing noticed until we left it.
+    # Hard dependencies that would otherwise fail outright: iv-image's
+    # bin/render-md-site, bin/gen-llms-txt, bin/shot and tests/sitediff.py all
+    # start `#!/usr/bin/env python3`. herdr's agent-state hooks guard with
+    # `command -v python3 || exit 0`, so they degrade SILENTLY — worse than
+    # failing, since agent tracking just stops.
+    #
+    # Costs no extra disk: `uv tool install` below already downloads a managed
+    # CPython (it has no system one to borrow), so --default only adds the
+    # python/python3 shims to ~/.local/bin. Measured: 113 MB before and after.
+    if [[ "$OS" == "linux" ]] && ! command -v python3 >/dev/null 2>&1; then
+        if uv python install --default >/dev/null 2>&1; then
+            echo "  [+] python3 (uv-managed, $(python3 --version 2>&1 | awk '{print $2}'))"
+        else
+            echo "  [!] python3: uv python install --default failed"
+        fi
+    fi
+
     # snowflake-cli provides the `snow` command
     if command -v snow >/dev/null 2>&1; then
         uv tool upgrade snowflake-cli >/dev/null 2>&1 && echo "  [+] snow (upgraded)" || echo "  [+] snow (up to date)"
