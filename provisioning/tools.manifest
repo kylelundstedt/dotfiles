@@ -23,6 +23,10 @@
 
 # exeuntu-provided (asserted in-repo: jq per iv-image setup-mcp.sh; git/curl
 # required by provision-iv.sh before it installs anything)
+# personal-mac: installed on macOS only. Measured 2026-07-29 as unused on dev
+# VMs — gh is unauthenticated there (git uses the exe.dev integration proxy)
+# and croc is ad-hoc with no state. 60 MB/VM.
+
 base git
 base curl
 base jq
@@ -57,9 +61,9 @@ personal bat
 personal fzf
 personal rg
 personal yq
-personal gh
+personal-mac gh
 personal carapace
-personal croc
+personal-mac croc
 personal cship
 personal snow
 personal claude

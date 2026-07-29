@@ -107,8 +107,22 @@ IS_IV_VM=false
 # want() also refuses team-layer tools (tools.manifest) on IV VMs: those are
 # iv-image's, version-pinned — installing (or --upgrade'ing) the floating
 # dotfiles copy would shadow the pin.
+# Personal tools that earn their place on a Mac but not on a dev VM. Measured
+# 2026-07-29: gh 39 MB, croc 21 MB per VM, neither used there. `gh` is not
+# authenticated on any VM (git goes over the exe.dev integration proxy, so
+# install.sh's own `gh auth token` line is a no-op), and croc is an ad-hoc
+# transfer tool with no state. Both install normally on macOS.
+#
+# NOT on this list, having been checked rather than assumed: tigris (18 vendored
+# agent skills depend on it), carapace (loaded by every shell for completions),
+# duckdb and the agent CLIs.
+VM_SKIP_TOOLS="gh croc"
+
 want() {
     if [[ "$IS_IV_VM" == true ]] && grep -qE "^team[[:space:]]+$1[[:space:]]*$" "$DOTFILES_DIR/provisioning/tools.manifest" 2>/dev/null; then
+        return 1
+    fi
+    if [[ "$OS" == "linux" ]] && [[ " $VM_SKIP_TOOLS " == *" $1 "* ]]; then
         return 1
     fi
     need "$1" || [[ "$UPGRADE" == true ]]
