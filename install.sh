@@ -218,11 +218,17 @@ install_github_binary() {
     # `|| true`: with no match (e.g. rate-limited response) the grep pipeline
     # fails, and under set -euo pipefail the failed assignment would abort the
     # whole script before the empty-check below can report why.
+    # `:[[:space:]]*` — NOT a literal `": "`. GitHub's API returns pretty-printed
+    # JSON most of the time but sometimes compact (`"key":"value"`, no space),
+    # and the hard-coded space silently matched ZERO urls when it did. Caught
+    # 2026-07-29: codex failed on a canary with a 200 response whose body
+    # plainly contained the asset; minutes later the same VM got the spaced form
+    # for the same repo. Any tool on this path could hit it, at random.
     asset_url=$(echo "$api_response" \
-        | grep -oE "\"browser_download_url\": \"[^\"]+\"" \
+        | grep -oE "\"browser_download_url\":[[:space:]]*\"[^\"]+\"" \
         | grep -E "$pattern" \
         | head -1 \
-        | sed 's/"browser_download_url": "//;s/"//' || true)
+        | sed -E 's/.*"browser_download_url":[[:space:]]*"//; s/"$//' || true)
     if [[ -z "$asset_url" ]]; then
         # Distinguish rate-limit from a genuine missing asset so it's not a silent skip.
         # Report the status too: "no matching asset" is only credible on a 200.
