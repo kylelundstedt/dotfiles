@@ -394,3 +394,25 @@ Non-interactive SSH gets `PATH=/bin:/usr/bin:/sbin:/usr/sbin:/exe.dev/bin:/usr/l
 absolute paths, not `command -v`**, or it will report every user-installed tool
 missing. Both false negatives were caught only because they contradicted
 something already known.
+
+## Gitignored generated output (2026-07-29)
+
+The invariant verified here — git and Tigris hold all permanent state — covers
+**tracked** state. It says nothing about gitignored build output, and on at
+least one VM that is the largest thing on the box.
+
+`iv-gitlake-examples` carried ~2.5 GB that exists nowhere else: 1.0 GB in
+`gitlake-examples/tpch-mortgage/{out,out-dev-a,out-dev-b}` (336 MB each, ignored
+via that repo's `.gitignore` lines 7-8) plus 1.5 GB of TPC-H datasets in `/tmp`
+(`tpchm-national-d8-l6`, `-v1-seed42`, `-v1-seed7`). `git status` was clean and
+`.git` was 1.9 MB, so every tracked-state check passed while the bulk was
+invisible to it.
+
+**Resolved: that data is regenerable by design** — generating synthetic mortgage
+data is the entire purpose of the committed `mortgage_dbgen/` package, so the
+VM retires with no special handling. Confirmed with Kyle 2026-07-29.
+
+**The check to keep**, before retiring any VM: `git status` clean is not
+sufficient. Look for ignored bulk (`du -shx ~/*/`, compare against `.git` size)
+and ask whether it is reproducible or precious. `/tmp` scratch is always
+disposable — `prune-disk --system` removes it at 3 days anyway.
