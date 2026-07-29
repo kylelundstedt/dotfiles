@@ -65,12 +65,36 @@ fi
 # Two-step (U11, 2026-07): the proxy injects the Tailscale OAuth client's
 # Basic credentials on every request, so only the token exchange goes through
 # it; the short-lived Bearer token then mints against the public API directly.
-token=$(curl -fsSL --connect-timeout 5 --max-time 15 \
-  -X POST -d "grant_type=client_credentials" \
-  "${PROXY%/}/api/v2/oauth/token" | jq -r '.access_token // empty' || true)
+# RETRY rather than trusting one call. Observed 2026-07-29 on a fresh VM: this
+# exchange returned 403 immediately after `integrations attach` succeeded, and
+# the whole join aborted. A manual re-attach then probed 200 on its FIRST try,
+# and a full re-run of this script also succeeded first try — so the failure is
+# intermittent and the obvious "attachment takes a few seconds to propagate"
+# story is NOT established. One 403, two immediate successes, cause unconfirmed.
+#
+# The retry is therefore defensive, not a fix for a diagnosed race. It costs
+# nothing when the first call works. If this ever burns all six attempts the
+# cause is something else and the message below says where to look.
+#
+# Note this window is new: before the attach-then-detach change the integration
+# was attached at creation, so nothing ever called the proxy seconds after an
+# attach.
+#
+# Never print a response body here: it carries the access token.
+token=""
+for attempt in 1 2 3 4 5 6; do
+  token=$(curl -fsSL --connect-timeout 5 --max-time 15 \
+    -X POST -d "grant_type=client_credentials" \
+    "${PROXY%/}/api/v2/oauth/token" 2>/dev/null | jq -r '.access_token // empty' 2>/dev/null || true)
+  [ -n "$token" ] && break
+  echo "join-tailnet: proxy not ready (attempt $attempt/6); retrying in 10s" >&2
+  sleep 10
+done
 if [ -z "$token" ]; then
-  echo "join-tailnet: OAuth token exchange via ${PROXY} failed" >&2
-  echo "  is the tailscale-api integration attached to this VM (--tag=iv)?" >&2
+  echo "join-tailnet: OAuth token exchange via ${PROXY} failed after 6 attempts" >&2
+  echo "  the attach propagates in seconds, so this is not the delay — check" >&2
+  echo "  'integrations list' for a tailscale-api attachment on this VM, and" >&2
+  echo "  'integrations test tailscale-api' for the credential itself." >&2
   exit 1
 fi
 
