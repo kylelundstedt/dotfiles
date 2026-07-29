@@ -228,3 +228,16 @@ credentials — `~/.agentsview/config.toml` and `~/.config/agentsview/source.env
 both do. Query for the field you need (`awk`/`grep` printing only the key), or
 diff structurally. Two separate leaks in one session came from printing a body
 "just to check the format".
+
+## Deliberate grants (do not "clean up")
+
+**`repo-ave-adapters-rw` on `iv-docs` as well as `iv-ave-adapters`.** Two VMs
+can push to ave-adapters, which a least-authority pass will flag. It is
+intentional: docs work edits and commits ave-adapters directly from `iv-docs`.
+Read-only there was considered and rejected — it would be routed around (ssh to
+the other box, or re-attach `-rw` when inconvenient), and a control that gets
+routed around is worse than none, because the attachment list then
+misrepresents the real authority. Confirmed 2026-07-29.
+
+The narrower `repo-ave-adapters-ro` still exists and is correct for
+`iv-foundry-stage2`, which only reads.

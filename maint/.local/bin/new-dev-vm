@@ -83,6 +83,12 @@ map_int() {
         github-kylelundstedt-iv-image)   echo "" ;;   # dropped — see why_int
         github-kylelundstedt-dotfiles)   echo "" ;;   # dropped — see why_int
         github-kylelundstedt-iv-docs)    echo repo-iv-docs-rw ;;
+        # DELIBERATE: this stays -rw on iv-docs as well as iv-ave-adapters.
+        # Docs work edits and commits ave-adapters directly from iv-docs, so
+        # read-only there would be routed around (ssh to the other box, or
+        # re-attach -rw when inconvenient) — and a control that gets routed
+        # around is worse than none, because the attachment list then
+        # misrepresents the real authority. Confirmed with Kyle 2026-07-29.
         github-kylelundstedt-ave-adapters) echo repo-ave-adapters-rw ;;
         ave-adapters-ro)                 echo repo-ave-adapters-ro ;;
         github-kylelundstedt-gitlake)    echo repo-gitlake-rw ;;
