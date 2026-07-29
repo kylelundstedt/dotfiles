@@ -260,6 +260,29 @@ if [[ -n "$RECREATE" ]]; then
                 r=$(sed -E 's#.*[/:]([^/]+/[^/]+)\.git$#\1#' <<<"$u")
                 [[ "$r" =~ /(dotfiles|iv-image)$ ]] && continue
                 [[ "$r" == "$u" ]] && continue          # unparseable remote
+
+                # Only clone what the replacement can actually reach. A VM can
+                # hold a checkout of a repo whose integration we are
+                # deliberately NOT carrying forward — iv-docs had
+                # ~/entire-agent-migration long after entire-agent-shelley was
+                # detached from it — and cloning that fails mid-run with a 403
+                # after the VM is already built. Narrowing authority should drop
+                # the checkout, not break the recreate.
+                granted=""
+                for iname in $(awk -v repo="repos=$r" '$0 ~ repo {print $1}' <<<"$int_list"); do
+                    [[ " ${INTEGRATIONS[*]-} " == *" $iname "* ]] && granted=1
+                    for t in ${TAGS[@]+"${TAGS[@]}"}; do
+                        awk -v n="$iname" -v tg="tag:$t" '$1==n{for(i=1;i<=NF;i++) if($i==tg) f=1} END{exit !f}' <<<"$int_list" && granted=1
+                    done
+                done
+                # A public repo needs no integration at all.
+                if [[ -z "$granted" ]] && command -v gh >/dev/null 2>&1; then
+                    [[ "$(gh repo view "$r" --json isPrivate -q .isPrivate 2>/dev/null)" == "false" ]] && granted=1
+                fi
+                if [[ -z "$granted" ]]; then
+                    echo "  - repo $r (skipped: nothing grants it on the replacement)"
+                    continue
+                fi
                 REPOS+=("$r"); echo "  + repo $r (checked out on $RECREATE)"
             done
         fi
