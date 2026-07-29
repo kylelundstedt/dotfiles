@@ -1,0 +1,10 @@
+worktrees/ave-m1-cli-cleanup|kylelundstedt/ave-adapters|p1-s1-m1-cli-cleanup|18413d5476bcf010cd604460399c47878cd29426
+worktrees/ave-m1-package-runtime|kylelundstedt/ave-adapters|p1-s1-m1-package-runtime|e94c04e797efd025185b70b7f4fe5b8afb7945e8
+worktrees/ave-m2-package-loader|kylelundstedt/ave-adapters|p1-s1-m2-package-loader|762f5fa50e7d42bd13229eb5bc91d306a786df3b
+worktrees/ave-m3-developer-inner-loop|kylelundstedt/ave-adapters|p1-s1-m3-developer-inner-loop|192e137831a75d363f231ee5df7d7c4ceaf71f37
+worktrees/ave-m4-governed-refresh|kylelundstedt/ave-adapters|p1-s1-m4-governed-refresh|8398366cee991d385fc8ce4f76c2bf5dd6a37907
+worktrees/ave-p1-s1-origin-recovery|kylelundstedt/ave-adapters|recovery/p1-s1-origin-main|199234fab163945265b222ef9b2fd402778ded9d
+worktrees/ave-m5-stateful-change-review/adapters|kylelundstedt/ave-adapters|p1-s1-m5-stateful-change-review|ad375f8e98f88bfef8ec208de68bca0a7741a8ed
+worktrees/ave-m6-foundry-reference-acceptance/adapters|kylelundstedt/ave-adapters|p1-s1-m6-foundry-reference-acceptance|b5e7c4c555f9ba1a24b4ae29649077f754bb31b5
+github/kylelundstedt/ave-adapters|kylelundstedt/ave-adapters|main|199234fab163945265b222ef9b2fd402778ded9d
+github/kylelundstedt/thoughts|git@github.com:kylelundstedt/thoughts.git|main|e2a2d3f6361d60bdc9081d6d5164423a0303978f
