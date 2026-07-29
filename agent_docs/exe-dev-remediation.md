@@ -21,12 +21,12 @@ prerequisite for migrating, not a product of it.
 It also front-loaded a full baseline of the entire fleet before anything could
 move, which gated a live security finding behind weeks of survey work.
 
-| Track                       | Scope                                                       | Status                           |
-| --------------------------- | ----------------------------------------------------------- | -------------------------------- |
-| **0 — Control plane**       | Agent forwarding, socket persistence, `auto:all` cleanup    | **Done**                         |
-| **1 — Free reclaim**        | `/tmp`, journal, apt, pip; extend `prune-disk` past `$HOME` | **Done** — ~7.8 GB, fleet 68.9 G |
-| **2a — Trim our own layer** | aws on-demand, de-duplicate, drop `pi`                      | **Done** — ~6.0 GB, fleet 63.1 G |
-| **2b — Slim dev base**      | exeslim + `git`/`uv`/`jq`/`unzip` + Shelley label           | Premise fixed; label untested    |
+| Track                       | Scope                                                       | Status                                 |
+| --------------------------- | ----------------------------------------------------------- | -------------------------------------- |
+| **0 — Control plane**       | Agent forwarding, socket persistence, `auto:all` cleanup    | **Done**                               |
+| **1 — Free reclaim**        | `/tmp`, journal, apt, pip; extend `prune-disk` past `$HOME` | **Done** — ~7.8 GB, fleet 68.9 G       |
+| **2a — Trim our own layer** | aws on-demand, de-duplicate, drop `pi`                      | **Done** — ~6.0 GB, fleet 63.1 G       |
+| **2b — Slim dev base**      | exeslim-dev image, Shelley units, canary-proven             | **Proven** — 276 MB fresh; not adopted |
 
 ---
 
@@ -398,7 +398,113 @@ Corrected in `iv-image` (`a107dcc`). **Not yet tested by us** — documentation
 evidence only. Our one exeslim VM (`rss-feed`) was built without the label, so
 it confirms the default-off behaviour and nothing about the opt-in.
 
-### Gating experiment, before any adoption decision
+### Canary results — 2026-07-29, two VMs, both since deleted
+
+Everything below was measured on `canary-slimdev` and `canary-shelleyunit`, not
+predicted.
+
+| Check                                         | Result                                                                                 |
+| --------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Fresh VM                                      | **276 MB** (vs exeuntu ~4 GB)                                                          |
+| + `provision-iv.sh` (35 skills, lock written) | 1.1 GB, **50 s**                                                                       |
+| + dotfiles overlay (no agent CLIs)            | 2.2 GB                                                                                 |
+| Failed units                                  | 0                                                                                      |
+| linger / `/run/user/1000`                     | present — AgentsView's user-unit prerequisite holds                                    |
+| `/exe.dev/etc/image.conf`                     | **present**, and the lock file recorded this repo's commit sha, so provenance survives |
+| `/headless-shell`                             | **absent** (Shelley's browser, 252 MB on exeuntu)                                      |
+| `EXEUNTU=1`                                   | absent, as expected                                                                    |
+
+Three defects surfaced that no amount of reading would have found:
+
+1. **`provision-iv.sh` aborted silently.** A guarded `systemctl --user disable`
+   followed by an **unguarded** `daemon-reload`, under `set -e`. Provisioning
+   died after installing every binary but before the agent config, MCP servers,
+   skills and the lock file — a box that looked provisioned, with 0 skills.
+   Latent on any first provision where the user manager has no bus address.
+   Fixed in `iv-image` (`aac5044`) with a `uctl` wrapper.
+2. **`apex` needs `libyaml-0.so.2`**, absent from exeslim. Checksum passed, then
+   the binary failed to load. An `ldd` sweep confirmed apex is the only affected
+   binary, so it is the whole gap.
+3. **`DBUS_SESSION_BUS_ADDRESS`** is an image `ENV` on exeuntu and unset on
+   exeslim. Every `systemctl --user` call failed despite an active user manager,
+   linger set and `/run/user/1000/bus` existing — socket present, client had no
+   address for it. That one variable caused defect 1 to fire.
+
+### Shelley: the label installs it, the image must run it
+
+`LABEL exe.dev/install-shelley=true` does exactly what the docs say — installs
+the binary to `/usr/local/bin` and makes the UI assume Shelley is present. It
+does **not** run it, and creates no unit: nothing under `/etc/systemd`,
+`/run/systemd`, `/usr/lib/systemd` or `/exe.dev`. exeuntu ships its own
+`shelley.socket`/`shelley.service`; a custom image needs equivalents.
+
+Ours are written against `shelley serve -h` — `-systemd-activation`,
+`-require-header`, `-db`, `-config` are all documented flags — rather than
+copied from exeuntu, so they stay maintainable when exe.dev ships a new Shelley.
+
+**Socket activation is load-bearing, not stylistic.** `shelley serve -port 9999`
+binds `*:9999` (measured), and these VMs sit behind a public HTTPS proxy.
+Letting systemd own the bind keeps it on `127.0.0.1:9999`. Verified on
+`canary-shelleyunit`:
+
+```
+shelley.socket   enabled, active
+shelley.service  inactive        <- correct: socket-activated
+listener         127.0.0.1:9999  <- loopback, not *:9999
+request          HTTP 200 -> shelley.service became active
+failed units     0
+```
+
+### Quarto — corrected, and where it actually goes
+
+An earlier estimate here claimed ~2.5 GB from making Quarto on-demand. **That
+was wrong and was written without checking usage.** Five of six VMs have a real
+site with `_site/` build output and had run the binary within the week.
+
+What is true: **no site uses Quarto's computational features** — no r/python/
+julia/ojs blocks anywhere. Quarto is a 423 MB static site generator for plain
+markdown, which is indefensible on size but not removable by deletion.
+
+So `provision-iv.sh` now installs Quarto only where a `_quarto.yml` exists
+(`IV_QUARTO=1` forces it) — fresh VMs stop carrying it; existing sites keep it.
+
+The real replacement, given the requirement "render the markdown docs and follow
+the existing git repo structure": **not** mdBook (wants `SUMMARY.md`), Hugo or
+Zola (want their own `content/` layout) — all would fight the repo structure.
+Two candidates that follow it, both measured on the canary against a real doc
+with a GFM table, code fences and YAML frontmatter:
+
+| Tool      |       Size | Notes                                                                                                                                                                  |
+| --------- | ---------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lowdown` | **268 KB** | In Ubuntu 24.04 (`1.1.0-1`), so apt owns updates — no pin, no checksum, no supply chain of our own. Consumed frontmatter into `<title>`, rendered table + fences, rc=0 |
+| `apex`    |     1.2 MB | Already installed and pinned by `provision-iv.sh`; also does `-t gfm` normalisation and terminal output                                                                |
+| Quarto    |     423 MB | ~1,500x larger than either                                                                                                                                             |
+
+The renderer is the easy part; the work is a walk script that mirrors the repo
+tree, rewrites `.md` links to `.html`, and applies include/exclude globs (which
+is all `_quarto-internal.yml` / `_quarto-product.yml` are). The `.md` twins are
+free — the sources are already markdown — and `gen-llms-txt.py` is already
+standalone. What is lost is Quarto's built-in search.
+
+Do it on `gitlake` or `ave-adapters` first. `iv-docs` is 126 pages across 3
+profiles with a post-render pipeline and is client-facing; it goes last.
+
+### Remaining trim candidates, verified as unconfigured
+
+Same test that settled aws — is it actually configured, rather than merely
+present:
+
+```
+rclone   no ~/.config/rclone/rclone.conf   on any VM
+tigris   no config                          on any VM
+gh       `gh auth status` fails             on any VM
+```
+
+~206 MB/VM. `carapace` (78 MB) is **not** a candidate — it genuinely runs on
+every shell for completions. Note `install.sh`'s `GITHUB_TOKEN=$(gh auth token)`
+is a no-op on VMs as a result.
+
+### Original gating checklist (all now answered)
 
 One throwaway canary answers everything: does `shelley_url` appear, does the UI
 button appear, does Shelley _run_ on a base lacking git, does `/headless-shell`
