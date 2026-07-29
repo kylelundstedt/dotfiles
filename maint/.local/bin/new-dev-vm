@@ -46,6 +46,74 @@ NAME=""; IMAGE="$IMAGE_DEFAULT"; REPOS=(); TAGS=(); INTEGRATIONS=()
 RECREATE=""; DRY=false; SKIP_OVERLAY=false; INHERIT=true
 
 die() { echo "new-dev-vm: $*" >&2; exit 1; }
+
+# --- integration/tag migration map (TRANSITIONAL) ---------------------------
+# Delete this block once every VM has been recreated and the old names are gone.
+#
+# The convention it migrates to:
+#   integration = <kind>-<target>-<access>   kind = repo|bucket|api|svc
+#                                            access always marked (ro|rw), never
+#                                            a silent default
+#   tag         = a CAPABILITY BUNDLE, never an owner. `tag:mcp-agent` says
+#                 "runs our agent stack, needs the MotherDuck and GitHub Copilot
+#                 proxies". Reading a VM's tags tells you what it may reach.
+#
+# Renaming in place would break the `~/iv-image` remote on every live VM (a
+# per-integration proxy host is baked into the clone URL), so instead each VM
+# picks up the new names when it is recreated. Old and new coexist until the
+# last VM migrates.
+map_tag() {
+    case "$1" in
+        iv)                         echo mcp-agent ;;
+        notion-api)                 echo notion ;;
+        kylelundstedt-fannie-sflpd) echo fannie-sflpd ;;
+        motherduck-api|llm)         echo "" ;;   # dropped — see why_tag
+        *)                          echo "$1" ;;
+    esac
+}
+why_tag() {
+    case "$1" in
+        motherduck-api) echo "dead — no integration is attached to this tag" ;;
+        llm)            echo "redundant — the llm integration is auto:all" ;;
+        *)              echo "unused" ;;
+    esac
+}
+map_int() {
+    case "$1" in
+        github-kylelundstedt-iv-image)   echo repo-iv-image-ro ;;
+        github-kylelundstedt-dotfiles)   echo "" ;;   # dropped — see why_int
+        github-kylelundstedt-iv-docs)    echo repo-iv-docs-rw ;;
+        github-kylelundstedt-ave-adapters) echo repo-ave-adapters-rw ;;
+        ave-adapters-ro)                 echo repo-ave-adapters-ro ;;
+        github-kylelundstedt-gitlake)    echo repo-gitlake-rw ;;
+        github-kylelundstedt-gitlake-examples) echo repo-gitlake-examples-rw ;;
+        github-kylelundstedt-thoughts)   echo repo-thoughts-rw ;;
+        github-kylelundstedt-iv-home)    echo repo-iv-home-rw ;;
+        github-kylelundstedt-entire-agent-shelley) echo repo-entire-agent-shelley-rw ;;
+        kylelundstedt-fannie-sflpd)      echo repo-fannie-sflpd-rw ;;
+        # NOT renamed here. s3/http-proxy/catalog integrations hold real
+        # credentials, so the migration for them is `integrations rename`, which
+        # preserves the secret — not create-new-and-attach, which would mean
+        # re-entering it. They keep their old names until every VM is migrated,
+        # then get renamed in one pass:
+        #   gitlake-examples               -> bucket-gitlake-examples
+        #   iv-foundry-stage2-fannie-sflpd -> bucket-fannie-sflpd
+        #   fannie-token                   -> api-fannie-sso
+        #   telnyx-test                    -> svc-telnyx
+        #   motherduck-mcp/github-mcp-home/tailscale-api/notion-api/motherduck-api
+        #     -> api-* (these are hostname-coupled: the name IS
+        #        <name>.int.exe.xyz, so mcp.manifest, install.sh and
+        #        join-tailnet.sh change with them)
+        *)                               echo "$1" ;;
+    esac
+}
+why_int() {
+    case "$1" in
+        github-kylelundstedt-dotfiles)
+            echo "dotfiles is a PUBLIC repo — clones over github.com, needs no credential" ;;
+        *)  echo "unused" ;;
+    esac
+}
 step() { printf '\n== %s\n' "$*"; }
 run() { if [[ "$DRY" == true ]]; then echo "  [dry-run] $*"; else "$@"; fi; }
 
@@ -136,14 +204,55 @@ if [[ -n "$RECREATE" ]]; then
         # replacement only gets them if we ask for them explicitly.
         local_direct=$(awk -v vm="vm:$RECREATE" '{for(i=1;i<=NF;i++) if($i==vm){print $1; break}}' <<<"$int_list")
 
+        missing_int=()
         for t in $local_tags; do
-            if [[ " ${TAGS[*]-} " == *" $t "* ]]; then continue; fi
-            TAGS+=("$t"); echo "  + tag $t"
+            mapped=$(map_tag "$t")
+            if [[ -z "$mapped" ]]; then echo "  - tag $t (dropped: $(why_tag "$t"))"; continue; fi
+            [[ "$mapped" != "$t" ]] && echo "  ~ tag $t -> $mapped"
+            if [[ " ${TAGS[*]-} " == *" $mapped "* ]]; then continue; fi
+            TAGS+=("$mapped"); [[ "$mapped" == "$t" ]] && echo "  + tag $mapped"
         done
         for i in $local_direct; do
-            if [[ " ${INTEGRATIONS[*]-} " == *" $i "* ]]; then continue; fi
-            INTEGRATIONS+=("$i"); echo "  + integration $i (direct)"
+            mapped=$(map_int "$i")
+            if [[ -z "$mapped" ]]; then echo "  - integration $i (dropped: $(why_int "$i"))"; continue; fi
+            [[ "$mapped" != "$i" ]] && echo "  ~ integration $i -> $mapped"
+            if [[ " ${INTEGRATIONS[*]-} " == *" $mapped "* ]]; then continue; fi
+            INTEGRATIONS+=("$mapped"); [[ "$mapped" == "$i" ]] && echo "  + integration $mapped (direct)"
+            # A mapped name that does not exist yet would fail at create time,
+            # after the old VM has already been quiesced. Check now.
+            grep -qE "^$mapped[[:space:]]" <<<"$int_list" || missing_int+=("$mapped|$i")
         done
+
+        # A RENAMED TAG THAT GRANTS NOTHING is the quiet failure this whole
+        # migration is meant to avoid: the new VM comes up with tag:notion,
+        # looks correct in `ls`, and has simply lost Notion access. Compare what
+        # the old tag grants (mapped through map_int) against what the new one
+        # does, and refuse to proceed on a mismatch.
+        for t in $local_tags; do
+            mapped=$(map_tag "$t"); [[ -z "$mapped" || "$mapped" == "$t" ]] && continue
+            for old_grant in $(awk -v tg="tag:$t" '{for(i=1;i<=NF;i++) if($i==tg){print $1; break}}' <<<"$int_list"); do
+                want=$(map_int "$old_grant"); [[ -z "$want" ]] && continue
+                if ! awk -v tg="tag:$mapped" -v n="$want" '$1==n{for(i=1;i<=NF;i++) if($i==tg) found=1} END{exit !found}' <<<"$int_list"; then
+                    echo "  !! tag:$mapped does not grant $want (tag:$t granted $old_grant)"
+                    echo "     fix: ssh exe.dev integrations attach $want tag:$mapped"
+                    tag_gap=1
+                fi
+            done
+        done
+        [[ -n "${tag_gap:-}" ]] && die "renamed tag(s) would grant less than the original — see above"
+
+        if (( ${#missing_int[@]} )); then
+            echo ""
+            echo "  These renamed integrations do not exist yet. Create them, then re-run:"
+            for m in "${missing_int[@]}"; do
+                new="${m%%|*}"; old="${m##*|}"
+                # "<repo>|<flags>" — a single field would make the no-flags case
+                # ambiguous, and ${spec#* } then duplicated the repo name.
+                spec=$(awk -v n="$old" '$1==n{for(i=1;i<=NF;i++){if($i ~ /^repos=/) r=substr($i,7); if($i=="readonly") f=f" --readonly"; if($i=="act-as-user") f=f" --act-as-user"}; print r "|" f}' <<<"$int_list")
+                echo "    ssh exe.dev integrations add github --name=$new --repository=${spec%%|*}${spec#*|}"
+            done
+            die "missing renamed integrations (see above)"
+        fi
 
         # Report what arrives WITHOUT being asked for, so the full capability
         # set of the new VM is visible here rather than discovered later.
@@ -167,7 +276,10 @@ for t in "${TAGS[@]+"${TAGS[@]}"}"; do create_args+=("--tag=$t"); done
 for r in "${REPOS[@]+"${REPOS[@]}"}"; do
     INTEGRATIONS+=("github-$(echo "$r" | tr '/' '-')")
 done
-INTEGRATIONS+=("github-kylelundstedt-iv-image" "github-kylelundstedt-dotfiles")
+# iv-image is PRIVATE, so it needs an integration to clone. dotfiles is PUBLIC
+# and clones straight from github.com — it had an integration on all 7 VMs, a
+# credential for a repo that needs none. Not carried forward.
+INTEGRATIONS+=("repo-iv-image-ro")
 # De-duplicate: --recreate inheritance and the two unconditional bootstrap
 # integrations above overlap on any VM that already had them, which is every
 # dev VM. Emitting `--integration=X` twice is at best noise in the audit trail.
@@ -196,7 +308,7 @@ step "provision team layer (iv-image)"
 checkout=""
 [[ -n "$IV_PIN" ]] && checkout="&& git -C ~/iv-image checkout --detach $IV_PIN"
 run ssh -o ConnectTimeout=300 -o StrictHostKeyChecking=accept-new "$EDGE" "bash -lc '
-    git clone -q https://github-kylelundstedt-iv-image.int.exe.xyz/kylelundstedt/iv-image.git ~/iv-image $checkout
+    git clone -q https://github.int.exe.xyz/kylelundstedt/iv-image.git ~/iv-image $checkout
     ~/iv-image/provision-iv.sh'"
 
 # --- phase 3: personal overlay ---------------------------------------------
@@ -205,7 +317,7 @@ if [[ "$SKIP_OVERLAY" != true ]]; then
     # provision-iv.sh overwrites ~/.claude/settings.json with the team default,
     # so the overlay MUST run after it or the SessionStart refresh hook is lost.
     run ssh -o ConnectTimeout=600 "$EDGE" "bash -lc '
-        git clone -q https://github-kylelundstedt-dotfiles.int.exe.xyz/kylelundstedt/dotfiles.git ~/dotfiles
+        git clone -q https://github.com/kylelundstedt/dotfiles.git ~/dotfiles
         cd ~/dotfiles && ./install.sh'"
 fi
 
