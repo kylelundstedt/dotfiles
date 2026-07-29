@@ -25,6 +25,11 @@
 #   new-dev-vm --name iv-foo --repo kylelundstedt/foo
 #   new-dev-vm --name iv-foo --recreate iv-foo-old
 #   new-dev-vm --name iv-foo --dry-run
+#
+# --recreate copies the source VM's tags and directly-attached integrations to
+# the replacement, and prints what it will also inherit via tag: and auto:all.
+# --no-inherit builds a bare VM instead, for deliberately narrowing a VM that
+# has accumulated capabilities it no longer needs.
 set -euo pipefail
 
 # --- defaults ---------------------------------------------------------------
@@ -38,7 +43,7 @@ COLLECTOR_LABEL="gui/$(id -u)/com.kylelundstedt.agentsview"
 TAILNET_DOMAIN="dojo-sun.ts.net"
 
 NAME=""; IMAGE="$IMAGE_DEFAULT"; REPOS=(); TAGS=(); INTEGRATIONS=()
-RECREATE=""; DRY=false; SKIP_OVERLAY=false
+RECREATE=""; DRY=false; SKIP_OVERLAY=false; INHERIT=true
 
 die() { echo "new-dev-vm: $*" >&2; exit 1; }
 step() { printf '\n== %s\n' "$*"; }
@@ -61,6 +66,7 @@ while [[ $# -gt 0 ]]; do
         --tag) TAGS+=("${2:?}"); shift 2 ;;
         --integration) INTEGRATIONS+=("${2:?}"); shift 2 ;;
         --recreate) RECREATE="${2:?}"; shift 2 ;;
+        --no-inherit) INHERIT=false; shift ;;
         --skip-overlay) SKIP_OVERLAY=true; shift ;;
         --dry-run) DRY=true; shift ;;
         -h|--help) usage ;;
@@ -104,6 +110,52 @@ if [[ -n "$RECREATE" ]]; then
         '.vms[] | select(.vm_name==$n)' >/dev/null \
         || die "--recreate target does not exist: $RECREATE"
     echo "  recreate source: $RECREATE (will NOT be deleted by this script)"
+
+    # CARRY THE CAPABILITY SET FORWARD. Until 2026-07-29 this block only checked
+    # that the source existed — the replacement was built with whatever --tag /
+    # --integration the operator happened to remember, and a forgotten one does
+    # not fail at create time. It fails later, as a clone that cannot
+    # authenticate or an MCP server that is quietly absent, on a VM that already
+    # looks healthy. `iv-docs` carries six attachments plus a tag; reproducing
+    # that from memory is not a reasonable ask.
+    #
+    # exe.dev fixes both image and integrations at creation, so getting this
+    # wrong is not adjustable afterwards — it is another recreate.
+    if [[ "$INHERIT" == true ]]; then
+        step "inherit capabilities from $RECREATE"
+
+        local_tags=$(ssh -o ConnectTimeout=30 exe.dev ls --json 2>/dev/null \
+            | jq -r --arg n "$RECREATE" '.vms[] | select(.vm_name==$n) | .tags[]?')
+
+        # Attachment specs live at the end of each `integrations list` row as
+        # bare tokens (vm:NAME, tag:NAME, auto:all). Match the token, not the
+        # column, since the middle columns vary by integration type.
+        int_list=$(ssh -o ConnectTimeout=30 exe.dev integrations list 2>/dev/null)
+
+        # Directly attached (vm:$RECREATE) — these do NOT follow a tag, so the
+        # replacement only gets them if we ask for them explicitly.
+        local_direct=$(awk -v vm="vm:$RECREATE" '{for(i=1;i<=NF;i++) if($i==vm){print $1; break}}' <<<"$int_list")
+
+        for t in $local_tags; do
+            if [[ " ${TAGS[*]-} " == *" $t "* ]]; then continue; fi
+            TAGS+=("$t"); echo "  + tag $t"
+        done
+        for i in $local_direct; do
+            if [[ " ${INTEGRATIONS[*]-} " == *" $i "* ]]; then continue; fi
+            INTEGRATIONS+=("$i"); echo "  + integration $i (direct)"
+        done
+
+        # Report what arrives WITHOUT being asked for, so the full capability
+        # set of the new VM is visible here rather than discovered later.
+        for t in $local_tags; do
+            awk -v tg="tag:$t" '{for(i=1;i<=NF;i++) if($i==tg){print "  . " $1 " (inherited via tag:" substr(tg,5) ")"; break}}' <<<"$int_list"
+        done
+        awk '{for(i=1;i<=NF;i++) if($i=="auto:all"){print "  . " $1 " (auto:all — every VM)"; break}}' <<<"$int_list"
+
+        echo "  review the list above: exe.dev fixes integrations at creation."
+    else
+        echo "  --no-inherit: capability set NOT copied from $RECREATE"
+    fi
 fi
 
 # --- phase 1: create --------------------------------------------------------
@@ -116,6 +168,17 @@ for r in "${REPOS[@]+"${REPOS[@]}"}"; do
     INTEGRATIONS+=("github-$(echo "$r" | tr '/' '-')")
 done
 INTEGRATIONS+=("github-kylelundstedt-iv-image" "github-kylelundstedt-dotfiles")
+# De-duplicate: --recreate inheritance and the two unconditional bootstrap
+# integrations above overlap on any VM that already had them, which is every
+# dev VM. Emitting `--integration=X` twice is at best noise in the audit trail.
+seen_int=" "
+deduped=()
+for i in "${INTEGRATIONS[@]}"; do
+    [[ "$seen_int" == *" $i "* ]] && continue
+    seen_int+="$i "
+    deduped+=("$i")
+done
+INTEGRATIONS=("${deduped[@]}")
 for i in "${INTEGRATIONS[@]}"; do create_args+=("--integration=$i"); done
 
 run ssh -o ConnectTimeout=60 exe.dev "${create_args[@]}"
