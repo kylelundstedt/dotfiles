@@ -207,3 +207,24 @@ Machine-readable expiry dates live in `provisioning/keys.manifest`, checked mont
 **GitHub PATs** (fine-grained, per resource owner): regenerate on github.com → update the 1P item → re-run `./install.sh` (re-resolves MCP registrations and re-provisions the sync-repos/tigris-backup Keychain items) → for Home/IV also `ssh exe.dev integrations remove github-mcp-home` (resp. `github-mcp-work`) and re-add with the new token. Record the new expiry in `provisioning/keys.manifest`.
 
 **Tigris/OWC8TB secrets**: static, no expiry. If ever rotated: update 1P, re-run `./install.sh` on the mini, and for the crypt password/salt re-encrypt or start a new backup generation first — the old archive is unreadable without the old values.
+
+## Accepted risks
+
+**telnyx-vm AgentsView bearer token — exposed 2026-07-29, NOT rotated.** An
+agent printed `~/.agentsview/config.toml` with `tail` while testing the
+collector-edit logic, putting one host's token into a session transcript.
+Decision: accept. The token only authorises reading agent-session data from
+that VM's source daemon on :8080, which binds the tailnet IP — using it already
+requires tailnet access, which implies broader compromise. Rotating would mean
+touching telnyx-vm mid-port for no meaningful reduction in risk.
+
+If it is ever rotated: new token into `~/.config/agentsview/source.env` (0600)
+on the VM, restart `agentsview-source.service` (a **user** unit — not the
+telephony webhook on :8000), update the matching `[[remote_hosts]]` token in
+`~/.agentsview/config.toml` on the mini, then kickstart the collector.
+
+**Operational note for agents:** never `cat`/`tail`/`head` a file known to hold
+credentials — `~/.agentsview/config.toml` and `~/.config/agentsview/source.env`
+both do. Query for the field you need (`awk`/`grep` printing only the key), or
+diff structurally. Two separate leaks in one session came from printing a body
+"just to check the format".
