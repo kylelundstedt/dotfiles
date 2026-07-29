@@ -241,6 +241,23 @@ if [[ -n "$RECREATE" ]]; then
         done
         [[ -n "${tag_gap:-}" ]] && die "renamed tag(s) would grant less than the original — see above"
 
+        # WORK REPOS. Inheriting the integration is not the same as having the
+        # work: the replacement would come up authorised to clone ave-adapters
+        # and simply not have it. Read what the source VM actually has checked
+        # out rather than trusting the operator to remember --repo.
+        #
+        # dotfiles and iv-image are excluded — the provisioners clone those
+        # themselves, from github.com.
+        if [[ ${#REPOS[@]} -eq 0 ]]; then
+            for u in $(ssh -o ConnectTimeout=30 "$RECREATE" \
+                    'for d in ~/*/; do [ -d "$d/.git" ] || continue; git -C "$d" remote get-url origin 2>/dev/null; done' 2>/dev/null); do
+                r=$(sed -E 's#.*[/:]([^/]+/[^/]+)\.git$#\1#' <<<"$u")
+                [[ "$r" =~ /(dotfiles|iv-image)$ ]] && continue
+                [[ "$r" == "$u" ]] && continue          # unparseable remote
+                REPOS+=("$r"); echo "  + repo $r (checked out on $RECREATE)"
+            done
+        fi
+
         if (( ${#missing_int[@]} )); then
             echo ""
             echo "  These renamed integrations do not exist yet. Create them, then re-run:"
@@ -273,9 +290,14 @@ step "create $NAME from $IMAGE"
 create_args=(new "--name=$NAME" "--image=$IMAGE" "--disk=$DISK" "--cpu=$CPU" "--memory=$MEM")
 for t in "${TAGS[@]+"${TAGS[@]}"}"; do create_args+=("--tag=$t"); done
 # Repo integrations must be attached at creation or the VM cannot clone.
-for r in "${REPOS[@]+"${REPOS[@]}"}"; do
-    INTEGRATIONS+=("github-$(echo "$r" | tr '/' '-')")
-done
+# Skipped when inheriting: --recreate already resolved the real integration
+# names (repo-<x>-rw / -ro), and deriving a second name from the repo would
+# re-grant the OLD one we are migrating away from.
+if [[ -z "$RECREATE" || "$INHERIT" != true ]]; then
+    for r in "${REPOS[@]+"${REPOS[@]}"}"; do
+        INTEGRATIONS+=("repo-${r##*/}-rw")
+    done
+fi
 # NO bootstrap integration. Both iv-image and dotfiles are public repos
 # (iv-image was made public 2026-07-29), so a fresh VM clones both straight
 # from github.com and needs no credential at all to provision itself. The two
@@ -322,6 +344,24 @@ if [[ "$SKIP_OVERLAY" != true ]]; then
         git clone -q https://github.com/kylelundstedt/dotfiles.git ~/dotfiles
         cd ~/dotfiles && ./install.sh'"
 fi
+
+# --- phase 3b: work repos ---------------------------------------------------
+# BEFORE the provision-iv.sh re-run in phase 5, not after. provision-iv.sh
+# installs some tooling conditionally on what is checked out — Quarto only when
+# a _quarto.yml exists under $HOME. With the clone last, a recreated doc-site VM
+# came up with no renderer at all and nothing said so: observed on
+# iv-ave-adapters-next, "Quarto skipped (no _quarto.yml under $HOME)" on a VM
+# whose whole job is rendering a Quarto site.
+#
+# Uses the generic github.int.exe.xyz host, which routes by repo path across
+# whatever github integrations are attached. The per-integration host bakes the
+# integration NAME into the URL, which would break the moment it is renamed.
+for r in "${REPOS[@]+"${REPOS[@]}"}"; do
+    step "clone $r"
+    short="${r##*/}"
+    run ssh -o ConnectTimeout=300 "$EDGE" "bash -lc '
+        git clone -q https://github.int.exe.xyz/$r.git ~/$short'"
+done
 
 # --- phase 4: tailnet -------------------------------------------------------
 step "join tailnet"
@@ -383,13 +423,7 @@ fi
 
 echo "  token: stored on VM + collector. Mirror it in 1Password ('AgentsView fleet tokens')."
 
-# --- phase 6: work repos ----------------------------------------------------
-for r in "${REPOS[@]+"${REPOS[@]}"}"; do
-    step "clone $r"
-    short="${r##*/}"
-    run ssh -o ConnectTimeout=300 "$NAME" "bash -lc '
-        git clone -q https://github-$(echo "$r" | tr '/' '-').int.exe.xyz/$r.git ~/$short'"
-done
+# (work repos are cloned in phase 3b, before provision-iv.sh re-runs)
 
 # --- phase 7: verify --------------------------------------------------------
 step "verify"
@@ -400,7 +434,14 @@ else
         echo \"  provision lock: \$(head -1 ~/iv-provision.lock 2>/dev/null || echo MISSING)\"
         echo \"  agentsview unit: \$(systemctl --user is-active agentsview-source.service 2>/dev/null)\"
         echo \"  failed units: \$(systemctl list-units --state=failed --no-legend | wc -l)\"
-        echo \"  disk: \$(df -h / | tail -1 | awk \"{print \\\$3}\")\"'"
+        echo \"  disk: \$(df -h / | tail -1 | awk \"{print \\\$3}\")\"
+        for q in ~/*/_quarto.yml; do
+            [ -e \"\$q\" ] || continue
+            command -v quarto >/dev/null \
+                && echo \"  renderer: quarto present (\$(basename \$(dirname \$q)) needs it)\" \
+                || echo \"  !! renderer MISSING: \$(basename \$(dirname \$q)) has _quarto.yml but quarto is not installed\"
+            break
+        done'"
 
     # The control-plane escalation check: a VM must NOT be able to reach
     # exe.dev. ControlPath=none is REQUIRED — a warm multiplexed socket makes a
