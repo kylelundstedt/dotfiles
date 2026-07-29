@@ -123,29 +123,44 @@ run ssh -o ConnectTimeout=60 exe.dev "${create_args[@]}"
 # exe.dev drops repeated SYNs per source IP; one attempt, generous timeout.
 [[ "$DRY" == true ]] || { echo "  waiting for boot..."; sleep 25; }
 
-# --- phase 2: tailnet -------------------------------------------------------
-step "join tailnet"
-# join-tailnet attaches tailscale-api for the duration and detaches on exit, so
-# no VM carries standing tailnet-admin authority.
-run "$HOME/.agents/skills/join-tailnet/join-tailnet.sh" "$NAME"
+# Before the tailnet join the VM is reachable ONLY over the exe.dev edge; after
+# it, by MagicDNS short name. Using the wrong one is not a slow failure, it is
+# "Could not resolve hostname".
+EDGE="$NAME.exe.xyz"
 
-# --- phase 3: team layer ----------------------------------------------------
+# --- phase 2: team layer ----------------------------------------------------
 step "provision team layer (iv-image)"
 checkout=""
 [[ -n "$IV_PIN" ]] && checkout="&& git -C ~/iv-image checkout --detach $IV_PIN"
-run ssh -o ConnectTimeout=300 "$NAME" "bash -lc '
+run ssh -o ConnectTimeout=300 -o StrictHostKeyChecking=accept-new "$EDGE" "bash -lc '
     git clone -q https://github-kylelundstedt-iv-image.int.exe.xyz/kylelundstedt/iv-image.git ~/iv-image $checkout
     ~/iv-image/provision-iv.sh'"
 
-# --- phase 4: personal overlay ---------------------------------------------
+# --- phase 3: personal overlay ---------------------------------------------
 if [[ "$SKIP_OVERLAY" != true ]]; then
     step "personal overlay (dotfiles)"
     # provision-iv.sh overwrites ~/.claude/settings.json with the team default,
     # so the overlay MUST run after it or the SessionStart refresh hook is lost.
-    run ssh -o ConnectTimeout=600 "$NAME" "bash -lc '
+    run ssh -o ConnectTimeout=600 "$EDGE" "bash -lc '
         git clone -q https://github-kylelundstedt-dotfiles.int.exe.xyz/kylelundstedt/dotfiles.git ~/dotfiles
         cd ~/dotfiles && ./install.sh'"
 fi
+
+# --- phase 4: tailnet -------------------------------------------------------
+step "join tailnet"
+# AFTER the overlay, not before: exeslim-dev ships no tailscaled (exeuntu did),
+# and dotfiles' install.sh is what installs Tailscale on Linux. Joining first
+# fails with "tailscaled socket never appeared" — measured on the first live run
+# of this script, 2026-07-29.
+#
+# This ordering works because the clones above go over the *.exe.xyz edge via
+# repo integrations, which needs no tailnet. Everything that DOES need the
+# tailnet — AgentsView's source daemon binding the tailnet IP, and the collector
+# reaching it — comes after.
+[[ "$DRY" == true ]] || ssh -o ConnectTimeout=60 "$EDGE" \
+    'command -v tailscale >/dev/null' \
+    || die "tailscale missing after overlay — install.sh's Linux path did not run"
+run "$HOME/.agents/skills/join-tailnet/join-tailnet.sh" "$NAME"
 
 # --- phase 5: AgentsView enrollment ----------------------------------------
 step "enroll in AgentsView"
