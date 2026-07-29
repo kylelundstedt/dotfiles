@@ -1,0 +1,10 @@
+ave-adapters-m6-native|kylelundstedt/ave-adapters|HEAD|b5e7c4c555f9ba1a24b4ae29649077f754bb31b5
+ave-adapters-native|kylelundstedt/ave-adapters|main|199234fab163945265b222ef9b2fd402778ded9d
+ave-adapters-p1-s1-m6|||
+ave-adapters-stage2-pin|kylelundstedt/ave-adapters|HEAD|b5e7c4c555f9ba1a24b4ae29649077f754bb31b5
+dotfiles-ro|kylelundstedt/dotfiles|master|c4eb2de91829800f733968abfc124bde954867e9
+entire-agent-shelley-v0.1.0|||
+fannie-sflpd|kylelundstedt/fannie-sflpd|p1-s2-m2-package-bootstrap|68dd6166d16c9c1cb5caa4b6de18db9af43891ef
+iv-docs|kylelundstedt/iv-docs|p1-s2-m2-completion-m3-start|9a47aebeb38bdf2a8fb5635296cf18708ed657e3
+iv-foundry-stage2|||
+iv-image-ro|kylelundstedt/iv-image|main|2fee0addeb53d1809a6ffa0de5e6106beffdc826
