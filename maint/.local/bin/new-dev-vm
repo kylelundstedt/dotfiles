@@ -42,7 +42,7 @@ COLLECTOR_CONF="$HOME/.agentsview/config.toml"
 COLLECTOR_LABEL="gui/$(id -u)/com.kylelundstedt.agentsview"
 TAILNET_DOMAIN="dojo-sun.ts.net"
 
-NAME=""; IMAGE="$IMAGE_DEFAULT"; REPOS=(); TAGS=(); INTEGRATIONS=()
+NAME=""; IMAGE="$IMAGE_DEFAULT"; REPOS=(); TAGS=(); INTEGRATIONS=(); CHECKOUTS=()
 RECREATE=""; DRY=false; SKIP_OVERLAY=false; INHERIT=true; RESUME_FROM=""
 
 die() { echo "new-dev-vm: $*" >&2; exit 1; }
@@ -294,11 +294,21 @@ if [[ -n "$RECREATE" ]]; then
         #
         # dotfiles and iv-image are excluded — the provisioners clone those
         # themselves, from github.com.
-        if [[ ${#REPOS[@]} -eq 0 ]]; then
-            for u in $(ssh -o ConnectTimeout=30 "$RECREATE" \
-                    'for d in ~/*/; do [ -d "$d/.git" ] || continue; git -C "$d" remote get-url origin 2>/dev/null; done' 2>/dev/null); do
+        # DEPTH AND LAYOUT, not just a set of repo names. `~/*/` alone found
+        # NOTHING on iv-foundry-stage2, whose entire working set lives in
+        # ~/worktrees/<name>; the replacement came up with only dotfiles and
+        # iv-image, passed every check, and was retired that way. iv-docs also
+        # keeps work in ~/github/<owner>/<repo> and ~/worktrees/<name>/adapters.
+        #
+        # A worktree's .git is a FILE, so test -e, not -d.
+        #
+        # dotfiles and iv-image are skipped only at the TOP level, where the
+        # provisioners clone them anyway — ~/worktrees/dotfiles-ro is real work
+        # and must be reproduced.
+        if [[ ${#CHECKOUTS[@]} -eq 0 ]]; then
+            while IFS='|' read -r cpath u cbranch csha; do
+                [[ -z "$cpath" ]] && continue
                 r=$(sed -E 's#.*[/:]([^/]+/[^/]+)\.git$#\1#' <<<"$u")
-                [[ "$r" =~ /(dotfiles|iv-image)$ ]] && continue
                 [[ "$r" == "$u" ]] && continue          # unparseable remote
 
                 # Only clone what the replacement can actually reach. A VM can
@@ -323,8 +333,16 @@ if [[ -n "$RECREATE" ]]; then
                     echo "  - repo $r (skipped: nothing grants it on the replacement)"
                     continue
                 fi
-                REPOS+=("$r"); echo "  + repo $r (checked out on $RECREATE)"
-            done
+                CHECKOUTS+=("$cpath|$r|$cbranch|$csha")
+                echo "  + $cpath ($r @ ${csha:0:7}, $cbranch)"
+            done < <(ssh -o ConnectTimeout=45 "$RECREATE" 'for d in ~/*/ ~/*/*/ ~/*/*/*/; do
+                    [ -e "$d/.git" ] || continue
+                    rel=${d#$HOME/}; rel=${rel%/}
+                    [ "$rel" = dotfiles ] && continue
+                    [ "$rel" = iv-image ] && continue
+                    u=$(git -C "$d" remote get-url origin 2>/dev/null) || continue
+                    echo "$rel|$u|$(git -C "$d" rev-parse --abbrev-ref HEAD 2>/dev/null)|$(git -C "$d" rev-parse HEAD 2>/dev/null)"
+                done' 2>/dev/null)
         fi
 
         if (( ${#missing_int[@]} )); then
@@ -430,24 +448,43 @@ fi
 # whatever github integrations are attached. The per-integration host bakes the
 # integration NAME into the URL, which would break the moment it is renamed.
 if should_run repos; then
+# --repo on a fresh VM has no layout to preserve: clone to ~/<name> on the
+# default branch, the same shape --recreate records.
 for r in "${REPOS[@]+"${REPOS[@]}"}"; do
-    step "clone $r"
-    short="${r##*/}"
+    CHECKOUTS+=("${r##*/}|$r||")
+done
+
+for c in ${CHECKOUTS[@]+"${CHECKOUTS[@]}"}; do
+    cpath="${c%%|*}"; rest="${c#*|}"
+    crepo="${rest%%|*}"; rest="${rest#*|}"
+    cbranch="${rest%%|*}"; csha="${rest#*|}"
+    step "clone $crepo -> ~/$cpath"
+
+    # Reproduce the CHECKOUT, not just the repo: branch and commit both. A
+    # branch may no longer exist upstream while its commits do (merged and
+    # deleted), so -B recreates it locally at the recorded sha. Rows recorded
+    # as detached (branch=HEAD) stay detached.
+    ckout="git -C ~/$cpath checkout -q -B '$cbranch' '$csha'"
+    [[ -z "$cbranch" ]] && ckout="true"
+    [[ "$cbranch" == HEAD ]] && ckout="git -C ~/$cpath checkout -q '$csha'"
+
     # RETRY: exe.dev's integration plumbing is eventually consistent on first
-    # use. The same shape as tailscale-api answering 403 right after an attach —
-    # here the github proxy answered "repository not found" for a repo whose
-    # integration was attached at creation, and both the generic and the
-    # per-integration host served it fine minutes later. Failing here wastes a
-    # fully provisioned VM; --resume-from now limits the damage, but not
-    # needing it at all is better.
+    # use — the github proxy answered "repository not found" for a repo whose
+    # integration was attached at creation, then served it minutes later.
+    # Public repos need no integration at all and the proxy 403s without one,
+    # hence the github.com fallback.
     run ssh -o ConnectTimeout=300 "$EDGE" "bash -lc '
-        for i in 1 2 3 4 5 6; do
-            git clone -q https://github.int.exe.xyz/$r.git ~/$short && exit 0
-            echo \"  clone of $r not ready (attempt \$i/6); retrying in 10s\" >&2
-            rm -rf ~/$short
+        mkdir -p ~/$(dirname "$cpath")
+        for i in 1 2 3 4 5; do
+            git clone -q https://github.int.exe.xyz/$crepo.git ~/$cpath && break
+            rm -rf ~/$cpath
+            git clone -q https://github.com/$crepo.git ~/$cpath && break
+            rm -rf ~/$cpath
+            echo \"  clone of $crepo not ready (attempt \$i/5); retrying in 10s\" >&2
             sleep 10
         done
-        exit 1'"
+        [ -e ~/$cpath/.git ] || exit 1
+        $ckout'"
 done
 fi
 
