@@ -43,9 +43,35 @@ COLLECTOR_LABEL="gui/$(id -u)/com.kylelundstedt.agentsview"
 TAILNET_DOMAIN="dojo-sun.ts.net"
 
 NAME=""; IMAGE="$IMAGE_DEFAULT"; REPOS=(); TAGS=(); INTEGRATIONS=()
-RECREATE=""; DRY=false; SKIP_OVERLAY=false; INHERIT=true
+RECREATE=""; DRY=false; SKIP_OVERLAY=false; INHERIT=true; RESUME_FROM=""
 
 die() { echo "new-dev-vm: $*" >&2; exit 1; }
+
+# --- resume ------------------------------------------------------------------
+# A run that dies in phase 4 used to mean deleting a fully provisioned VM and
+# starting over: ~20 minutes and a fresh 2 GB build, discarded. iv-docs was
+# built THREE times that way. Transient failures are normal here — exe.dev's
+# integration plumbing is eventually consistent on first use, so a 403 from
+# tailscale-api or a 404 from the github proxy is expected, not exceptional.
+#
+# Phases are ordinal; --resume-from skips everything before the named one and
+# continues against the VM that already exists.
+phase_num() {
+    case "$1" in
+        create)     echo 1 ;;
+        team)       echo 2 ;;
+        overlay)    echo 3 ;;
+        repos)      echo 4 ;;
+        tailnet)    echo 5 ;;
+        agentsview) echo 6 ;;
+        verify)     echo 7 ;;
+        *)          echo 0 ;;
+    esac
+}
+PHASES="create team overlay repos tailnet agentsview verify"
+START=1
+should_run() { local n; n=$(phase_num "$1"); (( n >= START )); }
+skipped()    { echo "  (skipped — resuming from $RESUME_FROM)"; }
 
 # --- integration/tag migration map (TRANSITIONAL) ---------------------------
 # Delete this block once every VM has been recreated and the old names are gone.
@@ -141,6 +167,7 @@ while [[ $# -gt 0 ]]; do
         --integration) INTEGRATIONS+=("${2:?}"); shift 2 ;;
         --recreate) RECREATE="${2:?}"; shift 2 ;;
         --no-inherit) INHERIT=false; shift ;;
+        --resume-from) RESUME_FROM="${2:?}"; shift 2 ;;
         --skip-overlay) SKIP_OVERLAY=true; shift ;;
         --dry-run) DRY=true; shift ;;
         -h|--help) usage ;;
@@ -151,6 +178,11 @@ done
 [[ -n "$NAME" ]] || die "--name is required"
 # exe.dev rejects names ending in -<digits> (test-123 fails, test-abc works).
 [[ "$NAME" =~ -[0-9]+$ ]] && die "exe.dev rejects names ending in -<digits>: $NAME"
+
+if [[ -n "$RESUME_FROM" ]]; then
+    START=$(phase_num "$RESUME_FROM")
+    (( START == 0 )) && die "unknown phase '$RESUME_FROM' (one of: $PHASES)"
+fi
 
 # --- phase 0: preflight -----------------------------------------------------
 step "preflight"
@@ -174,8 +206,16 @@ ssh -o ConnectTimeout=30 exe.dev whoami >/dev/null 2>&1 \
     || die "cannot authenticate to exe.dev"
 echo "  control plane: ok"
 
+vm_exists=false
 if ssh -o ConnectTimeout=30 exe.dev ls --json 2>/dev/null | jq -e --arg n "$NAME" \
         '.vms[] | select(.vm_name==$n)' >/dev/null; then
+    vm_exists=true
+fi
+# Resuming REQUIRES the VM; creating requires its absence.
+if [[ -n "$RESUME_FROM" ]]; then
+    [[ "$vm_exists" == true ]] || die "--resume-from needs an existing VM: $NAME"
+    echo "  resuming $NAME from phase '$RESUME_FROM'"
+elif [[ "$vm_exists" == true ]]; then
     die "VM already exists: $NAME"
 fi
 
@@ -314,6 +354,7 @@ if [[ -n "$RECREATE" ]]; then
 fi
 
 # --- phase 1: create --------------------------------------------------------
+if should_run create; then
 step "create $NAME from $IMAGE"
 
 create_args=(new "--name=$NAME" "--image=$IMAGE" "--disk=$DISK" "--cpu=$CPU" "--memory=$MEM")
@@ -350,6 +391,7 @@ run ssh -o ConnectTimeout=60 exe.dev "${create_args[@]}"
 
 # exe.dev drops repeated SYNs per source IP; one attempt, generous timeout.
 [[ "$DRY" == true ]] || { echo "  waiting for boot..."; sleep 25; }
+fi
 
 # Before the tailnet join the VM is reachable ONLY over the exe.dev edge; after
 # it, by MagicDNS short name. Using the wrong one is not a slow failure, it is
@@ -357,15 +399,17 @@ run ssh -o ConnectTimeout=60 exe.dev "${create_args[@]}"
 EDGE="$NAME.exe.xyz"
 
 # --- phase 2: team layer ----------------------------------------------------
+if should_run team; then
 step "provision team layer (iv-image)"
 checkout=""
 [[ -n "$IV_PIN" ]] && checkout="&& git -C ~/iv-image checkout --detach $IV_PIN"
 run ssh -o ConnectTimeout=300 -o StrictHostKeyChecking=accept-new "$EDGE" "bash -lc '
     git clone -q https://github.com/kylelundstedt/iv-image.git ~/iv-image $checkout
     ~/iv-image/provision-iv.sh'"
+fi
 
 # --- phase 3: personal overlay ---------------------------------------------
-if [[ "$SKIP_OVERLAY" != true ]]; then
+if should_run overlay && [[ "$SKIP_OVERLAY" != true ]]; then
     step "personal overlay (dotfiles)"
     # provision-iv.sh overwrites ~/.claude/settings.json with the team default,
     # so the overlay MUST run after it or the SessionStart refresh hook is lost.
@@ -385,6 +429,7 @@ fi
 # Uses the generic github.int.exe.xyz host, which routes by repo path across
 # whatever github integrations are attached. The per-integration host bakes the
 # integration NAME into the URL, which would break the moment it is renamed.
+if should_run repos; then
 for r in "${REPOS[@]+"${REPOS[@]}"}"; do
     step "clone $r"
     short="${r##*/}"
@@ -393,7 +438,8 @@ for r in "${REPOS[@]+"${REPOS[@]}"}"; do
     # here the github proxy answered "repository not found" for a repo whose
     # integration was attached at creation, and both the generic and the
     # per-integration host served it fine minutes later. Failing here wastes a
-    # fully provisioned VM, since there is no resume.
+    # fully provisioned VM; --resume-from now limits the damage, but not
+    # needing it at all is better.
     run ssh -o ConnectTimeout=300 "$EDGE" "bash -lc '
         for i in 1 2 3 4 5 6; do
             git clone -q https://github.int.exe.xyz/$r.git ~/$short && exit 0
@@ -403,8 +449,10 @@ for r in "${REPOS[@]+"${REPOS[@]}"}"; do
         done
         exit 1'"
 done
+fi
 
 # --- phase 4: tailnet -------------------------------------------------------
+if should_run tailnet; then
 step "join tailnet"
 # AFTER the overlay, not before: exeslim-dev ships no tailscaled (exeuntu did),
 # and dotfiles' install.sh is what installs Tailscale on Linux. Joining first
@@ -421,6 +469,9 @@ step "join tailnet"
 run "$HOME/.agents/skills/join-tailnet/join-tailnet.sh" "$NAME"
 
 # --- phase 5: AgentsView enrollment ----------------------------------------
+fi
+
+if should_run agentsview; then
 step "enroll in AgentsView"
 # Fail-closed by design: the source daemon stays disabled until BOTH a tailnet
 # address and a per-host token exist. Both sides must be written — the token on
@@ -467,6 +518,9 @@ echo "  token: stored on VM + collector. Mirror it in 1Password ('AgentsView fle
 # (work repos are cloned in phase 3b, before provision-iv.sh re-runs)
 
 # --- phase 7: verify --------------------------------------------------------
+fi
+
+if should_run verify; then
 step "verify"
 if [[ "$DRY" == true ]]; then
     echo "  [dry-run] skipping verification"
@@ -500,6 +554,7 @@ else
     echo "  agentsview coverage:"
     "$HOME/.local/bin/agentsview-coverage" --dry-run 2>&1 | tail -3 | sed 's/^/    /'
 fi
+fi
 
 # --- retirement (never automatic) ------------------------------------------
 if [[ -n "$RECREATE" ]]; then
@@ -507,18 +562,17 @@ if [[ -n "$RECREATE" ]]; then
 
 == retire $RECREATE — NOT done automatically
 
-Verify the new VM first, then, in this order:
+Verify the new VM first (render its site if it serves one), then:
 
-  1. confirm no external dependency uses the old name (custom domains, webhooks,
-     the AgentsView collector, anything pinned to its tailnet hostname)
-  2. remove its collector entry:  edit $COLLECTOR_CONF, drop the
-     [[remote_hosts]] block for $RECREATE, then
-     launchctl kickstart -k $COLLECTOR_LABEL
-  3. check for local-only work:   the disposability audit covers \$HOME AND
-     /tmp — see agent_docs/vm-disposability.md
-  4. delete:                      ssh exe.dev rm $RECREATE
+  retire-vm $RECREATE --replaced-by $NAME --delete
 
-Its tailnet node is ephemeral and disappears on its own once offline.
+which refuses if any repo on $RECREATE has uncommitted or unpushed work,
+removes the collector entry BEFORE deleting, then restores the canonical
+name — exe.dev rename, OS/Tailscale hostname, and the collector URL, all
+of which embed it.
+
+Still yours to confirm first: that no external dependency uses the old
+name (custom domains, webhooks, anything pinned to its tailnet hostname).
 EOF
 fi
 
