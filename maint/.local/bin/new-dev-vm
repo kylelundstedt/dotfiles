@@ -388,8 +388,20 @@ fi
 for r in "${REPOS[@]+"${REPOS[@]}"}"; do
     step "clone $r"
     short="${r##*/}"
+    # RETRY: exe.dev's integration plumbing is eventually consistent on first
+    # use. The same shape as tailscale-api answering 403 right after an attach —
+    # here the github proxy answered "repository not found" for a repo whose
+    # integration was attached at creation, and both the generic and the
+    # per-integration host served it fine minutes later. Failing here wastes a
+    # fully provisioned VM, since there is no resume.
     run ssh -o ConnectTimeout=300 "$EDGE" "bash -lc '
-        git clone -q https://github.int.exe.xyz/$r.git ~/$short'"
+        for i in 1 2 3 4 5 6; do
+            git clone -q https://github.int.exe.xyz/$r.git ~/$short && exit 0
+            echo \"  clone of $r not ready (attempt \$i/6); retrying in 10s\" >&2
+            rm -rf ~/$short
+            sleep 10
+        done
+        exit 1'"
 done
 
 # --- phase 4: tailnet -------------------------------------------------------

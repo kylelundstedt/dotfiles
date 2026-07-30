@@ -74,6 +74,88 @@ else
     echo "  none"
 fi
 
+# UNGIT'D TREES: the question is not "does this have a .git" but "is this
+# content already committed somewhere". iv-foundry-stage2's retirement was held
+# most of a day on ~31 MB judged unique because no repo of that name existed on
+# GitHub — while every source file was byte-identical to origin/iv-foundry-stage2
+# on the iv-docs repo. A tree can be a stale working copy of a BRANCH of another
+# repo, and three separate checks were silent about that.
+#
+# So: hash every non-generated file and ask whether any repo on this VM already
+# has that blob. Zero misses means the tree is a duplicate of committed content
+# and the VM is disposable regardless of what its directory layout suggests.
+echo "== ungit'd trees on $OLD"
+ung=$(ssh -o ConnectTimeout=60 "$OLD" 'bash -s' 2>/dev/null <<'REMOTE'
+shopt -s nullglob
+repos=()
+for d in ~/*/ ~/*/*/; do [ -e "$d/.git" ] && repos+=("$d"); done
+(( ${#repos[@]} )) || exit 0
+# Depth 1 only for REPORTING (repo discovery above still scans deeper).
+# Scanning deeper listed a tree and then each of its own subdirectories
+# again - decisions/, drafts/, platform/ - all children of one ungit'd
+# tree. Aggregating at the top level is both quieter and more accurate.
+for d in ~/*/; do
+    [ -d "$d" ] || continue
+    [ -e "$d/.git" ] && continue
+    # Inside a repo already? Then it is that repo's business. Walk the WHOLE
+    # ancestor chain — checking only the immediate parent reported every
+    # subdirectory of every repo (decisions/, drafts/, src/ ...) as ungit'd.
+    p="${d%/}"; inrepo=""
+    while [ "$p" != "$HOME" ] && [ "$p" != "/" ]; do
+        p=$(dirname "$p")
+        [ -e "$p/.git" ] && { inrepo=1; break; }
+    done
+    [ -n "$inrepo" ] && continue
+    # Toolchain and runtime dirs are not work. NO `case` here: bash 3.2 counts
+    # parens naively inside $( ), so a case pattern's unbalanced `)` closes the
+    # command substitution early and the whole script fails to parse.
+    b=$(basename "${d%/}")
+    skip=""
+    for s in node go bin lib include share; do [ "$b" = "$s" ] && skip=1; done
+    [ -n "$skip" ] && continue
+    files=$(find "$d" -type f \
+        -not -path '*/.git/*' -not -path '*/_site*' -not -path '*/.quarto/*' \
+        -not -path '*/__pycache__/*' -not -path '*/.venv/*' \
+        -not -path '*/node_modules/*' -not -path '*/.pytest_cache/*' 2>/dev/null | head -5000)
+    n=$(wc -l <<<"$files" | tr -d ' '); [ "$n" = 0 ] && continue
+    miss=0
+    while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        h=$(git hash-object "$f" 2>/dev/null) || { miss=$((miss+1)); continue; }
+        found=0
+        for r in "${repos[@]}"; do
+            git -C "$r" cat-file -e "$h" 2>/dev/null && { found=1; break; }
+        done
+        [ "$found" = 0 ] && miss=$((miss+1))
+    done <<<"$files"
+    echo "$(basename "${d%/}")|$n|$miss"
+done
+REMOTE
+)
+if [[ -z "$ung" ]]; then
+    echo "  none"
+else
+    while IFS='|' read -r name n miss; do
+        [[ -z "$name" ]] && continue
+        if [[ "$miss" == "0" ]]; then
+            echo "  $name: $n files, all already committed in a repo on this VM — disposable"
+        else
+            echo "  ?  $name: $miss of $n files not in any LOCAL repo (check the remote)"
+        fi
+    done <<<"$ung"
+    # ADVISORY, not a gate. This searches only the repos cloned on this VM, so
+    # it proves the positive case and NOT the negative: a file whose blob lives
+    # only on the remote reads as "not found" here. iv-foundry-stage2's 29 MB
+    # was exactly that — every file was on origin/iv-foundry-stage2 of the
+    # iv-docs repo, a branch nothing local had checked out.
+    #
+    # So "all already committed" means genuinely disposable; a non-zero count
+    # means LOOK, not STOP — hash the tree against the remote branches of the
+    # sibling repos before concluding anything. Blocking on this count would
+    # have held four VMs that were fine.
+    echo "  (advisory: local repos only — a non-zero count needs a remote check, not a halt)"
+fi
+
 echo "== collector entry for $OLD"
 if grep -q "host = \"$OLD\"" "$COLLECTOR_CONF" 2>/dev/null; then
     cp "$COLLECTOR_CONF" "$COLLECTOR_CONF.bak-$(date +%Y%m%d%H%M%S)"
