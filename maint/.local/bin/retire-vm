@@ -56,23 +56,29 @@ fi
 #
 # Warn rather than block: a pushed worktree costs one `git worktree add` to
 # restore, but an unpushed one is real work about to be deleted.
-echo "== worktrees on $OLD"
-wt=$(ssh -o ConnectTimeout=45 "$OLD" 'for d in ~/*/; do
-        [ -f "$d/.git" ] || continue
+# EVERY repo, not just worktrees, and not just depth 1. The first version of
+# this checked `[ -f .git ]` — worktrees only — so an ordinary clone with
+# unpushed commits was never examined at all. iv-docs had 3 unpushed commits
+# (main +1, entire/checkpoints/v1 +2) in a plain ~/iv-docs, and the VM was one
+# render-verification away from deletion.
+#
+# Depth 3 because work lives at ~/repo, ~/worktrees/<name>, and
+# ~/github/<owner>/<repo>. `--branches HEAD --not --remotes` counts every local
+# branch, not just the checked-out one — a stale side branch is still work.
+echo "== repos on $OLD"
+wt=$(ssh -o ConnectTimeout=60 "$OLD" 'for d in ~/*/ ~/*/*/ ~/*/*/*/; do
+        [ -e "$d/.git" ] || continue
         b=$(git -C "$d" rev-parse --abbrev-ref HEAD 2>/dev/null)
         u=$(git -C "$d" status --porcelain 2>/dev/null | wc -l | tr -d " ")
         p=$(git -C "$d" rev-list --count --branches HEAD --not --remotes 2>/dev/null)
-        echo "$(basename "$d") branch=$b uncommitted=$u unpushed=$p"
+        [ "$u" = 0 ] && [ "$p" = 0 ] && continue
+        echo "$(echo "$d" | sed "s#$HOME/##; s#/\$##") branch=$b uncommitted=$u unpushed=$p"
      done' 2>/dev/null)
 if [[ -n "$wt" ]]; then
-    echo "$wt" | sed 's/^/  /'
-    if grep -qvE 'uncommitted=0 unpushed=0$' <<<"$wt"; then
-        die "a worktree has uncommitted or unpushed work — push it before retiring $OLD"
-    fi
-    echo "  all clean and pushed (restore with: git worktree add)"
-else
-    echo "  none"
+    echo "$wt" | sed 's/^/  !! /'
+    die "repo(s) above have uncommitted or unpushed work — push before retiring $OLD"
 fi
+echo "  all clean and pushed"
 
 # UNGIT'D TREES: the question is not "does this have a .git" but "is this
 # content already committed somewhere". iv-foundry-stage2's retirement was held
