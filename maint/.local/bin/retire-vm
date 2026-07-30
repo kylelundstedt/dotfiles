@@ -201,6 +201,23 @@ if [[ "$DELETE" == true ]]; then
             || die "rename failed; VM is still $REPLACED_BY"
         echo "  exe.dev: renamed"
 
+        # MOVE THE INTEGRATIONS. exe.dev attaches by VM NAME and `rename` does
+        # not follow, so every `vm:<old-name>` attachment is silently stranded:
+        # the VM keeps running, looks healthy, and every git operation fails
+        # with "integration not found or not attached to this VM". Six VMs were
+        # renamed before this was noticed, all six unable to fetch or push.
+        #
+        # `ssh -n` is load-bearing — without it the ssh inside the loop eats the
+        # rest of the piped attachment list and only the first one moves.
+        moved=0
+        for intg in $(ssh -o ConnectTimeout=30 exe.dev integrations list 2>/dev/null \
+                | awk -v vm="vm:$REPLACED_BY" '{for(i=1;i<=NF;i++) if($i==vm){print $1; break}}'); do
+            ssh -n -o ConnectTimeout=30 exe.dev integrations attach "$intg" "vm:$OLD" >/dev/null 2>&1 || true
+            ssh -n -o ConnectTimeout=30 exe.dev integrations detach "$intg" "vm:$REPLACED_BY" >/dev/null 2>&1 || true
+            moved=$((moved+1))
+        done
+        echo "  integrations: moved $moved attachment(s) to vm:$OLD"
+
         # The exe.dev rename does NOT touch the OS or Tailscale hostname, and
         # the collector URL embeds the tailnet name — so all three move together
         # or the VM silently stops being scraped.

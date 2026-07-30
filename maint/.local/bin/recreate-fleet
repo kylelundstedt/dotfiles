@@ -37,6 +37,7 @@ set -uo pipefail   # deliberately NOT -e: a failure must be caught and reported,
 QUEUE=(iv-gitlake-examples iv-gitlake iv-home iv-foundry-stage2 iv-docs kgl-thoughts)
 CHECKPOINT=2
 DRY=false
+PREFLIGHT=false
 NEWVM="$(dirname "$0")/new-dev-vm"
 
 explicit=()
@@ -44,6 +45,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --checkpoint) CHECKPOINT="${2:?}"; shift 2 ;;
         --dry-run)    DRY=true; shift ;;
+        --preflight)  PREFLIGHT=true; shift ;;
         -h|--help)    sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         -*)           echo "unknown flag: $1" >&2; exit 1 ;;
         *)            explicit+=("$1"); shift ;;
@@ -65,6 +67,63 @@ done
 if ! ssh-add -T "$HOME/.ssh/exe_dev.pub" >/dev/null 2>&1; then
     echo "recreate-fleet: 1Password agent cannot sign with the exe.dev key — skipping this run."
     echo "  (unlock 1Password on klundstedt-mini; nothing was started)"
+    exit 0
+fi
+
+# --- preflight ---------------------------------------------------------------
+# Every blocker this migration hit was discoverable READ-ONLY before anything
+# was built: unpushed commits on iv-docs, an unpopulated tag:notion, a missing
+# repo-<x>-rw, work living under ~/worktrees where nothing looked. Each one
+# instead surfaced mid-run, after a VM was already provisioned.
+#
+# This audits the whole queue and prints one report. Nothing is created,
+# nothing is deleted, no integration is attached.
+if [[ "$PREFLIGHT" == true ]]; then
+    echo "== preflight audit (read-only) — $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    blockers=0
+    for vm in "${QUEUE[@]}"; do
+        echo ""
+        echo "--- $vm"
+        if ! ssh -o ConnectTimeout=30 exe.dev ls --json 2>/dev/null \
+             | jq -e --arg n "$vm" '.vms[] | select(.vm_name==$n)' >/dev/null; then
+            echo "  !! not a running VM"; blockers=$((blockers+1)); continue
+        fi
+
+        # 1. Unpushed work — the thing that nearly cost iv-docs 3 commits.
+        #    Fetch first: a stale remote-tracking ref over-reports, which is how
+        #    entire/checkpoints/v1 looked like 2 unpushed commits when it had none.
+        dirty=$(ssh -o ConnectTimeout=60 "$vm" 'for d in ~/*/ ~/*/*/ ~/*/*/*/; do
+                    [ -e "$d/.git" ] || continue
+                    git -C "$d" fetch -q --all --prune 2>/dev/null
+                    u=$(git -C "$d" status --porcelain 2>/dev/null | wc -l | tr -d " ")
+                    p=$(git -C "$d" rev-list --count --branches HEAD --not --remotes 2>/dev/null)
+                    [ "$u" = 0 ] && [ "$p" = 0 ] && continue
+                    echo "$(echo "$d" | sed "s#$HOME/##; s#/\$##") uncommitted=$u unpushed=$p"
+                done' 2>/dev/null)
+        if [[ -n "$dirty" ]]; then
+            echo "$dirty" | sed 's/^/  !! /'; blockers=$((blockers+1))
+        else
+            echo "  repos: clean and pushed"
+        fi
+
+        # 2. What the recreate itself would refuse on — missing renamed
+        #    integrations, or a renamed tag granting less than the original.
+        out=$("$NEWVM" --name "$vm-next" --recreate "$vm" --dry-run 2>&1)
+        if grep -qE 'integrations (add|attach)' <<<"$out"; then
+            grep -oE 'ssh exe\.dev integrations (add|attach) [^"]*' <<<"$out" \
+                | sed 's/^/  prep: /'
+            blockers=$((blockers+1))
+        else
+            echo "  prep: none needed"
+        fi
+        grep -E '^  [+-~] repo' <<<"$out" | sed 's/^/  /'
+    done
+    echo ""
+    if (( blockers )); then
+        echo "== $blockers VM(s) need attention before recreating"
+        exit 1
+    fi
+    echo "== all clear"
     exit 0
 fi
 
