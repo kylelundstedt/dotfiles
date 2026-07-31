@@ -436,8 +436,11 @@ install_cli_tools() {
         pids+=($!)
     else echo "  [=] croc"; fi
     local tigris_arch; case "$arch" in arm64|aarch64) tigris_arch="arm64" ;; x86_64) tigris_arch="x64" ;; esac
+    # Tigris CLI moved tigrisdata/cli → tigrisdata/storage. The old repo's releases
+    # froze (~3.1–3.4) and predate TIGRIS_FORCE_PATH_STYLE, which exe.dev Object
+    # Storage integrations require (path-style proxy). Same tarball layout + asset names.
     if want tigris; then
-        (install_release_asset "tigrisdata/cli" "tigris-${direnv_os}-${tigris_arch}.tar.gz" "tigris" "tigris-${direnv_os}-${tigris_arch}") &
+        (install_release_asset "tigrisdata/storage" "tigris-${direnv_os}-${tigris_arch}.tar.gz" "tigris" "tigris-${direnv_os}-${tigris_arch}") &
         pids+=($!)
     else echo "  [=] tigris"; fi
     # archil: CLI on Linux, macOS app installed separately (interactive prompt)
