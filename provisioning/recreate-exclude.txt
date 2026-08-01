@@ -1,0 +1,19 @@
+# VMs the recreate cycle must never pick up on its own. One name per line.
+# recreate-fleet reads this; passing a name explicitly still overrides it.
+#
+# rss-feed          deployment lane, not a dev VM — already on exeslim, and the
+#                   dev profile would install an agent stack it has no business
+#                   carrying.
+# telnyx-vm         mid-carrier-port. Its webhook is registered with Telnyx and
+#                   its code hard-codes telnyx-test.int.exe.xyz. A recreate is a
+#                   scheduled operation, not a routine one.
+# kgl-thoughts      backs a public site; retirement needs a real check that no
+#                   custom domain or DNS points at the VM.
+# iv-entire-agent-shelley
+#                   holds ~/.ssh/id_entire_setup, an orphan private key that
+#                   authenticates nothing we can find. Recreating destroys it.
+#                   Resolve that first (agent_docs/exe-dev-remediation.md).
+rss-feed
+telnyx-vm
+kgl-thoughts
+iv-entire-agent-shelley

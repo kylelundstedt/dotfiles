@@ -23,8 +23,9 @@
 #      cloned; a doc-site VM with no renderer). Six in flight means six
 #      half-built VMs when the seventh bug lands.
 #
-# NOTHING IS EVER DELETED. Each old VM is left running and untouched; new-dev-vm
-# prints its retirement checklist and retirement stays a human decision.
+# NOTHING IS EVER DELETED — by design, not by omission. This builds and
+# verifies replacements; cutover is a human act. See the summary block at the
+# end for why an unattended cutover would be wrong here.
 #
 # Usage:
 #   recreate-fleet                      # default queue, checkpoint after 2
@@ -34,7 +35,14 @@
 set -uo pipefail   # deliberately NOT -e: a failure must be caught and reported,
                    # not abort mid-VM leaving no summary
 
-QUEUE=(iv-gitlake-examples iv-gitlake iv-home iv-foundry-stage2 iv-docs kgl-thoughts)
+# The queue is DERIVED, not literal. A hard-coded list goes stale the moment it
+# runs: the original one still named five VMs that had already migrated, included
+# one deliberately excluded, and omitted another entirely. A VM is due when its
+# image is not the current pin, or when it is older than --max-age days —
+# whichever comes first, since the cycle exists for OS patching.
+QUEUE=()
+MAX_AGE=30
+EXCLUDE_FILE="$(dirname "$0")/../../../provisioning/recreate-exclude.txt"
 CHECKPOINT=2
 DRY=false
 PREFLIGHT=false
@@ -46,12 +54,20 @@ while [[ $# -gt 0 ]]; do
         --checkpoint) CHECKPOINT="${2:?}"; shift 2 ;;
         --dry-run)    DRY=true; shift ;;
         --preflight)  PREFLIGHT=true; shift ;;
+        --max-age)    MAX_AGE="${2:?}"; shift 2 ;;
         -h|--help)    sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         -*)           echo "unknown flag: $1" >&2; exit 1 ;;
         *)            explicit+=("$1"); shift ;;
     esac
 done
-(( ${#explicit[@]} )) && QUEUE=("${explicit[@]}")
+if (( ${#explicit[@]} )); then
+    # An explicit name overrides both the due-check and the exclusion list: the
+    # operator asked for this VM by name.
+    QUEUE=("${explicit[@]}")
+    DERIVED=false
+else
+    DERIVED=true
+fi
 
 [[ -x "$NEWVM" ]] || { echo "new-dev-vm not found next to this script" >&2; exit 1; }
 
@@ -68,6 +84,39 @@ if ! ssh-add -T "$HOME/.ssh/exe_dev.pub" >/dev/null 2>&1; then
     echo "recreate-fleet: 1Password agent cannot sign with the exe.dev key — skipping this run."
     echo "  (unlock 1Password on klundstedt-mini; nothing was started)"
     exit 0
+fi
+
+# --- derive the queue -------------------------------------------------------
+if [[ "$DERIVED" == true ]]; then
+    PIN=$(grep -oE 'exeslim-dev:[0-9]{4}-[0-9]{2}-[0-9]{2}\.[0-9]+\.[0-9]+' "$NEWVM" | head -1 | cut -d: -f2)
+    [[ -n "$PIN" ]] || { echo "recreate-fleet: cannot read the image pin from new-dev-vm" >&2; exit 1; }
+
+    excl=""
+    [[ -f "$EXCLUDE_FILE" ]] && excl=$(grep -vE '^\s*#|^\s*$' "$EXCLUDE_FILE" | tr '\n' ' ')
+
+    echo "== deriving queue (pin=$PIN, max-age=${MAX_AGE}d)"
+    # `last_active_at` is not creation; `created_at` is what ages. Compare in
+    # UTC epoch seconds so timezone never enters into it.
+    now=$(date -u +%s)
+    while IFS='|' read -r vm img created; do
+        [[ -z "$vm" ]] && continue
+        case " $excl " in *" $vm "*) echo "  - $vm (excluded)"; continue ;; esac
+        age_days=$(( (now - $(date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$created" +%s 2>/dev/null || echo "$now")) / 86400 ))
+        why=""
+        [[ "$img" != *"$PIN" ]] && why="image $img != pin"
+        (( age_days >= MAX_AGE )) && why="${why:+$why; }age ${age_days}d >= ${MAX_AGE}d"
+        if [[ -n "$why" ]]; then
+            QUEUE+=("$vm"); echo "  + $vm ($why)"
+        else
+            echo "  . $vm (current, ${age_days}d old)"
+        fi
+    done < <(ssh -o ConnectTimeout=30 exe.dev ls --json 2>/dev/null \
+        | jq -r '.vms[] | select((.tags//[]) | index("mcp-agent")) | "\(.vm_name)|\(.image)|\(.created_at)"')
+
+    if (( ${#QUEUE[@]} == 0 )); then
+        echo "== nothing due"
+        exit 0
+    fi
 fi
 
 # --- preflight ---------------------------------------------------------------
@@ -228,10 +277,34 @@ note "  completed: ${done_vms[*]:-none}"
 [[ -n "$failed_vm" ]] && note "  FAILED at: $failed_vm (queue stopped; nothing deleted)"
 note "  log: $LOG"
 note ""
-note "  Retirement of the old VMs is deliberately NOT automated. For each one:"
-note "    1. confirm nothing external depends on the old name"
-note "    2. remove its [[remote_hosts]] block from ~/.agentsview/config.toml"
-note "    3. ssh exe.dev rm <old-vm>"
+# THE UNATTENDED BOUNDARY, stated rather than implied. This tool BUILDS
+# replacements and never cuts over. That is not an oversight to be closed later:
+#
+#   - retire-vm refuses on any uncommitted or unpushed work, and normal agent
+#     activity produces untracked files (a rendered index-gfm.md blocked exactly
+#     this on 2026-07-30). An unattended cutover would either stall on that or,
+#     worse, be "fixed" by relaxing the check that protects real work.
+#   - Nothing here verifies the VM still does its JOB. Units, disk and
+#     control-plane denial are checked; whether the site still renders the same
+#     bytes was verified by hand each time.
+#   - Deletion is irreversible and the old VM is the only rollback.
+#
+# So what a schedule should run is a fleet REFRESH PROPOSAL: replacements built
+# and verified, cutover left to a human. Retire with the command below.
+note "  Built, NOT cut over. Each old VM is still running and serving."
+if (( ${#done_vms[@]} )); then
+    note ""
+    note "  Verify each replacement (render its site if it serves one), then:"
+    for d in ${done_vms[@]+"${done_vms[@]}"}; do
+        note "    retire-vm $d --replaced-by $d-next --delete"
+    done
+    note ""
+    note "  retire-vm refuses if any repo on the old VM has uncommitted or"
+    note "  unpushed work, removes the collector entry before deleting, and"
+    note "  restores the canonical name (exe.dev rename + OS/Tailscale hostname"
+    note "  + collector URL + integration attachments, which do NOT follow a"
+    note "  rename on their own)."
+fi
 
 [[ -n "$failed_vm" ]] && exit 1
 exit 0
