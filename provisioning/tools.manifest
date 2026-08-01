@@ -4,7 +4,7 @@
 # "what", not the "how".
 #
 # Columns (whitespace-separated):
-#   layer  base | team | personal
+#   layer  base | team | personal | personal-mac
 #   tool   command name on PATH
 #
 # Layers:
@@ -16,10 +16,12 @@
 #             install.sh also installs duckdb/quarto/tigris/herdr/agentsview
 #             (floating) so macOS gets them — a known, intentional overlap.
 #   personal  dotfiles-only: installed by install.sh, absent from iv-image.
+#   personal-mac  like personal, but macOS-only — install.sh skips it on Linux
+#             VMs (see the gh/croc note below). Same drift invariants as personal.
 #
 # Consumers: none yet (installers are still imperative); checked by
-# diff-provisioning.sh (team ⊆ provision-iv.sh, personal ⊆ install.sh,
-# personal ∩ provision-iv.sh = ∅).
+# diff-provisioning.sh (team ⊆ provision-iv.sh, personal/personal-mac ⊆
+# install.sh, personal ∩ provision-iv.sh = ∅).
 
 # exeuntu-provided (asserted in-repo: jq per iv-image setup-mcp.sh; git/curl
 # required by provision-iv.sh before it installs anything)

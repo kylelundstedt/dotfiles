@@ -200,13 +200,16 @@ while read -r layer tool; do
             fi
             grep -qwF "$tool" <<<"$install_code" && info "team tool $tool also installed by install.sh (macOS overlap — expected)" || true
             ;;
-        personal)
-            grep -qwF "$tool" <<<"$install_code" && ok "personal tool $tool in install.sh" || drift "personal tool $tool missing from install.sh"
+        personal | personal-mac)
+            # personal-mac = personal, but installed on macOS only (install.sh
+            # skips it on Linux VMs). Same invariants either way: present in
+            # install.sh, never on VMs — the latter is automatic for macOS-only.
+            grep -qwF "$tool" <<<"$install_code" && ok "$layer tool $tool in install.sh" || drift "$layer tool $tool missing from install.sh"
             # provision-iv.sh guards every tool install with `command -v <tool>`,
             # so that's the precise signal (a bare word-grep false-positives on
             # e.g. .claude/ and codex-config.toml paths).
             if $have_iv; then
-                grep -qE "command -v $tool\b" <<<"$prov_code" && drift "personal tool $tool is ALSO installed by provision-iv.sh (layer wrong?)" || true
+                grep -qE "command -v $tool\b" <<<"$prov_code" && drift "$layer tool $tool is ALSO installed by provision-iv.sh (layer wrong?)" || true
             fi
             ;;
         *) drift "tools.manifest: unknown layer '$layer' for '$tool'" ;;
