@@ -9,11 +9,11 @@
 #                   scheduled operation, not a routine one.
 # kgl-thoughts      backs a public site; retirement needs a real check that no
 #                   custom domain or DNS points at the VM.
-# iv-entire-agent-shelley
-#                   holds ~/.ssh/id_entire_setup, an orphan private key that
-#                   authenticates nothing we can find. Recreating destroys it.
-#                   Resolve that first (agent_docs/exe-dev-remediation.md).
+# (iv-entire-agent-shelley was here until 2026-08-01: its orphan bootstrap key
+#  is archived to 1Password Employee and removed from the VM, so recreating it
+#  destroys nothing. GitHub rejects the key outright — `ssh -i ... git@github.com`
+#  returns Permission denied — and it appears in no authorized_keys, no deploy
+#  key, and no config we control.)
 rss-feed
 telnyx-vm
 kgl-thoughts
-iv-entire-agent-shelley
