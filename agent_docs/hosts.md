@@ -27,10 +27,14 @@ fleet runs here.
   `authorized_keys`. Also runs a dedicated mosh-bootstrap sshd on port `2222`
   (`ssh/sshd-moshi/`, for the herdr pilot), bound to the Tailscale address and
   keyed off `~/.ssh/authorized_keys_moshi` — the break-glass path if Tailscale
-  SSH is unavailable. Native **Remote Login (`com.openssh.sshd` on `*:22`) is
-  off** as of 2026-07-31; it was reachable on the LAN and its only credentials
-  were three stale JumpCloud keys, now deleted. Three independent daemons —
-  changing one does not affect the others. See [ssh-keys.md](ssh-keys.md).
+  SSH is unavailable. Native Remote Login (`com.openssh.sshd`, `*:22`) and
+  Screen Sharing (`*:5900`) are **both off** as of 2026-07-31 — each was
+  reachable on the LAN; Remote Login's only credentials were three stale
+  JumpCloud keys, now deleted, and Screen Sharing had gone 14 days unused.
+  These are independent daemons: turning those two off left Tailscale SSH and
+  `2222` untouched. Note it also leaves **no remote GUI path** to the mini,
+  which matters when 1Password needs unlocking here. See
+  [ssh-keys.md](ssh-keys.md).
 - **Backup:** `backup/tigris-backup.sh` runs here **only** (guarded by a
   `LocalHostName` check in `backup/_lib.sh`). `~/` + Photos → the IA
   `klundstedt-mini-backup` bucket; the external `OWC8TB` volumes → the

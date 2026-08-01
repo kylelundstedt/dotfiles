@@ -1,9 +1,10 @@
 # SSH Key Inventory & the Mini's Inbound Surface
 
 Every SSH private key this account holds, what each one authenticates, and the
-three separate inbound SSH paths into `klundstedt-mini`. Written 2026-07-31
-from the mini, after a JumpCloud reconciliation that deleted three stale key
-registrations.
+separate inbound remote-access paths into `klundstedt-mini` — which of them are
+still open and why. Written 2026-07-31 from the mini, after a JumpCloud
+reconciliation that deleted three stale key registrations and closed two
+LAN-facing services.
 
 This exists because the JumpCloud registrations were **invisible from the
 repo**: nothing in dotfiles referenced them, they were pushed onto the host by
@@ -78,16 +79,20 @@ There is also **no JumpCloud-managed server fleet**. `known_hosts` and shell
 history are entirely exe.dev VMs, `github.com`, and `klundstedt-mini`; the only
 JC-managed systems are the two Macs.
 
-## The mini's three inbound SSH surfaces
+## The mini's inbound remote-access surface
 
-Worth stating explicitly because they are independent daemons and it is easy to
-assume changing one affects another. It does not.
+Worth stating explicitly because these are independent daemons and it is easy
+to assume changing one affects another. It does not — turning Remote Login off
+left both remaining paths untouched.
 
-| Surface             | Daemon                       | Port / bind                 | Authorized-keys file                |
-| ------------------- | ---------------------------- | --------------------------- | ----------------------------------- |
-| Tailscale SSH       | `tailscaled` (in-process)    | tailnet only                | none — tailnet ACLs                 |
-| Moshi bootstrap     | `dev.klundstedt.sshd-moshi`  | `100.123.154.23:2222`       | `.ssh/authorized_keys_moshi`        |
-| Native Remote Login | `com.openssh.sshd` (launchd) | `*:22` — **all interfaces** | `.ssh/authorized_keys` (JC-managed) |
+State after the 2026-07-31 cleanup:
+
+| Surface             | Daemon                       | Port / bind               | Credentials                         | State   |
+| ------------------- | ---------------------------- | ------------------------- | ----------------------------------- | ------- |
+| Tailscale SSH       | `tailscaled` (in-process)    | tailnet only              | none — tailnet ACLs                 | **on**  |
+| Moshi bootstrap     | `dev.klundstedt.sshd-moshi`  | `100.123.154.23:2222`     | `.ssh/authorized_keys_moshi`        | **on**  |
+| Native Remote Login | `com.openssh.sshd` (launchd) | `*:22` — all interfaces   | `.ssh/authorized_keys` (JC-managed) | **off** |
+| Screen Sharing      | `com.apple.screensharing`    | `*:5900` — all interfaces | macOS account password              | **off** |
 
 Native Remote Login was the exposure: bound to every interface (confirmed
 reachable on the LAN address `192.168.1.165:22`), offering
@@ -115,6 +120,39 @@ every agent session, which is a permanent broad read grant in exchange for one
 toggle. Use **System Settings → General → Sharing → Remote Login** instead.
 (A `launchctl disable system/com.openssh.sshd` + `bootout` override also works
 without FDA and persists, but a major macOS update can reset overrides.)
+
+### Screen Sharing — also turned off, on a weaker argument
+
+Turned off the same day. Unlike SSH there was **no defect** here: no legacy VNC
+password file existed, so auth was macOS account credentials rather than a weak
+VNC secret; Remote Management/ARD was never enabled (`ARDAgent` not loaded, no
+`com.apple.RemoteManagement` domain). The case was pure surface reduction — one
+more authenticated service on `*:5900`, reachable from anything on the LAN, on
+a host whose Application Firewall is disabled — plus `screensharingd` showing
+**zero log entries in 14 days** and the mini having physical displays (Studio
+Display + a 4K) to re-enable from.
+
+**The cost, which is real:** this removes the only remote GUI path to the mini.
+The recurring case is unlocking 1Password — see the `new-dev-vm` preflight
+blocker in [TODO.md](../TODO.md), which refuses when the agent can't sign. If
+that happens while away from the machine, it now waits until you're back. Turn
+Screen Sharing back on in **System Settings → General → Sharing** if that
+becomes a pattern; it was a judgment call, not a defect fix.
+
+**There is no tailnet-only middle setting.** Screen Sharing binds all
+interfaces with no interface option; the macOS Application Firewall is per-app
+(blocking `screensharingd` is equivalent to turning it off); only custom `pf`
+rules could scope 5900 to `utun`, and those are reset by macOS updates. On or
+off are the real choices.
+
+### What still listens on all interfaces
+
+After both toggles, the only non-loopback, non-tailnet listeners left are Apple
+platform services this repo doesn't configure: `ControlCenter` on `:5000` and
+`:7000` (AirPlay Receiver), `rapportd` on a high port (Continuity/Handoff), and
+`:88` (local KDC). Everything this repo owns is either loopback (`hub-mcp`
+`:8765`, AgentsView collector `:8080`) or bound to the Tailscale address
+(`:2222`, and `:443`/`:8443` from `tailscale serve`).
 
 ## What was searched (and came up empty)
 

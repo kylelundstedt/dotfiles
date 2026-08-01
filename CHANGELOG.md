@@ -40,6 +40,26 @@ is what made the question moot. Verified after: port 22 closed,
 `com.openssh.sshd` fully unloaded, moshi's 2222 untouched. There is no
 JumpCloud-managed server fleet; the only JC systems are the two Macs.
 
+**Screen Sharing turned off too**, on a deliberately weaker argument. There was
+no defect there — no legacy VNC password file, so auth was macOS account
+credentials rather than a weak VNC secret, and Remote Management/ARD was never
+enabled. The case was pure surface reduction (`*:5900` on all interfaces, host
+firewall disabled), supported by `screensharingd` logging **zero entries in 14
+days** and the mini having physical displays to re-enable from. The cost is
+named rather than hidden: there is now **no remote GUI path to the mini**, and
+the recurring case for one — unlocking 1Password for the `new-dev-vm` preflight
+— is already in `TODO.md`. There is no tailnet-only middle setting; Screen
+Sharing binds all interfaces, the Application Firewall is per-app, and only
+custom `pf` rules could scope it, which macOS updates reset.
+
+Two method notes worth keeping. `systemsetup -f -setremotelogin off` fails with
+_"requires Full Disk Access privileges"_ — and granting the terminal FDA is the
+wrong trade, since every agent session spawned there inherits it; use the GUI
+toggle. And the first `screensharingd` log query returned empty because of
+shell quoting, not because the service was unused — a silent false negative
+that would have made a real usage record look like an idle service. It was
+re-run against a `loginwindow` control that did return data.
+
 Incidental find: two **unencrypted third-party RSA private keys** sitting in
 `~/archives/email/attachments/`, which is inside the Tigris backup path.
 
