@@ -94,6 +94,7 @@ if [[ "$DERIVED" == true ]]; then
     excl=""
     [[ -f "$EXCLUDE_FILE" ]] && excl=$(grep -vE '^\s*#|^\s*$' "$EXCLUDE_FILE" | tr '\n' ' ')
 
+    all_vms=$(ssh -o ConnectTimeout=30 exe.dev ls --json 2>/dev/null | jq -r '.vms[].vm_name')
     echo "== deriving queue (pin=$PIN, max-age=${MAX_AGE}d)"
     # `last_active_at` is not creation; `created_at` is what ages. Compare in
     # UTC epoch seconds so timezone never enters into it.
@@ -101,6 +102,15 @@ if [[ "$DERIVED" == true ]]; then
     while IFS='|' read -r vm img created; do
         [[ -z "$vm" ]] && continue
         case " $excl " in *" $vm "*) echo "  - $vm (excluded)"; continue ;; esac
+        # A replacement awaiting cutover is not a steady-state VM. Without this
+        # an aged iv-foo-next would be "recreated" as iv-foo-next-next, and the
+        # suffix would accrete every cycle. Demonstrated by the first dry run.
+        case "$vm" in *-next) echo "  - $vm (pending cutover)"; continue ;; esac
+        # Nor is a VM that already has one built and waiting — building a second
+        # replacement helps nobody and consumes the pool.
+        if grep -qx "$vm-next" <<<"$all_vms"; then
+            echo "  - $vm (replacement $vm-next already built, awaiting cutover)"; continue
+        fi
         age_days=$(( (now - $(date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$created" +%s 2>/dev/null || echo "$now")) / 86400 ))
         why=""
         [[ "$img" != *"$PIN" ]] && why="image $img != pin"

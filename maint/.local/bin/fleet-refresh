@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# fleet-refresh — scheduled dev-VM refresh PROPOSAL.
+#
+# Builds and verifies replacements for VMs that are due, and stops there. It
+# never cuts over and never deletes. See recreate-fleet's summary block for why
+# an unattended cutover would be wrong: retire-vm refuses on uncommitted work
+# (normal agent activity creates untracked files), nothing here verifies the VM
+# still does its JOB rather than merely being healthy, and the old VM is the
+# only rollback.
+#
+# So a green check means "replacements are built and waiting", not "the fleet
+# is updated". The retire commands are printed in the run log.
+#
+# Heartbeat: healthchecks.io ping URL in the login Keychain under
+# fleet-refresh:healthcheck-url (optional; no-op if absent).
+#
+# SUCCESS IS PINGED ON EVERY SKIP — no VMs due, 1Password locked, wrong host.
+# A dead-man's switch that only pings when work happens starves during the
+# 29 days when nothing is due, and reports DOWN for a fleet that is fine
+# (agent_docs/monitoring.md: "staleness-skipping jobs must ping success on
+# skip").
+#
+# Usage: fleet-refresh [--max-age N] [--build N] [--dry-run]
+set -uo pipefail
+source "$(cd "$(dirname "$0")/../../.." && pwd)/backup/_lib.sh" 2>/dev/null \
+  || source "$HOME/dotfiles/backup/_lib.sh"
+
+MAX_AGE=30
+BUILD=2          # cap per run: 2 VMs is ~40 min and ~5 GB of pool
+DRY_RUN=false
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --max-age) MAX_AGE="${2:?}"; shift 2 ;;
+        --build)   BUILD="${2:?}"; shift 2 ;;
+        --dry-run) DRY_RUN=true; shift ;;
+        *) echo "Usage: $0 [--max-age N] [--build N] [--dry-run]" >&2; exit 2 ;;
+    esac
+done
+
+job_hc_init "fleet-refresh:healthcheck-url"
+hc() { $DRY_RUN && return 0; job_hc "$@"; }
+
+FLEET="$(dirname "$0")/recreate-fleet"
+BUMP="$(dirname "$0")/bump-vm-image"
+
+# Stowed on every Mac, but the control plane is mini-only (CLAUDE.md, and
+# recreate-fleet enforces it). Ping success and leave — this is a correct state,
+# not a failure.
+if [[ "$(hostname -s)" != "klundstedt-mini" ]]; then
+    echo "fleet-refresh: not klundstedt-mini — nothing to do"
+    hc; exit 0
+fi
+
+hc /start
+echo "== fleet-refresh $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+# Report a newer base image but never adopt it unattended. The pin is what
+# every future VM is built from; moving it is a decision, and bump-vm-image
+# requires --write for that reason.
+img_note=""
+if [[ -x "$BUMP" ]]; then
+    bump_out=$("$BUMP" 2>&1 || true)
+    echo "$bump_out" | sed 's/^/  /'
+    grep -q "would update the pin" <<<"$bump_out" \
+        && img_note="a newer exeslim-dev build is published — run bump-vm-image --write"
+fi
+
+out=$("$FLEET" --max-age "$MAX_AGE" --checkpoint "$BUILD" 2>&1); rc=$?
+echo "$out"
+
+built=$(grep -cE '^  OK: .* built' <<<"$out" || true)
+summary="built=$built"
+[[ -n "$img_note" ]] && summary="$summary; $img_note"
+
+if (( rc != 0 )); then
+    # A failed build leaves a half-provisioned VM in place on purpose — it is
+    # resumable with `new-dev-vm --resume-from`, and deleting it would discard
+    # ~20 minutes of provisioning.
+    echo "fleet-refresh: recreate-fleet exited $rc"
+    hc /fail --data-raw "fleet-refresh: $summary; recreate-fleet rc=$rc (resumable with --resume-from)"
+    exit "$rc"
+fi
+
+if grep -q "== nothing due" <<<"$out"; then
+    echo "fleet-refresh: nothing due${img_note:+ ($img_note)}"
+    hc; exit 0
+fi
+
+echo "fleet-refresh: $summary"
+echo "  NOT cut over — retire commands are in the output above."
+hc --data-raw "fleet-refresh: $summary"
