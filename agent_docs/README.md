@@ -35,6 +35,7 @@ always-on rules live in `AGENTS.md`.
 | `shelley-dual-provider.md`   | Verified: exe.dev OpenAI + personal-gateway Claude in one Shelley via a VM-local merge proxy            |
 | `monitoring.md`              | healthchecks.io registry — job↔check schedule pairs, grace rules, incidents                             |
 | `secrets.md`                 | Secret management — exe.dev integrations, 1Password patterns, MCP server auth                           |
+| `snowflake-keys.md`          | The 4 Snowflake accounts, key-pair registrations, break-glass item defects, `rsa_key` orphan closed     |
 | `multi-tenant.md`            | Future multi-tenant plan (gated on first paying client) — decisions, checklist                          |
 | `herdr-pilot.md`             | herdr + Moshi agent-workflow pilot — topology decisions, boundaries, checklist                          |
 | `agentsview-pilot.md`        | Approved fleet pilot — central Shelley/Claude/Codex history across exe.dev and AC VMs                   |
