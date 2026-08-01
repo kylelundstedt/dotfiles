@@ -5,14 +5,15 @@
 #
 # SSHes into <vm>.exe.xyz (the exe.dev edge path — works before the VM is on the
 # tailnet) and runs `tailscale up` with a one-use, ephemeral, preauthorized key
-# minted through exe.dev's tailscale-api HTTP proxy. The Tailscale API secret
+# minted through exe.dev's api-tailscale HTTP proxy. The Tailscale API secret
 # never touches the VM; exe.dev injects it at the proxy layer.
 #
 # Preconditions (all satisfied by iv-image >= 2.0.0 created with --tag=iv):
 #   - tailscaled enabled and running on the VM
 #   - curl + jq present on the VM
 #
-# ATTACH-THEN-DETACH (2026-07-28). `tailscale-api` used to be attached
+# ATTACH-THEN-DETACH (2026-07-28). `api-tailscale` (then `tailscale-api`) used
+# to be attached
 # `auto:all`, so every VM — including the public-facing ones — could mint
 # tailnet auth keys, remove nodes, and edit ACLs at any time. Verified from
 # rss-feed: the proxy returned HTTP 200 on a token exchange. It is now attached
@@ -22,31 +23,31 @@
 # will show a stray `vm:` attachment.
 #
 # Env overrides: IV_TAILSCALE_TAG (default tag:dev),
-#                IV_TAILSCALE_API_URL (default https://tailscale-api.int.exe.xyz)
+#                IV_TAILSCALE_API_URL (default https://api-tailscale.int.exe.xyz)
 set -euo pipefail
 
 VM=${1:?usage: join-tailnet.sh <vm-name>}
 TAG=${IV_TAILSCALE_TAG:-tag:dev}
-PROXY=${IV_TAILSCALE_API_URL:-https://tailscale-api.int.exe.xyz}
+PROXY=${IV_TAILSCALE_API_URL:-https://api-tailscale.int.exe.xyz}
 
 # Was it already attached before we got here? If so, leave it exactly as found
 # rather than detaching something we did not attach.
 preexisting=false
 if ssh -o ConnectTimeout=30 exe.dev integrations list 2>/dev/null \
-   | awk -v vm="vm:$VM" '$1=="tailscale-api" && index($0, vm) {found=1} END{exit !found}'; then
+   | awk -v vm="vm:$VM" '$1=="api-tailscale" && index($0, vm) {found=1} END{exit !found}'; then
   preexisting=true
-  echo "join-tailnet: tailscale-api already attached to $VM — leaving attachment as found" >&2
+  echo "join-tailnet: api-tailscale already attached to $VM — leaving attachment as found" >&2
 else
-  echo "join-tailnet: attaching tailscale-api to $VM for the duration of the join" >&2
-  ssh -o ConnectTimeout=30 exe.dev integrations attach tailscale-api "vm:$VM" >/dev/null \
-    || { echo "join-tailnet: could not attach tailscale-api to $VM" >&2; exit 1; }
+  echo "join-tailnet: attaching api-tailscale to $VM for the duration of the join" >&2
+  ssh -o ConnectTimeout=30 exe.dev integrations attach api-tailscale "vm:$VM" >/dev/null \
+    || { echo "join-tailnet: could not attach api-tailscale to $VM" >&2; exit 1; }
 fi
 
 detach() {
   [ "$preexisting" = true ] && return 0
-  echo "join-tailnet: detaching tailscale-api from $VM" >&2
-  ssh -o ConnectTimeout=30 exe.dev integrations detach tailscale-api "vm:$VM" >/dev/null \
-    || echo "join-tailnet: WARNING — failed to detach tailscale-api from $VM; detach it manually" >&2
+  echo "join-tailnet: detaching api-tailscale from $VM" >&2
+  ssh -o ConnectTimeout=30 exe.dev integrations detach api-tailscale "vm:$VM" >/dev/null \
+    || echo "join-tailnet: WARNING — failed to detach api-tailscale from $VM; detach it manually" >&2
 }
 trap detach EXIT INT TERM
 
@@ -93,8 +94,8 @@ done
 if [ -z "$token" ]; then
   echo "join-tailnet: OAuth token exchange via ${PROXY} failed after 6 attempts" >&2
   echo "  the attach propagates in seconds, so this is not the delay — check" >&2
-  echo "  'integrations list' for a tailscale-api attachment on this VM, and" >&2
-  echo "  'integrations test tailscale-api' for the credential itself." >&2
+  echo "  'integrations list' for an api-tailscale attachment on this VM, and" >&2
+  echo "  'integrations test api-tailscale' for the credential itself." >&2
   exit 1
 fi
 

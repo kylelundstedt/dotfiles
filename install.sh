@@ -1702,7 +1702,7 @@ setup_tailscale() {
         # when TS_AUTHKEY wasn't provided explicitly.
         local ts_key="${TS_AUTHKEY:-}"
         if [[ -z "$ts_key" ]]; then
-            local ts_proxy="https://tailscale-api.int.exe.xyz"
+            local ts_proxy="https://api-tailscale.int.exe.xyz"
             # Two-step (U11, 2026-07): the proxy injects the Tailscale OAuth
             # client's Basic credentials on every request, so only the token
             # exchange goes through it; the 1h Bearer token then talks to the
