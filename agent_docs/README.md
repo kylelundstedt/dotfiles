@@ -36,6 +36,7 @@ always-on rules live in `AGENTS.md`.
 | `monitoring.md`              | healthchecks.io registry — job↔check schedule pairs, grace rules, incidents                             |
 | `secrets.md`                 | Secret management — exe.dev integrations, 1Password patterns, MCP server auth                           |
 | `snowflake-keys.md`          | The 4 Snowflake accounts, key-pair registrations, break-glass item defects, `rsa_key` orphan closed     |
+| `ssh-keys.md`                | Every SSH key held, the 3 stale JumpCloud registrations deleted 2026-07-31, the mini's 3 inbound paths  |
 | `multi-tenant.md`            | Future multi-tenant plan (gated on first paying client) — decisions, checklist                          |
 | `herdr-pilot.md`             | herdr + Moshi agent-workflow pilot — topology decisions, boundaries, checklist                          |
 | `agentsview-pilot.md`        | Approved fleet pilot — central Shelley/Claude/Codex history across exe.dev and AC VMs                   |

@@ -4,6 +4,41 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-07-31 — JumpCloud SSH key reconciliation; mini's inbound surface closed
+
+Audited every SSH private key this account holds and reconciled it against the
+three keys registered on the JumpCloud user `JC IV - klundstedt`. **All three
+registrations were stale and all three were deleted** — `iv-klundstedt`
+(2019-03-09, RSA), `iv-klundstedt-2020-02` (2020-02-21, RSA), and
+`iv-klundstedt-2022-11` (2022-10-28, ed25519). Fingerprints and the full search
+in [agent_docs/ssh-keys.md](agent_docs/ssh-keys.md).
+
+Stale in the strict sense: **the private half of all three is gone.** Searched
+`~/.ssh` (which holds no private keys at all — everything is in the 1Password
+agent), all 190 items across all four 1P vaults, a full `$HOME` content grep for
+PEM private-key headers, `/Volumes/OWC8TB`, iCloud Drive, and Time Machine (no
+destinations, so no historical copy exists). The keys could not be used by us —
+only by someone else holding a surviving copy.
+
+They were not inert. The JumpCloud agent runs on both Macs and pushes registered
+keys into `~/.ssh/authorized_keys`, which native `sshd` reads; Remote Login was
+on and bound to **all interfaces**, confirmed reachable at `192.168.1.165:22`
+with `PasswordAuthentication` at the macOS default of enabled. So a 2019 RSA key
+of unknown disposition was a standing LAN-facing credential on the always-on
+Mac.
+
+**The current key was deliberately NOT registered in their place.** Every path
+actually in use bypasses `authorized_keys`: mbp → mini is Tailscale SSH
+(tailnet ACLs), the phone is the separate sshd on 2222 reading
+`authorized_keys_moshi`, and the VMs use the exe.dev key. Registering
+`iv-klundstedt-2024-01` would have pushed it back into the same LAN-facing file
+on every JC-managed device — recreating the exposure for no gain. Remote Login
+was turned off on the mini instead, which is what made the question moot. There
+is no JumpCloud-managed server fleet; the only JC systems are the two Macs.
+
+Incidental find: two **unencrypted third-party RSA private keys** sitting in
+`~/archives/email/attachments/`, which is inside the Tigris backup path.
+
 ## 2026-07-28 — AgentsView adopted; retention mechanism; slim deployment lane
 
 Closed the AgentsView pilot and adopted it fleet-wide. All 9 running exe.dev

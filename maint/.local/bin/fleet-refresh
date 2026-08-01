@@ -81,6 +81,15 @@ if (( rc != 0 )); then
     exit "$rc"
 fi
 
+# recreate-fleet exits 0 when the agent cannot sign — correct for a cron run,
+# but it means "not attempted", not "nothing to do". Reporting built=0 with a
+# pointer to retire commands that do not exist reads like a clean no-op run.
+if grep -q "cannot sign with the exe.dev key" <<<"$out"; then
+    echo "fleet-refresh: skipped — 1Password locked, nothing attempted"
+    hc --data-raw "fleet-refresh: skipped (1Password locked)"
+    exit 0
+fi
+
 if grep -q "== nothing due" <<<"$out"; then
     echo "fleet-refresh: nothing due${img_note:+ ($img_note)}"
     hc; exit 0

@@ -22,9 +22,15 @@ fleet runs here.
   **first** `install.sh` run; self-maintains after. It's a **tagged** device
   (`tag:dev`, persistent) — its rebuild path mints a non-ephemeral key via `op`.
   Formula upgrades are a manual ritual (see `AGENTS.md` → Tailscale).
-- **SSH target:** reachable at `klundstedt-mini.dojo-sun.ts.net`. Also runs a
-  dedicated mosh-bootstrap sshd on port `2222` (`ssh/sshd-moshi/`, for the
-  herdr pilot).
+- **SSH target:** reachable at `klundstedt-mini.dojo-sun.ts.net` via **Tailscale
+  SSH** (`RunSSH: true`), which authenticates on tailnet ACLs and never reads
+  `authorized_keys`. Also runs a dedicated mosh-bootstrap sshd on port `2222`
+  (`ssh/sshd-moshi/`, for the herdr pilot), bound to the Tailscale address and
+  keyed off `~/.ssh/authorized_keys_moshi` — the break-glass path if Tailscale
+  SSH is unavailable. Native **Remote Login (`com.openssh.sshd` on `*:22`) is
+  off** as of 2026-07-31; it was reachable on the LAN and its only credentials
+  were three stale JumpCloud keys, now deleted. Three independent daemons —
+  changing one does not affect the others. See [ssh-keys.md](ssh-keys.md).
 - **Backup:** `backup/tigris-backup.sh` runs here **only** (guarded by a
   `LocalHostName` check in `backup/_lib.sh`). `~/` + Photos → the IA
   `klundstedt-mini-backup` bucket; the external `OWC8TB` volumes → the
