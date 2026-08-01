@@ -33,8 +33,12 @@ actually in use bypasses `authorized_keys`: mbp → mini is Tailscale SSH
 `authorized_keys_moshi`, and the VMs use the exe.dev key. Registering
 `iv-klundstedt-2024-01` would have pushed it back into the same LAN-facing file
 on every JC-managed device — recreating the exposure for no gain. Remote Login
-was turned off on the mini instead, which is what made the question moot. There
-is no JumpCloud-managed server fleet; the only JC systems are the two Macs.
+was turned off on the mini instead (GUI toggle — `systemsetup -f
+-setremotelogin off` needs Full Disk Access on the calling terminal, which is
+not worth granting since every agent session spawned there inherits it), which
+is what made the question moot. Verified after: port 22 closed,
+`com.openssh.sshd` fully unloaded, moshi's 2222 untouched. There is no
+JumpCloud-managed server fleet; the only JC systems are the two Macs.
 
 Incidental find: two **unencrypted third-party RSA private keys** sitting in
 `~/archives/email/attachments/`, which is inside the Tigris backup path.

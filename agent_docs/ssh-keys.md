@@ -96,23 +96,25 @@ the three stale JC ones. `PasswordAuthentication` is not set anywhere in
 `sshd_config` or `sshd_config.d/100-macos.conf`, so it ran at the macOS default
 of enabled.
 
-**Decided 2026-07-31: turn Remote Login off on the mini.** With the JC keys
-deleted the file is empty, so port 22 grants nothing by pubkey — but it still
-answers on the LAN with password auth enabled, and nothing uses it.
+**Remote Login turned OFF on the mini 2026-07-31.** With the JC keys deleted
+the file is empty, so port 22 granted nothing by pubkey — but it still answered
+on the LAN with password auth enabled, and nothing used it. Verified after:
+`nc -z 127.0.0.1 22` fails, `com.openssh.sshd` is fully unloaded
+(`Could not find service ... in domain for system`), and `2222` still listens.
 
-```
-sudo systemsetup -f -setremotelogin off      # off
-sudo systemsetup -f -setremotelogin on       # re-enable if ever needed
-```
+Tailscale SSH and the moshi sshd were unaffected, as expected — `tailscaled`
+implements its own SSH server rather than proxying to `sshd`, and the moshi
+daemon is a distinct LaunchDaemon with its own config. The moshi path on 2222
+is the deliberate break-glass route if Tailscale SSH is ever unavailable.
 
-Tailscale SSH and the moshi sshd are unaffected — `tailscaled` implements its
-own SSH server rather than proxying to `sshd`, and the moshi daemon is a
-distinct LaunchDaemon with its own config. The moshi path on 2222 is the
-deliberate break-glass route if Tailscale SSH is ever unavailable.
-
-> **PENDING as of this writing** — the command needs interactive `sudo`, which
-> an agent session can't supply. Verify with
-> `nc -z 127.0.0.1 22` (should fail) and flip this note when done.
+**Toggle it from the GUI, not the CLI.** `sudo systemsetup -f -setremotelogin
+off` fails with _"Turning Remote Login on or off requires Full Disk Access
+privileges"_ — the FDA has to belong to the calling terminal. Don't grant it:
+that capability is inherited by every process the terminal spawns, including
+every agent session, which is a permanent broad read grant in exchange for one
+toggle. Use **System Settings → General → Sharing → Remote Login** instead.
+(A `launchctl disable system/com.openssh.sshd` + `bootout` override also works
+without FDA and persists, but a major macOS update can reset overrides.)
 
 ## What was searched (and came up empty)
 
