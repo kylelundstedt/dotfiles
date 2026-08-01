@@ -43,8 +43,15 @@ else
     || { echo "join-tailnet: could not attach api-tailscale to $VM" >&2; exit 1; }
 fi
 
+detached=false
 detach() {
   [ "$preexisting" = true ] && return 0
+  # The trap is armed on EXIT INT TERM, so an interrupted run fires it more than
+  # once: the first detach succeeds, the second fails because there is nothing
+  # left to attach, and prints a warning that reads like a leaked credential.
+  # Observed while deliberately interrupting a join to test --resume-from.
+  [ "$detached" = true ] && return 0
+  detached=true
   echo "join-tailnet: detaching api-tailscale from $VM" >&2
   ssh -o ConnectTimeout=30 exe.dev integrations detach api-tailscale "vm:$VM" >/dev/null \
     || echo "join-tailnet: WARNING — failed to detach api-tailscale from $VM; detach it manually" >&2
