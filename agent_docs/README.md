@@ -21,6 +21,7 @@ always-on rules live in `AGENTS.md`.
 | `hosts.md`                   | Where this runs — the two Macs (mini vs mbp) and the Linux VM fleet + testing                           |
 | `exe-dev.md`                 | exe.dev fleet specifics — SSH rate-limit discipline, no-hook contract, reflection                       |
 | `exe-dev-web.md`             | exe.dev app/Shelley endpoint model + 2026-07-19 fleet web audit                                         |
+| `exe-dev-https-api.md`       | HTTPS API evaluation — token scoping, why it is NOT a lockout fix, deferred to the scheduled cycle      |
 | `git-identity.md`            | Repo layout + commit identity across macOS & exe.dev VMs (hasconfig-by-org)                             |
 | `git-https-migration.md`     | HTTPS-only Git transport migration, canary, fleet rollout, and rollback                                 |
 | `agents-recommendations.md`  | Operating patterns, dual-agent workflows, task routing, maintenance checklists                          |
