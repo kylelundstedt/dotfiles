@@ -86,7 +86,7 @@ fi
 # pointer to retire commands that do not exist reads like a clean no-op run.
 if grep -q "cannot sign with the exe.dev key" <<<"$out"; then
     echo "fleet-refresh: skipped — 1Password locked, nothing attempted"
-    hc --data-raw "fleet-refresh: skipped (1Password locked)"
+    hc "" --data-raw "fleet-refresh: skipped (1Password locked)"
     exit 0
 fi
 
@@ -97,4 +97,4 @@ fi
 
 echo "fleet-refresh: $summary"
 echo "  NOT cut over — retire commands are in the output above."
-hc --data-raw "fleet-refresh: $summary"
+hc "" --data-raw "fleet-refresh: $summary"
