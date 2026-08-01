@@ -187,11 +187,52 @@ Both are third-party and unrelated to any IV system, but `~/archives` is in the
 Tigris backup path ([tigris-backup-runbook.md](tigris-backup-runbook.md)), so
 they are being replicated off-machine. Open item in [TODO.md](../TODO.md).
 
-## mbp
+## mbp — handoff
 
-Not covered by this sweep. `klundstedt-mbp` has Remote Login **off** already
-(connection to `klundstedt-mbp.dojo-sun.ts.net:22` times out), so the JC keys
-were never a live inbound path there, and the JC deletion removes them from its
-`authorized_keys` on the agent's next sync regardless. The 1Password result is
-machine-independent and already settles that half for both Macs. What remains is
-an on-disk `~/.ssh` inventory run locally on the mbp — see [TODO.md](../TODO.md).
+Not covered by this sweep, which ran entirely from the mini.
+
+**Nothing has to be carried across.** Both things that changed are account-level
+and the mbp picks them up on its own: the JumpCloud registrations were deleted
+server-side, so its JC agent reconciles its own `~/.ssh/authorized_keys` on the
+next sync, and the 1Password inventory is per-account, not per-machine. This
+file is the handoff — pull `~/dotfiles` on the mbp and it's there. (The
+session-start `refresh-env.sh` auto-pull is **exe.dev VMs only**; on a Mac it's
+a manual `git pull`.) What's left is local verification.
+
+**`:22` on the mbp is not reachable from the mini, cause unconfirmed.** The
+tailnet path itself is proven — `tailscale ping klundstedt-mbp` pongs direct in
+4 ms — so the failure is at the port, not the network. That is consistent with
+Remote Login being off, but a Tailscale ACL denying `tag:dev → user device` on
+22 would be indistinguishable from here, since ACLs drop the SYN at the
+receiving node. Don't record it as "Remote Login is off on the mbp" until it's
+checked locally.
+
+Run on the mbp:
+
+```bash
+# 1. Did the JC agent reconcile? Expect header comments and zero keys.
+cat ~/.ssh/authorized_keys
+ssh-keygen -lf ~/.ssh/authorized_keys   # expect "is not a public key file"
+
+# 2. On-disk inventory + agent. Expect no private keys; agent shows the 3 1P keys.
+ls -la ~/.ssh/
+ssh-add -l
+
+# 3. Any surviving private half of the three deleted JC keys?
+grep -rl -I -e 'BEGIN OPENSSH PRIVATE KEY' -e 'BEGIN RSA PRIVATE KEY' ~ 2>/dev/null \
+  | grep -v -e '/go/pkg/mod/' -e '/node_modules/' -e '/Library/Caches/' -e '/\.git/'
+# fingerprint any hit:  ssh-keygen -yf <file> | ssh-keygen -lf -
+# match against: SHA256:lLwdqcogkqC2r8wsBoM01TxDBRgqe/Qp2LTZmvj3LxE
+#                SHA256:VrqTiPtJo5EATgk/LxCQG5lXJKLAZt5Q4/5lLowTaGo
+#                SHA256:c+2b39L9VGiSgJ+LQVpZcZVXHMxtx1CazwdvURsX8F0
+
+# 4. Actual state of the two services (settles the :22 question above).
+sudo systemsetup -getremotelogin        # or System Settings > General > Sharing
+netstat -an | awk '/LISTEN/ && ($1=="tcp4"||$1=="tcp6") {print $1, $4}' | sort -u
+```
+
+A hit in step 3 is the only result that changes anything — it would mean a
+deleted registration's private half still exists and should be destroyed. Steps
+1, 2 and 4 are confirmations. Note the mbp is the **dev laptop**, not the
+always-on host: leaving Remote Login on there is a much smaller exposure than
+it was on the mini, so treat step 4 as information, not a required change.
