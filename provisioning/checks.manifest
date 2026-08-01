@@ -27,4 +27,3 @@ personal-mcp: embeddings | period:900 | - | 1800 | personal-mcp:com.kylelundsted
 personal-mcp: calendar | cron:15 3 * * * | America/Los_Angeles | 3600 | personal-mcp:com.kylelundstedt.calendar-refresh
 entire-push-check | period:86400 | - | 3600 | dotfiles:com.kylelundstedt.entire-push-check
 agentsview-retention | period:86400 | - | 3600 | dotfiles:com.kylelundstedt.agentsview-retention
-fleet-refresh | cron:0 9 * * 1 | America/Los_Angeles | 7200 | dotfiles:com.kylelundstedt.fleet-refresh
