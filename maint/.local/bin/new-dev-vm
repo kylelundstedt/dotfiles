@@ -486,6 +486,26 @@ for c in ${CHECKOUTS[@]+"${CHECKOUTS[@]}"}; do
         [ -e ~/$cpath/.git ] || exit 1
         $ckout'"
 done
+
+# SERVE the site, do not merely render it. provision-docsite points nginx at
+# <repo>/_site on :8000, the port exe.dev proxies. Nothing invoked it before, so
+# every recreated doc VM came up rendering correctly and serving nothing —
+# exe.dev's own error page reads "Port 8000 unbound". One repo per VM, which is
+# what provision-docsite assumes.
+if [[ "$DRY" == true ]]; then
+    step "serve doc site"
+    echo "  [dry-run] provision-docsite <repo> if one carries a _quarto.yml"
+else
+    site=$(ssh -o ConnectTimeout=45 "$EDGE" 'for d in ~/*/; do
+            [ -e "$d/_quarto.yml" ] || continue
+            b=$(basename "$d"); [ "$b" = dotfiles ] && continue; [ "$b" = iv-image ] && continue
+            echo "$b"; break
+        done' 2>/dev/null)
+    if [[ -n "$site" ]]; then
+        step "serve doc site ($site)"
+        run ssh -o ConnectTimeout=900 "$EDGE" "bash -lc 'provision-docsite ~/$site'"
+    fi
+fi
 fi
 
 # --- phase 4: tailnet -------------------------------------------------------
@@ -574,6 +594,15 @@ else
             command -v quarto >/dev/null \
                 && echo \"  renderer: quarto present (\$d needs it)\" \
                 || echo \"  !! renderer MISSING: \$d has _quarto.yml but quarto is not installed\"
+            # SERVING is a separate claim from RENDERING, and the one that
+            # matters. Every doc site went dark at cutover because exeslim-dev
+            # shipped no nginx and nothing ran provision-docsite — while this
+            # check happily reported the renderer present. exe.dev proxies
+            # :8000, so an unbound port means the site is down.
+            code=\$(curl -s -o /dev/null -w %{http_code} --max-time 10 http://localhost:8000/ 2>/dev/null || echo 000)
+            [ \"\$code\" = 200 ] \
+                && echo \"  docsite: serving on :8000 (HTTP 200)\" \
+                || echo \"  !! docsite NOT SERVED: :8000 returned \$code — run provision-docsite ~/\$d\"
             break
         done'"
 
