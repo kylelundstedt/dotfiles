@@ -285,8 +285,13 @@ backed by a Tigris bucket (`t3.storage.dev`). Credentials are injected at the
 edge — the VM sends **placeholder** creds and the proxy re-signs with the real
 Tigris key, so no secret material lands on the VM.
 
-**Convention:** name the integration the same as its bucket (e.g. integration
-`gitlake-examples` → bucket `gitlake-examples`). Attach per VM with
+**The endpoint host is the INTEGRATION name, not the bucket name.** The proxy
+lives at `https://<integration>.int.exe.xyz`, where `<integration>` is the
+integration's name — which need not equal the bucket. Always look it up rather
+than assume: `ssh exe.dev integrations list` shows `<name> s3 endpoint=… bucket=…`.
+E.g. integration `bucket-gitlake-examples` fronts bucket `gitlake-examples`, so
+the host is `bucket-gitlake-examples.int.exe.xyz` but the path uses
+`gitlake-examples`. Attach per VM with
 `ssh exe.dev integrations attach <name> vm:<vm>`.
 
 **Path-style only.** The proxy reads the bucket from the URL _path_
