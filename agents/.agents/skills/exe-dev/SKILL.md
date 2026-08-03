@@ -170,6 +170,10 @@ This requires the Tailscale ACL to permit `tag:dev` → `tag:dev` for both the n
 
 **Userspace-mode fallback.** If `/dev/net/tun` isn't available (some Apple Containers configs, Sprite), `install.sh` falls back to `tailscaled --tun=userspace-networking`. Plain `ssh <vm>` won't work in that mode (no kernel route to tailnet IPs); use `tailscale ssh <vm>` instead, which proxies through tailscaled's userspace TCP stack.
 
+### Tailnet identity after a rename — restart does NOT fix it
+
+A VM's tailnet name is the `--hostname` recorded at `tailscale up` time, **not** re-read from the OS afterward. So if the OS hostname changes (e.g. a recreate joins as `<name>-next`, then gets renamed to `<name>`), the node stays under the **old** name and peers can't reach it by its canonical name — it looks "on the tailnet but uncommunicative." Two things that do **not** fix this (measured on a canary 2026-08-02): `hostnamectl set-hostname`, and `systemctl restart tailscaled` — a restart re-announces the same saved name. What fixes it is **re-registration**: `sudo tailscale logout` then re-join (`join-tailnet.sh <vm>`, which is idempotent toward the requested hostname and clears any stale node holding the name first). Re-registration mints a new node, so the tailnet **IP changes** too — anything pinned to the old IP must be refreshed. Never prescribe "restart tailscaled" to fix tailnet reachability; re-register.
+
 ## Setting Up a Dev VM
 
 A default setup script (`exe-setup.sh`) is registered via `ssh exe.dev defaults write` so every new VM automatically gets Tailscale + dotfiles. Two commands to a working repo:

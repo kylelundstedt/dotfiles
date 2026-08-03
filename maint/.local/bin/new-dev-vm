@@ -525,6 +525,34 @@ step "join tailnet"
     || die "tailscale missing after overlay — install.sh's Linux path did not run"
 run "$HOME/.agents/skills/join-tailnet/join-tailnet.sh" "$NAME"
 
+# Post-condition: "joined" is not "reachable as $NAME". A VM that came up under
+# its <name>-next staging identity is Running but invisible to peers as $NAME,
+# and a tailscaled restart would NOT correct it (the tailnet name is a saved
+# `up --hostname` pref — only a re-register does). join-tailnet is now
+# idempotent toward the requested hostname, so re-running it re-registers a
+# mis-named node; verify from here (this host is on the tailnet) that the
+# canonical name actually resolves AND accepts TCP:22, and re-register until it
+# does. Measured on a canary 2026-08-02.
+if [[ "$DRY" != true ]]; then
+    verify_tailnet_name() {
+        local ip i
+        for i in 1 2 3 4 5; do
+            ip=$(tailscale ip -4 "$NAME" 2>/dev/null | head -1)
+            [[ -n "$ip" ]] && (exec 3<>"/dev/tcp/$ip/22") 2>/dev/null && return 0
+            sleep 3
+        done
+        return 1
+    }
+    tries=0
+    until verify_tailnet_name; do
+        tries=$((tries + 1))
+        (( tries > 3 )) && die "VM is up but not reachable as '$NAME' on the tailnet after $tries re-register attempts — the node may be stuck under its -next name (check 'ssh $EDGE tailscale status')"
+        echo "  not yet reachable as $NAME on the tailnet — re-registering (attempt $tries/3)"
+        run "$HOME/.agents/skills/join-tailnet/join-tailnet.sh" "$NAME"
+    done
+    echo "  verified: reachable as $NAME on the tailnet"
+fi
+
 # --- phase 5: AgentsView enrollment ----------------------------------------
 fi
 

@@ -63,11 +63,26 @@ ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new "${VM}.exe.xyz" \
 set -euo pipefail
 : "${TAG:?}" "${PROXY:?}"
 
+want_host=$(hostname)
+
+# Idempotent toward the REQUESTED hostname, not merely "is it up". A VM that
+# joined under its <name>-next staging hostname is Running, but peers address it
+# by its canonical name — so a bare "already on tailnet, exit 0" would leave it
+# reachable only under the wrong name. A tailscaled RESTART does not fix this:
+# the tailnet name is a saved `up --hostname` pref, re-read from neither the OS
+# nor a restart — only a re-register (logout + up) changes it. Measured on a
+# canary 2026-08-02. So if we are up but under the wrong name, log out and fall
+# through to the mint + up below, which re-registers under $want_host.
 state=$(tailscale status --json 2>/dev/null | jq -r '.BackendState // empty' || true)
 if [ "$state" = "Running" ]; then
-  echo "already on tailnet:"
-  tailscale status
-  exit 0
+  cur_host=$(tailscale status --json 2>/dev/null | jq -r '.Self.DNSName // ""' | cut -d. -f1)
+  if [ "$cur_host" = "$want_host" ]; then
+    echo "already on tailnet as $want_host:"
+    tailscale status
+    exit 0
+  fi
+  echo "join-tailnet: on tailnet as '$cur_host' but hostname is '$want_host' — re-registering" >&2
+  sudo tailscale logout 2>/dev/null || true
 fi
 
 # Two-step (U11, 2026-07): the proxy injects the Tailscale OAuth client's
@@ -115,7 +130,7 @@ fi
 # ("prevents -2 suffix"); join-tailnet did not.
 #
 # Only nodes whose hostname matches AND which are not this machine are removed.
-want_host=$(hostname)
+# ($want_host is set at the top of this block.)
 myips=$(tailscale status --json 2>/dev/null | jq -r '(.Self.TailscaleIPs // [])[]' | tr '\n' ' ')
 for stale in $(curl -fsSL --max-time 15 -H "Authorization: Bearer $token" \
       https://api.tailscale.com/api/v2/tailnet/-/devices 2>/dev/null \
