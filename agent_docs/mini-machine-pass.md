@@ -330,19 +330,43 @@ material from the original JumpCloud setup — not SCIM, which uses a bearer
 token. Expired 7 years ago; unrelated to the three deleted JC device-key
 registrations.
 
+### `~/Downloads` private keys deleted (2026-08-02, closed)
+
+All **21** private-key files under `~/Downloads` were deleted, on the evidence
+that none was referenced by any SSH or AWS config, `~/.ssh/config` names only the
+1Password agent and `exe_dev.pub`, and every one dated 2015–2020 against
+infrastructure long gone. Manifest:
+
+| Group                                                                            | Count | Notes                                                          |
+| -------------------------------------------------------------------------------- | ----- | -------------------------------------------------------------- |
+| DigiCert TLS keys (`dataloader`, `ghe`, `Looker/explore`, `S3`)                  | 8     | duplicated across `_Archive 2011` and `Legal/Vendors/_Archive` |
+| NameCheap TLS keys (`ghe`, `key.pem`)                                            | 4     | 2015, both copies                                              |
+| JumpCloud SAML SSO keypair (`private.pem`)                                       | 2     | 2016-01-07, expired 2019-01-06, both copies                    |
+| Loancare / ccap / `mike` (OpenSSH)                                               | 4     | third-party, inside an exported user folder                    |
+| `industryvault.internal` (`admin-2017-08`, `private-key`, `gitlab-secrets.json`) | 3     | **last surviving copies** of two keys lost in the incident     |
+
+Deleting the last two `industryvault.internal` copies deliberately completes the
+loss from the incident above — consistent with the decision to leave those
+as-is. `~/Downloads` is in the Tigris backup path, so this deletion propagates on
+the next 04:30 sync and is itself recoverable for **30 days** from then.
+
+Verified after: **0** private keys remain under `~/Downloads`; the **61** Keynote
+`.key` presentations that the original bad glob had miscounted are untouched.
+
+`$HOME` private-key-bearing files went 81 → 63, now composed of: 29 encrypted
+committed files in repos (accepted, above), 16 Go module test fixtures, 7 Claude
+Code `file-history` snapshots of this doc, 4 `~/archives/email` attachments (open
+TODO), 3 snowflake-cli library sources, 2 dotfiles docs that merely quote the
+header string, `~/.orbstack/ssh/id_ed25519`, and the rotated GAM key at 0600.
+**No loose unencrypted key material remains outside those.**
+
 ## NEEDS KYLE
 
-Items 1, 3, 4, 5 and 7 are closed — see
-[Decisions taken 2026-08-02](#decisions-taken-2026-08-02). What remains:
+Everything from this pass is closed. Two items live on elsewhere:
 
-1. **The 21 world-readable private keys in `~/Downloads`** — delete, or `chmod
-600`. Evidence for deletion: none is referenced by any SSH/AWS config; the
-   JumpCloud SSO pair expired 2019-01-06; the DigiCert/NameCheap TLS keys are
-   for `ghe.industryvault.com`, Looker `explore`, `dataloader` and
-   `industryvault_com`, all long gone; the `loancare`/`ccap`/`MH` keys are
-   third-party material inside an exported user folder. **Interacts with the
-   deleted-keys decision:** `~/Downloads/Product/Platform/industryvault.internal/`
-   now holds the _only_ surviving copies of two of the three lost keys, so
-   deleting those two completes that loss. `~/Downloads` is also in the Tigris
-   backup path, so any deletion propagates on the next 04:30 sync and is itself
-   only recoverable for 30 days.
+1. **The four cleartext third-party keys in `~/archives/email/attachments/`** —
+   delete vs. accept as archive fidelity. Tracked in [TODO.md](../TODO.md), not
+   here, since it is an archive-policy question rather than a machine-pass one.
+2. **The `gam check svcacct` DwD ambiguity** noted above — one look in the
+   Workspace admin console to confirm `cloud-platform` / `iam` / `cloud-identity`
+   are not actually delegated.
