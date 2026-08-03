@@ -91,9 +91,14 @@ Two UNIT 1 claims were checked and are **wrong** — do not carry them forward:
   not liveness. Same key as the deleted `~/Documents` copy (identical public-key
   digest `f9691353…`).
 
-Permissions finding: **100** private-key files under `~/Documents`/`~/Downloads`
-are world-readable (mode 0644), including the surviving
-`industryvault-private-key.pem`.
+Permissions finding (**corrected 2026-08-02**): an earlier figure of "100
+world-readable private keys" was wrong — the `*.key` glob was matching **Keynote
+presentations**. By content, `~/Documents` + `~/Downloads` hold **21** private
+key files. All 21 are world-readable (0644) and all 21 are in `~/Downloads`;
+`~/Documents` holds zero after the incident above.
+
+None is referenced by `~/.ssh/config`, `~/.aws/config`, or `~/.aws/credentials`.
+`~/.ssh/config` names only the 1Password agent socket and `exe_dev.pub`.
 
 ## UNIT 2 — SSH inventory
 
@@ -114,10 +119,26 @@ Agent serves exactly the three expected keys, no extras:
 
 **UNIT 2's search was defective and its result was re-derived.** It reported
 "zero matches" for `BEGIN … PRIVATE KEY` across `$HOME`. A correct content sweep
-finds **81** matching files. The re-run confirms UNIT 2's _conclusion_ — none of
-the 81 is a private half of the three deleted JumpCloud registrations
-(`SHA256:lLwdqcog…`, `SHA256:VrqTiPtJ…`, `SHA256:c+2b39L9…`) — but the finding
-now rests on the re-run, not on UNIT 2.
+finds **81** matching files.
+
+**Method correction (2026-08-02).** The first re-run claimed none of the 81 was
+a private half of the three deleted JumpCloud registrations
+(`SHA256:lLwdqcog…`, `SHA256:VrqTiPtJ…`, `SHA256:c+2b39L9…`). That claim was
+**not supported at the time**: `ssh-keygen -lf` refuses any file with mode 0644
+(`UNPROTECTED PRIVATE KEY FILE`), so 76 of 80 silently failed to fingerprint and
+were scored as non-matches. Re-done by deriving each public half with `openssl`
+and building the `ssh-rsa` wire blob directly, which has no permission check:
+
+- **23 RSA private keys fingerprinted, 0 matches.**
+- The one **ed25519** JumpCloud key is covered separately: the only ed25519
+  private key on disk is `~/.orbstack/ssh/id_ed25519`
+  (`SHA256:yBAFJAGHJ1R+/JprZEhYOEAXwMRS0BmGj2hSkAvJQKw`) — no match.
+- The remaining 58 are non-keys (Go test fixtures, library source, JSON, the
+  `ssh-keys.md` snapshots) or **encrypted** repo material that cannot be
+  fingerprinted without its passphrase — all of it Snowflake/PGP material inside
+  dbt repos, none of it JumpCloud-shaped.
+
+Conclusion (no surviving JumpCloud private half) stands, now on evidence.
 
 Of the 81: ~16 are Go module test fixtures, 2 are snowflake-cli library source
 (regex patterns, not keys), 4 are Claude Code `file-history` snapshots of
@@ -239,25 +260,62 @@ than the mini, that check stops covering the escalation path it was written for.
 - Found the unrecorded unencrypted GAM service-account key.
 - Re-verified the exe.dev API evaluation; recorded two drifts.
 
+## Decisions taken 2026-08-02
+
+- **Three deleted keys — leave as-is.** Not restored. Deliberate: the StartCom
+  cert expired 2015-04-15 for a host long gone; the other two have surviving
+  `~/Downloads` copies. Backup recovery would have been possible until roughly
+  **2026-09-01** (30-day soft-delete, clock starting at the 2026-08-02 04:30
+  sync that mirrored the deletion). That window is being allowed to lapse.
+- **Committed key material — accepted.** No history rewrite for the 22 tracked
+  `.gitpod.yml` files or the three other tracked key-bearing files. They are
+  encrypted at rest; rotate the underlying keys if a passphrase is ever
+  suspected leaked.
+- **1Password verified** (item 3, closed). Vaults: `gitlake-spikes`, `Employee`,
+  `Principals Only`, `Root Only`. Exactly three `SSH Key` items, all in
+  `Employee`, matching the three agent-served keys. The only JumpCloud-shaped
+  entry is a `LOGIN` ("JumpCloud kylegmail") — no key stored as a Document or
+  Secure Note. The 2026-07-31 finding is now verified rather than carried
+  forward.
+- **Snowflake — nothing on this machine** (item 4, closed). `snow connection
+list` returns no connections and `~/.snowflake/` does not exist. No local
+  key-pair config to audit; prior state stands in
+  [snowflake-keys.md](snowflake-keys.md).
+- **`coreutils` not needed.** The `timeout` gap only mattered for the
+  subagent-brief guards, which are not being reused. Dropped.
+
+### JumpCloud SSO signing material (identified 2026-08-02)
+
+`~/Downloads/Admin/Legal/Vendors/JumpCloud/` (and an `_Archive 2011` duplicate)
+holds `cert.pem` + `private.pem`, both 2016-01-07, confirmed a **matching
+keypair** by modulus digest. Cert is self-signed, `O=Risk Integration dba
+IndustryVault`, valid 2016-01-07 → **2019-01-06**. This is SAML SSO signing
+material from the original JumpCloud setup — not SCIM, which uses a bearer
+token. Expired 7 years ago; unrelated to the three deleted JC device-key
+registrations.
+
 ## NEEDS KYLE
 
-1. **Decide on the three deleted keys.** Restore or accept the loss. Two have
-   identical surviving copies in `~/Downloads/Product/Platform/industryvault.internal/`;
-   `StartCom .../ssl.key` has **no local duplicate** — only the Tigris backup
-   (nightly 04:30, so this morning's run predates the loss). Restoration writes
-   secret material and was out of scope here.
-2. **`~/.gam/oauth2service.json`** — confirm whether `gam-project-1nkz8` is still
-   an active Workspace-admin service account. If yes, this is the top rotation
-   candidate on the machine. Needs a Google Cloud console / `gcloud` login.
-3. **1Password vault re-verification** was not attempted — `op` needs an
-   unlock. The 2026-07-31 sweep's finding (three `SSH_KEY` items, no JumpCloud
-   key stored as Document or Secure Note) is carried forward unverified.
-4. **Snowflake** account/key-pair state untouched this pass — `snow` needs a
-   login. Prior state stands in [snowflake-keys.md](snowflake-keys.md).
-5. **22 tracked `.gitpod.yml` files** carrying encrypted private keys, plus the
-   three other tracked key-bearing files listed under UNIT 3 — decide whether
-   history rewriting is warranted or whether encrypted-at-rest is acceptable.
-6. **100 world-readable private-key files** under `~/Documents`/`~/Downloads` —
-   decide whether to `chmod 600` en masse.
-7. **Install `coreutils`** (or pick another guard) before reusing the subagent
-   briefs; `timeout` is absent, so the op/snow guards were inert.
+Items 1, 3, 4, 5 and 7 are closed — see
+[Decisions taken 2026-08-02](#decisions-taken-2026-08-02). What remains:
+
+1. **Rotate the GAM service-account key.** `~/.gam/oauth2service.json`,
+   unencrypted PKCS#8, `gam-project-1nkz8`, mtime 2026-07-01. Decision is made
+   (rotate via `gcloud`, store in 1Password); execution is **blocked on
+   reauth** — `gcloud` is credentialed as `klundstedt@industryvault.com` but
+   every API call fails with `Reauthentication failed. cannot prompt during
+non-interactive execution`. Run `gcloud auth login`, then the SA state can be
+   read and the key rotated. Note GAM also holds `client_secrets.json` and
+   `oauth2.txt` in the same directory; check what actually authenticates GAM
+   before deleting the old key, or GAM breaks.
+2. **The 21 world-readable private keys in `~/Downloads`** — delete, or `chmod
+600`. Evidence for deletion: none is referenced by any SSH/AWS config; the
+   JumpCloud SSO pair expired 2019-01-06; the DigiCert/NameCheap TLS keys are
+   for `ghe.industryvault.com`, Looker `explore`, `dataloader` and
+   `industryvault_com`, all long gone; the `loancare`/`ccap`/`MH` keys are
+   third-party material inside an exported user folder. **Interacts with the
+   deleted-keys decision:** `~/Downloads/Product/Platform/industryvault.internal/`
+   now holds the _only_ surviving copies of two of the three lost keys, so
+   deleting those two completes that loss. `~/Downloads` is also in the Tigris
+   backup path, so any deletion propagates on the next 04:30 sync and is itself
+   only recoverable for 30 days.
