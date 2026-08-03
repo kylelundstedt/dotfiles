@@ -219,17 +219,56 @@ ls -la ~/.ssh/
 ssh-add -l
 
 # 3. Any surviving private half of the three deleted JC keys?
-grep -rl -I -e 'BEGIN OPENSSH PRIVATE KEY' -e 'BEGIN RSA PRIVATE KEY' ~ 2>/dev/null \
-  | grep -v -e '/go/pkg/mod/' -e '/node_modules/' -e '/Library/Caches/' -e '/\.git/'
-# fingerprint any hit:  ssh-keygen -yf <file> | ssh-keygen -lf -
-# match against: SHA256:lLwdqcogkqC2r8wsBoM01TxDBRgqe/Qp2LTZmvj3LxE
-#                SHA256:VrqTiPtJo5EATgk/LxCQG5lXJKLAZt5Q4/5lLowTaGo
-#                SHA256:c+2b39L9VGiSgJ+LQVpZcZVXHMxtx1CazwdvURsX8F0
+#    Two traps, both hit for real on the mini 2026-08-02 — see the WARNING below.
+find ~ \( -path ~/Library -o -path ~/.Trash -o -name node_modules -o -name .venv \
+          -o -name venv -o -name .git \) -prune \
+     -o -type f -size -20k -print0 2>/dev/null \
+  | xargs -0 grep -l -- 'BEGIN .*PRIVATE KEY' 2>/dev/null | sort
+
+# Fingerprint every hit and compare. Do NOT use `ssh-keygen -lf/-yf` here.
+python3 - <<'PY'
+import base64,hashlib,subprocess,struct,sys
+JC={"lLwdqcogkqC2r8wsBoM01TxDBRgqe/Qp2LTZmvj3LxE",
+    "VrqTiPtJo5EATgk/LxCQG5lXJKLAZt5Q4/5lLowTaGo",
+    "c+2b39L9VGiSgJ+LQVpZcZVXHMxtx1CazwdvURsX8F0"}
+mp=lambda i:(lambda b:struct.pack('>I',len(b))+b)(i.to_bytes((i.bit_length()+8)//8,'big') or b'\x00')
+s =lambda b:struct.pack('>I',len(b))+b
+ok=bad=0
+for p in [l.strip() for l in sys.stdin if l.strip()]:
+    r=subprocess.run(["openssl","rsa","-in",p,"-noout","-modulus","-passin","pass:"],
+                     capture_output=True,text=True)
+    if r.returncode or not r.stdout.startswith("Modulus="): bad+=1; continue
+    n=int(r.stdout.strip().split("=")[1],16); ok+=1
+    fpr=base64.b64encode(hashlib.sha256(s(b"ssh-rsa")+mp(65537)+mp(n)).digest()).decode().rstrip("=")
+    if fpr in JC: print("*** JC MATCH:",p,fpr)
+print(f"RSA fingerprinted={ok} not-RSA-or-unreadable={bad}")
+PY
+# (pipe the file list from the find above into that block)
+# The one ed25519 JC key can't be covered this way — fingerprint any ed25519
+# private key separately; on the mini the only one was ~/.orbstack/ssh/id_ed25519.
 
 # 4. Actual state of the two services (settles the :22 question above).
 sudo systemsetup -getremotelogin        # or System Settings > General > Sharing
 netstat -an | awk '/LISTEN/ && ($1=="tcp4"||$1=="tcp6") {print $1, $4}' | sort -u
 ```
+
+> **WARNING — two traps that made the mini's first pass silently wrong.** Both
+> were corrected 2026-08-02; the block above already accounts for them.
+>
+> 1. **An `OPENSSH|RSA`-only grep misses most keys.** PKCS#8
+>    `-----BEGIN PRIVATE KEY-----` is the common form for TLS keys, and
+>    `BEGIN ENCRYPTED PRIVATE KEY` / `BEGIN PGP PRIVATE KEY BLOCK` are missed
+>    too. Of the 21 private keys found under the mini's `~/Downloads`, **8 were
+>    plain `BEGIN PRIVATE KEY`** — the old grep would have reported none of them.
+> 2. **`ssh-keygen -lf` / `-yf` refuses any file with mode 0644**, printing the
+>    `UNPROTECTED PRIVATE KEY FILE` banner and no fingerprint. Every one of the
+>    mini's 21 keys was 0644, so a fingerprint loop built on `ssh-keygen`
+>    produces empty output that reads as "no match" — a false all-clear. Derive
+>    the public half with `openssl` instead, as above.
+>
+> Net effect if you skip this: the search returns a confident clean result
+> having checked almost nothing. On the mini it reported "zero matches" against
+> a `$HOME` that actually held 81 key-bearing files.
 
 A hit in step 3 is the only result that changes anything — it would mean a
 deleted registration's private half still exists and should be destroyed. Steps
