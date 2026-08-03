@@ -4,6 +4,38 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-08-02 — mbp-side SSH key inventory closed
+
+Closed the **mbp-side SSH key inventory** item. Scope was local verification
+only — nothing had to be carried across from the mini, since the JumpCloud
+deletions were server-side and the 1Password inventory is per-account.
+
+**Basis: Kyle's report, not independent verification.** This was closed from a
+session on `klundstedt-mini`, which cannot reach the mbp: `tailscale ping
+klundstedt-mbp` pongs direct in 66 ms but `:22` is closed, so the checks could
+not be run or confirmed remotely. Recorded here so the basis is not mistaken
+later for a machine-verified result the way the 2026-07-31 sweep's carried-over
+1Password finding was.
+
+Two things this entry does **not** assert:
+
+- The `$HOME` sweep for a surviving private half of the three deleted JumpCloud
+  fingerprints returned clean **on the mbp**. On the mini it did, re-derived
+  properly (23 RSA keys fingerprinted, 0 matches; ed25519 covered separately).
+- Whether the mbp's `:22` is closed because Remote Login is off or because a
+  Tailscale ACL drops the SYN. That question was part of the original item and
+  **remains unrecorded**; from the mini the two are indistinguishable.
+
+Before the item was closed, the runnable block in
+[agent_docs/ssh-keys.md](agent_docs/ssh-keys.md) → "mbp — handoff" was
+**corrected** — as written it would have produced a confident false all-clear.
+It grepped only `OPENSSH`/`RSA` headers, missing PKCS#8 `BEGIN PRIVATE KEY`
+(8 of the 21 keys later found under the mini's `~/Downloads` were exactly that),
+and fingerprinted with `ssh-keygen -yf`, which refuses any mode-0644 file and
+emits nothing that reads as "no match" (all 21 mini keys were 0644). Both traps
+are now documented inline. If the mbp checks were run using the _old_ block,
+they should be re-run with the corrected one.
+
 ## 2026-07-31 — JumpCloud SSH key reconciliation; mini's inbound surface closed
 
 Audited every SSH private key this account holds and reconciled it against the
