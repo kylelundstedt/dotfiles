@@ -284,6 +284,42 @@ list` returns no connections and `~/.snowflake/` does not exist. No local
 - **`coreutils` not needed.** The `timeout` gap only mattered for the
   subagent-brief guards, which are not being reused. Dropped.
 
+### GAM service-account key rotated (2026-08-02, closed)
+
+The unencrypted key found in this pass was **live**, not legacy: project
+`gam-project-1nkz8` is ACTIVE, created **2026-07-01**, sitting under org
+`749117189805` (the industryvault.com Workspace org) with
+`klundstedt@industryvault.com` as sole owner. The on-disk key `e03036ef…` was
+the service account's only USER_MANAGED key and had **no expiry**
+(`9999-12-31`). `gcloud` should be authenticated as the industryvault.com admin,
+not a personal Gmail identity — a Gmail account cannot own a project in that org.
+
+Rotation performed:
+
+1. New USER_MANAGED key `bb3aedae…` created via `gcloud`.
+2. Stored in **1Password → Employee → "GAM service account key —
+   gam-project-1nkz8"** (Document item) as the system of record.
+3. Installed to `~/.gam/oauth2service.json` at mode **0600**.
+4. Verified with `gam check svcacct user klundstedt@industryvault.com` — all 42
+   DWD scopes PASS, SA client `106052313394866525740` fully authorized.
+5. Old key `e03036ef…` **deleted** from GCP; re-verified GAM afterwards.
+6. Staged copies shredded from the session scratchpad.
+
+Domain-wide delegation is bound to the SA's **client ID**, not the key, so no
+Workspace re-authorization was needed and none will be for future rotations.
+
+Also tightened: `oauth2.txt`, `client_secrets.json` and `gam.cfg` were all mode
+0644 and are now 0600. `oauth2.txt` holds the admin's OAuth refresh token and
+was as exposed as the SA key.
+
+Unresolved detail: `gam check svcacct` reports a section headed "Deprecated
+scopes that GAM should NEVER have DwD access to" listing `cloud-identity`,
+`cloud-platform` and `iam` as **PASS**. GAM's PASS semantics in that section are
+ambiguous — it may mean "correctly not granted" or "granted". If those scopes
+really are delegated, an SA that can impersonate any user _and_ manage IAM is a
+privilege-escalation path worth closing. Worth one look in the Workspace admin
+console.
+
 ### JumpCloud SSO signing material (identified 2026-08-02)
 
 `~/Downloads/Admin/Legal/Vendors/JumpCloud/` (and an `_Archive 2011` duplicate)
@@ -299,16 +335,7 @@ registrations.
 Items 1, 3, 4, 5 and 7 are closed — see
 [Decisions taken 2026-08-02](#decisions-taken-2026-08-02). What remains:
 
-1. **Rotate the GAM service-account key.** `~/.gam/oauth2service.json`,
-   unencrypted PKCS#8, `gam-project-1nkz8`, mtime 2026-07-01. Decision is made
-   (rotate via `gcloud`, store in 1Password); execution is **blocked on
-   reauth** — `gcloud` is credentialed as `klundstedt@industryvault.com` but
-   every API call fails with `Reauthentication failed. cannot prompt during
-non-interactive execution`. Run `gcloud auth login`, then the SA state can be
-   read and the key rotated. Note GAM also holds `client_secrets.json` and
-   `oauth2.txt` in the same directory; check what actually authenticates GAM
-   before deleting the old key, or GAM breaks.
-2. **The 21 world-readable private keys in `~/Downloads`** — delete, or `chmod
+1. **The 21 world-readable private keys in `~/Downloads`** — delete, or `chmod
 600`. Evidence for deletion: none is referenced by any SSH/AWS config; the
    JumpCloud SSO pair expired 2019-01-06; the DigiCert/NameCheap TLS keys are
    for `ghe.industryvault.com`, Looker `explore`, `dataloader` and
