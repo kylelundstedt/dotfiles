@@ -4,6 +4,38 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-08-02 — Snowflake 1P admin-item defects closed; a TOTP seed burned
+
+Both admin-item defects recorded against the Snowflake TODO are now resolved.
+
+- **`Snowflake CMG CLI - klundstedt`** — the defect was real. The top-level
+  `username` read `klundstedt`, while the actual Snowflake user is
+  `KLUNDSTEDT@INDUSTRYVAULT.COM` (already correct in the item's separate `user`
+  field, which is why the item looked fine on a casual read and still cost a
+  failed login). `username` corrected.
+- **`Snowflake SHARED - admin`** — **stale, no change needed.** `username`
+  already holds `support+shared@industryvault.com`, and the notes explain that
+  the Snowflake user _name_ is `ADMIN` while the login is the support address.
+  The TODO was describing a confusion that the item already documents.
+
+**Incident: the SHARED account's TOTP seed was leaked into an agent session
+transcript.** Reading the two items values-free, the field filter excluded
+`type=="CONCEALED"` — but **1Password does not type one-time-password fields as
+CONCEALED**, so the complete `otpauth://` URI including the base32 seed was
+printed. Consequence beyond the screen: Claude Code writes transcripts to
+`~/.claude/projects/`, and `~/.claude` has no exclusion in
+`backup/tigris-backup-filter.txt`, so the seed replicated to Tigris on the next
+04:30 sync and is subject to the bucket's 30-day version retention.
+
+The password is unaffected; only the second factor is burned. Re-enrollment is
+tracked in [TODO.md](TODO.md).
+
+Generalizable lesson, and the second field-shape trap in two days (after
+`ssh-keygen` refusing mode-0644 files): **allow-list the fields you want, never
+filter by type.** A type-based exclusion silently fails open whenever the store
+types something unexpectedly, and it fails open on exactly the material you were
+trying to protect.
+
 ## 2026-08-02 — mbp-side SSH key inventory closed
 
 Closed the **mbp-side SSH key inventory** item. Scope was local verification
