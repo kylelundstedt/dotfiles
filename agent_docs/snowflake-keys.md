@@ -15,12 +15,12 @@ Verified 2026-07-31 by `SHOW ACCOUNTS` as `ORGADMIN` in MAIN. There are exactly
 four. **`CLIENTX`, named in the MAIN admin item's `org_control` field, does not
 exist** — treat that note as aspirational.
 
-| Account   | Locator  | Account identifier        | Cloud / region | Created    | Admin MFA          |
-| --------- | -------- | ------------------------- | -------------- | ---------- | ------------------ |
-| MAIN      | DJA78347 | `INDUSTRYVAULT-MAIN`      | not recorded   | 2019-10-07 | password + TOTP    |
-| SHARED    | ROB18784 | `INDUSTRYVAULT-SHARED`    | AWS us-west-2  | 2022-10-13 | password + TOTP    |
-| CMG_SDW   | AK97040  | `INDUSTRYVAULT-CMG_SDW`   | Azure westus2  | 2024-01-05 | password + TOTP    |
-| SHARETEST | YC59469  | `INDUSTRYVAULT-SHARETEST` | Azure westus2  | 2026-06-03 | password + passkey |
+| Account   | Locator  | Account identifier        | Cloud / region | Created    | Admin MFA       |
+| --------- | -------- | ------------------------- | -------------- | ---------- | --------------- |
+| MAIN      | DJA78347 | `INDUSTRYVAULT-MAIN`      | not recorded   | 2019-10-07 | password + TOTP |
+| SHARED    | ROB18784 | `INDUSTRYVAULT-SHARED`    | AWS us-west-2  | 2022-10-13 | password + TOTP |
+| CMG_SDW   | AK97040  | `INDUSTRYVAULT-CMG_SDW`   | Azure westus2  | 2024-01-05 | password + TOTP |
+| SHARETEST | YC59469  | `INDUSTRYVAULT-SHARETEST` | Azure westus2  | 2026-06-03 | password + TOTP |
 
 MAIN holds `ORGADMIN` over the other three. All non-root MAIN users are disabled
 by design.
@@ -30,11 +30,23 @@ by design.
 Break-glass admin items live in 1Password **`Root Only`**; the named key-pair
 item lives in **`Employee`**. Two things about them are load-bearing:
 
-**TOTP accounts can be driven headlessly; the passkey account cannot.** For
-MAIN / SHARED / CMG, `op item get <id> --otp` plus the connector's `passcode=`
-parameter is sufficient. SHARETEST's MFA is a **native passkey**, which is
-device-bound — there is no headless path, so any SHARETEST check is an
-interactive browser login.
+**All four accounts can be driven headlessly.** `op item get <id> --otp` plus
+the connector's `passcode=` parameter is sufficient for every one of them.
+
+> **Corrected 2026-08-02.** This section previously claimed SHARETEST's MFA was
+> a device-bound **native passkey** with no headless path, which is why it sat
+> unswept for weeks. It is **TOTP**, enrolled in the 1P item's one-time-password
+> field. The item's own `authenticator` and `mfa_note` fields carried the stale
+> passkey claim — the note even read "consider also enrolling TOTP" — and the
+> doc inherited it; both have now been corrected in 1Password.
+>
+> Two gotchas when connecting, both cost a failed attempt:
+>
+> - Log in as the **`login_name`** (`support+sharetest@industryvault.com`), not
+>   the Snowflake NAME (`ADMIN`). Same pattern on SHARED.
+> - Use plain password auth plus `--mfa-passcode`. Passing
+>   `--authenticator username_password_mfa` fails with a misleading
+>   "Incorrect username or password".
 
 **`SNOWFLAKE.ORGANIZATION_USAGE` is not enabled**, even from MAIN as `ORGADMIN`
 (`Object 'SNOWFLAKE.ORGANIZATION_USAGE.USERS' does not exist or not
@@ -72,7 +84,7 @@ Every user enumerated with `SHOW USERS` then `DESC USER` under `ACCOUNTADMIN`,
 | CMG_SDW   | 96    | 9                   | 9             |
 | MAIN      | 10    | 1                   | 1             |
 | SHARED    | 4     | 1                   | 1             |
-| SHARETEST | —     | **not checked**     | —             |
+| SHARETEST | 2     | **0**               | 0             |
 
 CMG_SDW holders (all enabled; `CMG_DATACLOUD_DEV_SERVICE_ACCOUNT` and
 `CMG_DATACLOUD_DEV_USER` **share one fingerprint**, so 9 registrations span 8
@@ -141,10 +153,11 @@ pass (which also archived the 4096-bit `Snowflake Key-Pair` orphan); `rsa_key`
 was archived 2026-08-01 00:45Z. `ssh-add -l` on the mini now lists only the three
 ed25519 keys, which is the intended steady state.
 
-**Remaining doubt is SHARETEST only** — passkey-bound, so unchecked. It was
-created 2026-06-03, eighteen months after this key, and is an internal
-share-testing account, so it is an unlikely home for a Dec-2024 service user.
-Tracked in [TODO.md](../TODO.md).
+**No remaining doubt — SHARETEST was swept 2026-08-02 and is clean.** The
+account holds exactly two users, `ADMIN` and `AKILLINGER`, and `SHOW USERS`
+reports `has_rsa_public_key = false` for **both**. There is no `sqlmesh_user`
+and no key-pair auth anywhere in the account, so `SHA256:k6bqs5g7…` is not
+registered there. Every one of the four accounts has now been checked.
 
 ## Sweeping an account for a fingerprint
 

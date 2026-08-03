@@ -4,6 +4,38 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-08-02 — SHARETEST swept and clean; the "passkey" blocker was wrong
+
+The last unswept Snowflake account is now checked. **SHARETEST holds no
+key-pair auth at all**: exactly two users, `ADMIN` and `AKILLINGER`, both with
+`has_rsa_public_key = false`, and no `sqlmesh_user`. The archived
+`SHA256:k6bqs5g7…` is not registered there. All four accounts are now swept and
+the orphan-key question is closed on the search side.
+
+**The blocker that kept it unswept for weeks did not exist.** The item was
+parked as "needs an interactive browser login" because SHARETEST's MFA was
+recorded as a device-bound **native passkey**. It is **TOTP**, enrolled in the
+1P item's one-time-password field, and drives headlessly like the other three.
+The bad claim originated in the 1Password item itself — `authenticator` said
+`password + MFA (passkey)` and `mfa_note` read "consider **also** enrolling TOTP
+in 1P", written before TOTP was enrolled and never updated once it was. The
+`[OTP]` field was populated; the prose around it was not. `snowflake-keys.md`
+inherited the claim, and `TODO.md` inherited it from there.
+
+Both 1P fields are corrected, and `snowflake-keys.md` now carries the correction
+inline plus two connection gotchas that each cost a failed login attempt:
+
+- Log in as the **`login_name`** (`support+sharetest@industryvault.com`), not
+  the Snowflake NAME (`ADMIN`) — same pattern as SHARED.
+- Use plain password auth with `--mfa-passcode`. Passing
+  `--authenticator username_password_mfa` fails as "Incorrect username or
+  password", which reads as a credential problem rather than a protocol one.
+
+Worth noting how this was caught: not by any check, but by Kyle contradicting
+the record from memory. Three artifacts agreed with each other — the 1P item,
+the doc, and the TODO — because two of them were copies of the first. Agreement
+across derived records is not corroboration.
+
 ## 2026-08-02 — Snowflake 1P admin-item defects closed; a TOTP seed burned
 
 Both admin-item defects recorded against the Snowflake TODO are now resolved.
