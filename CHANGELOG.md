@@ -4,6 +4,44 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-08-02 — `id_entire_setup` gone; agent-transcript backup exposure scoped
+
+**`~/.ssh/id_entire_setup` on `iv-entire-agent-shelley` no longer exists.** The
+VM's `~/.ssh` now holds only `config`, `exe_dev.pub`, `known_hosts` and
+`sockets` — no private keys and no `authorized_keys` — all dated `Aug 1 01:22`,
+the exeslim-dev recreate. The rebuild wiped it.
+
+Closed, but by disposal rather than by answering the question. **We can no
+longer determine what that key authenticated**, because the recreate destroyed
+the evidence along with the key. If its public half is still registered
+somewhere as an authorized or deploy key, that grant is now dangling — harmless
+while the private half is destroyed, unless a copy existed off-VM. The
+2026-08-01 `$HOME` sweep on the mini found no such copy.
+
+Worth generalizing: disposable VMs make credentials disappear on a schedule,
+which is good for exposure and bad for forensics. A key found on a VM should be
+fingerprinted **when found**, not queued for later, because the next recreate
+silently closes the investigation.
+
+**Separately, the agent-transcript backup question was scoped.** Neither
+`~/.claude` (83 MB of transcripts, plus a 13 MB `file-history/` cache and live
+OAuth credentials) nor `~/.codex` (145 MB) is excluded from the Tigris backup.
+
+The tempting fix — exclude them to stop secrets replicating — is **wrong on its
+own terms**. For history the backup is redundant, since AgentsView already
+indexes the mini's Claude/Codex sessions directly and is the system of record.
+But excluding them does not reduce exposure, because AgentsView's records
+contain "credentials accidentally exposed to tools" by its own retention
+policy's admission, and `~/archives/agentsview` is itself in the backup path.
+Removing one copy of a secret that a second store holds by design is
+housekeeping, not remediation.
+
+What the analysis did surface is that the two pieces AgentsView does **not**
+cover — `~/.claude/.credentials.json` and `~/.claude/file-history/` — are the
+ones actually worth excluding. Neither is agent history; both are backed up; and
+`file-history` mirrors file contents verbatim, having already been observed
+holding key-bearing files. Tracked in [TODO.md](TODO.md).
+
 ## 2026-08-02 — SHARETEST swept and clean; the "passkey" blocker was wrong
 
 The last unswept Snowflake account is now checked. **SHARETEST holds no
