@@ -151,21 +151,33 @@ Closed the **mbp-side SSH key inventory** item. Scope was local verification
 only — nothing had to be carried across from the mini, since the JumpCloud
 deletions were server-side and the 1Password inventory is per-account.
 
-**Basis: Kyle's report, not independent verification.** This was closed from a
+**Basis at first close: Kyle's report, not independent verification — then
+machine-verified on the mbp 2026-08-03.** The item was first closed from a
 session on `klundstedt-mini`, which cannot reach the mbp: `tailscale ping
 klundstedt-mbp` pongs direct in 66 ms but `:22` is closed, so the checks could
-not be run or confirmed remotely. Recorded here so the basis is not mistaken
-later for a machine-verified result the way the 2026-07-31 sweep's carried-over
-1Password finding was.
-
-Two things this entry does **not** assert:
+not be run or confirmed remotely. It was recorded that way so the basis would
+not be mistaken for a machine-verified result the way the 2026-07-31 sweep's
+carried-over 1Password finding was. A later mbp-local session ran the corrected
+block directly; the two things this entry originally declined to assert are now
+asserted on evidence:
 
 - The `$HOME` sweep for a surviving private half of the three deleted JumpCloud
-  fingerprints returned clean **on the mbp**. On the mini it did, re-derived
-  properly (23 RSA keys fingerprinted, 0 matches; ed25519 covered separately).
-- Whether the mbp's `:22` is closed because Remote Login is off or because a
-  Tailscale ACL drops the SYN. That question was part of the original item and
-  **remains unrecorded**; from the mini the two are indistinguishable.
+  fingerprints returned **clean on the mbp** — 81 key-bearing files (the five
+  `*.ducklake.files` DuckLake data stores, ~995k machine-generated parquet
+  fragments, excluded as non-credential columnar data), 10 plaintext RSA
+  fingerprinted via `openssl` and both on-disk OpenSSH ed25519 keys
+  fingerprinted, **0 matches**. Full results in
+  [agent_docs/ssh-keys.md](agent_docs/ssh-keys.md) → "mbp — verified".
+- The mbp's `:22` is closed because **Remote Login is off**, not a Tailscale
+  ACL. Locally the two are distinguishable and it is decisive: nothing listens
+  on `:22` on any interface and `com.openssh.sshd` is not loaded in the system
+  domain. An ACL-drop with Remote Login on would still show sshd listening
+  locally on `:22`; it does not.
+
+Also new, not present on the mini: the mbp has **no stale key trove of its
+own** — `~/Downloads` and `~/Documents` each hold zero private keys (the mini
+had 21 under `~/Downloads`), and `~/.gam` does not exist (the mini's
+unencrypted GAM service-account key is mini-only).
 
 Before the item was closed, the runnable block in
 [agent_docs/ssh-keys.md](agent_docs/ssh-keys.md) → "mbp — handoff" was

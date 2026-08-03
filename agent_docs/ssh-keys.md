@@ -17,7 +17,8 @@ SSH at all) live in [snowflake-keys.md](snowflake-keys.md).
 ## Current keys — all three, all in 1Password
 
 There are **no private key files in `~/.ssh` on the mini** — verified; the mbp
-was not inventoried (see the last section). Every usable key lives in the
+was inventoried the same way on 2026-08-03 and is also clean (see
+[mbp — verified](#mbp--verified-2026-08-03)). Every usable key lives in the
 1Password `Employee` vault and is served by the 1Password SSH agent, which
 `~/.ssh/config` wires up via a global `IdentityAgent`. That part is
 machine-independent and therefore settled for both Macs.
@@ -199,13 +200,14 @@ file is the handoff — pull `~/dotfiles` on the mbp and it's there. (The
 session-start `refresh-env.sh` auto-pull is **exe.dev VMs only**; on a Mac it's
 a manual `git pull`.) What's left is local verification.
 
-**`:22` on the mbp is not reachable from the mini, cause unconfirmed.** The
-tailnet path itself is proven — `tailscale ping klundstedt-mbp` pongs direct in
-4 ms — so the failure is at the port, not the network. That is consistent with
-Remote Login being off, but a Tailscale ACL denying `tag:dev → user device` on
-22 would be indistinguishable from here, since ACLs drop the SYN at the
-receiving node. Don't record it as "Remote Login is off on the mbp" until it's
-checked locally.
+**`:22` on the mbp is not reachable from the mini, cause unconfirmed.**
+_[Resolved 2026-08-03 — checked locally: Remote Login is off. See
+[mbp — verified](#mbp--verified-2026-08-03).]_ The tailnet path itself is
+proven — `tailscale ping klundstedt-mbp` pongs direct in 4 ms — so the failure
+is at the port, not the network. That is consistent with Remote Login being
+off, but a Tailscale ACL denying `tag:dev → user device` on 22 would be
+indistinguishable from here, since ACLs drop the SYN at the receiving node.
+Don't record it as "Remote Login is off on the mbp" until it's checked locally.
 
 Run on the mbp:
 
@@ -275,3 +277,55 @@ deleted registration's private half still exists and should be destroyed. Steps
 1, 2 and 4 are confirmations. Note the mbp is the **dev laptop**, not the
 always-on host: leaving Remote Login on there is a much smaller exposure than
 it was on the mini, so treat step 4 as information, not a required change.
+
+### mbp — verified 2026-08-03
+
+Ran locally on `klundstedt-mbp` with the corrected block above (dotfiles at or
+past `4b050b3`). All five checks clean; nothing actionable. Values-free — paths,
+counts, and **public** fingerprints only.
+
+1. **`authorized_keys` reconciled, header-only.** The three JC agent comment
+   lines, zero keys; `ssh-keygen -lf` returns "is not a public key file". The JC
+   agent reconciled server-side as expected after the 2026-07-31 deletions.
+   `authorized_keys.jcorig` is comment-only (110 bytes, no key material).
+2. **`~/.ssh` holds no on-disk private keys.** `ssh-add -l` serves exactly the
+   three 1Password agent keys, fingerprints matching the mini:
+   `SHA256:ioXXRYB9pi…` (GitHub), `SHA256:gMRe/DbjCc…` (exe.dev),
+   `SHA256:S8bDr6M8p5…` (iv-klundstedt-2024-01).
+3. **No surviving private half of the three deleted JC registrations.** Full
+   `$HOME` content sweep for `BEGIN … PRIVATE KEY` (same prune set as the block,
+   **plus** the five `*.ducklake.files` DuckLake data stores — 995,076
+   machine-generated parquet fragments — pruned as non-credential columnar data,
+   noted rather than silently dropped). 81 key-bearing files. **12 are actual
+   parseable private keys** and were all fingerprinted and compared: 10 plaintext
+   RSA via `openssl` — Go/Rust/tornado test fixtures — (0 matches to `lLwdqcog…`
+   / `VrqTiPtJ…`), and the two on-disk OpenSSH ed25519 keys (0 match to
+   `c+2b39L9…`): `~/.ollama/id_ed25519` `SHA256:rUbuQvBiS9…` and
+   `~/.orbstack/ssh/id_ed25519` `SHA256:eKKXRijvno…`, both self-managed tool
+   keys. The remaining 69 are not JC-shaped and not fingerprintable as-is:
+   snowflake-cli library source and its `.pyc` (31); encrypted committed dbt
+   `.gitpod`/workflow/`.bashrc` blobs, one PGP `.asc`, and two loose encrypted
+   Snowflake `.p8` (29); and nine others — a few Go/Rust test sources, a git-hook
+   sample, two Claude history/paste snapshots, this doc, and a mbedtls C header.
+   The encrypted material is the same Snowflake/PGP class accepted on the mini
+   and cannot be fingerprinted without its passphrases; the JC device keys were
+   unencrypted, so this is a category difference, not a gap. Same conclusion as
+   the mini, on evidence.
+4. **`:22` is closed because Remote Login is OFF — not a Tailscale ACL.** The
+   mini couldn't distinguish these; locally it is decisive: nothing listens on
+   `:22` on any interface and `com.openssh.sshd` is not loaded in the system
+   domain ("Could not find service … in domain for system"). An ACL-drop with
+   Remote Login on would still show sshd listening locally on `:22`; it does not.
+   (`systemsetup -getremotelogin` needs root and was not run; the listener and
+   launchd evidence settle it without it.) No moshi `:2222` here either — that
+   path is mini-only.
+5. **No stale key trove of its own.** Unlike the mini, the mbp's `~/Downloads`
+   holds **0** private keys, `~/Documents` **0**, and `~/.gam` does not exist
+   (the mini's unencrypted GAM SA key is mini-only). The only private keys
+   outside `~/.ssh` are the two self-managed tool keys above and two **encrypted**
+   Snowflake `.p8` files: `~/private_key.p8` (mode 0600, not in a repo) and the
+   gitignored `servicervault_oversight_poc/rsa_key.p8`. No loose unencrypted
+   grantable material.
+
+The mbp is the dev laptop, not an always-on host: Remote Login was already off
+and no service change was made.
