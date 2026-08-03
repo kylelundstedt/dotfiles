@@ -4,6 +4,45 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-08-02 — agent-harness state excluded from the Tigris backup
+
+`backup/tigris-backup-filter.txt` now excludes the agent-harness stores under
+`~/.claude` and `~/.codex`. Measured effect: **7,056 → 661 files** backed up
+from those two trees.
+
+The rules are grouped by _why_, because the reasons are not equally strong and
+collapsing them would misrepresent what this achieves:
+
+1. **Credentials** — `~/.claude/.credentials.json` (Claude + MCP OAuth),
+   `~/.codex/auth.json`. Never replicate.
+2. **Verbatim content mirrors** — `file-history/` (snapshots of every file an
+   agent has edited; the 2026-08-01 sweep found key-bearing files in it),
+   `paste-cache/` (raw pasted prompt text — the first file inspected was the
+   credential-hygiene brief itself), and `shell-snapshots/` (**all six**
+   contained `export VAR=value` lines; an environment dump is a standard secret
+   carrier). The last two were found only while validating the other rules.
+   None is agent history, so AgentsView does not cover any of them — which is
+   what makes this group the one that actually matters.
+3. **Agent history** — `~/.claude/projects`, `~/.codex/sessions`. Redundant,
+   **not** a secret fix. AgentsView indexes these directly and is the system of
+   record. But its own retention policy says its records contain "credentials
+   accidentally exposed to tools", and `~/archives/agentsview` is backed up.
+   Removing a duplicate copy of something a second store holds by design is
+   housekeeping. The filter says so inline so the next reader is not misled.
+4. **Junk / hot SQLite** — `~/.codex/.tmp` alone was ~5,300 files. Live
+   `sqlite`/`-wal`/`-shm` sets are excluded for the same reason as
+   `~/.agentsview`: a hot WAL copied file-by-file is not a consistent snapshot.
+
+Rules were validated with `rclone lsf --filter-from` before commit, not just
+eyeballed; the residual matches are a 217-byte MCP server-name cache with no
+token material, a lock file, and plugin documentation.
+
+**This is prevention, not cleanup.** rclone applies filters to both source and
+destination, so the ~6,400 objects these rules newly exclude are **orphaned in
+`bkup:home`, not deleted** — including the transcript carrying the SHARED TOTP
+seed. An explicit purge is tracked in [TODO.md](TODO.md). The `--max-delete
+5000` guard is not a factor precisely because no deletions are triggered.
+
 ## 2026-08-02 — `id_entire_setup` gone; agent-transcript backup exposure scoped
 
 **`~/.ssh/id_entire_setup` on `iv-entire-agent-shelley` no longer exists.** The

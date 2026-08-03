@@ -39,6 +39,54 @@
 # Derived DuckDB rebuilt nightly from the source DBs (regenerable)
 - /archives/hub/hub.duckdb
 - /archives/hub/hub.duckdb.tmp
+# Agent harness state (~/.claude, ~/.codex). Three separate reasons, kept
+# separate because they are NOT equally strong.
+#
+# 1. CREDENTIALS — never replicate. Live OAuth tokens for Claude/MCP and Codex.
+- /.claude/.credentials.json
+- /.codex/auth.json
+#
+# 2. VERBATIM FILE MIRROR — file-history keeps snapshots of every file an agent
+#    has edited, so it silently duplicates whatever those files contained. The
+#    2026-08-01 sweep found key-bearing files in it. AgentsView does not cover
+#    this (it is not agent history), which is what makes it worth excluding.
+- /.claude/file-history/**
+#    Same class, found while validating these rules: paste-cache holds verbatim
+#    pasted prompt text, and every shell-snapshot contains `export VAR=value`
+#    lines — an environment dump is a standard secret carrier. Neither is agent
+#    history, so AgentsView does not cover either.
+- /.claude/paste-cache/**
+- /.claude/shell-snapshots/**
+#
+# 3. AGENT HISTORY — redundant, NOT a secret-exposure fix. AgentsView indexes
+#    the mini's Claude/Codex sessions directly and is the system of record, and
+#    agentsview-pilot.md states that permanent byte-for-byte native retention is
+#    not required. But read that policy's own retention section: AgentsView
+#    records contain "credentials accidentally exposed to tools", and
+#    ~/archives/agentsview IS backed up. Excluding these removes a duplicate
+#    copy; the exposure lives in AgentsView by design. Do not mistake this rule
+#    for remediation.
+- /.claude/projects/**
+- /.codex/sessions/**
+#
+# 4. JUNK / REGENERABLE / HOT SQLITE. .tmp alone is ~5300 files. The live
+#    sqlite+wal sets are excluded for the same reason as ~/.agentsview: a hot
+#    WAL copied file-by-file is not a consistent snapshot.
+- /.codex/.tmp/**
+- /.codex/cache/**
+- /.claude/cache/**
+- /.codex/*.sqlite
+- /.codex/*.sqlite-wal
+- /.codex/*.sqlite-shm
+#
+# NOTE ON CLEANUP: rclone applies filters to BOTH source and destination, so
+# adding an exclusion stops future syncing but leaves already-uploaded objects
+# ORPHANED in the bucket rather than deleting them. Anything these rules newly
+# exclude is still in `bkup:home` until explicitly removed. Verify with
+# `rclone lsf bkup:home/.claude/ -R` and purge deliberately with --dry-run
+# first; the bucket's 30-day soft-delete then applies to the removal.
+# Corollary: this change does NOT retroactively remove the 2026-08-02 TOTP-seed
+# transcript from the bucket.
 # Junk
 - /.Trash/**
 - /.cache/**
