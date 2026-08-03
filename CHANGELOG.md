@@ -4,6 +4,44 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-08-03 — mbp verified locally; the credential-hygiene pass is closed
+
+The mbp ran the corrected handoff block locally and all five checks came back
+clean — full detail in [agent_docs/ssh-keys.md](agent_docs/ssh-keys.md) →
+"mbp — verified 2026-08-03". This **supersedes the 2026-08-02 entry below**,
+which recorded the item as closed on report with two things explicitly not
+asserted. Both are now settled on evidence:
+
+- **The `$HOME` sweep is clean.** 81 key-bearing files, 12 actually parseable
+  private keys, all fingerprinted and compared: zero matches to any of the three
+  deleted JumpCloud registrations. Same conclusion as the mini, reached the same
+  way. The remaining 69 are library source, test fixtures, or the encrypted
+  Snowflake/PGP class accepted on the mini — a category difference, not a gap,
+  since the JC device keys were unencrypted.
+- **`:22` is closed because Remote Login is OFF, not a Tailscale ACL.** The mini
+  could not distinguish these; locally it is decisive — nothing listens on `:22`
+  on any interface and `com.openssh.sshd` is not loaded in the system domain. An
+  ACL drop with Remote Login on would still show sshd listening locally.
+
+The mbp is also materially cleaner than the mini: **zero** private keys in
+`~/Downloads` and `~/Documents`, no `~/.gam` (the unencrypted GAM service-account
+key was mini-only), and no moshi `:2222` path. The only private keys outside
+`~/.ssh` are two self-managed tool keys (ollama, orbstack) and two **encrypted**
+Snowflake `.p8` files.
+
+Two things worth carrying forward from how that sweep was run:
+
+- It used the corrected block, so it avoided both traps that made the mini's
+  first pass silently wrong. That correction was worth making — the old block
+  would have returned a confident false all-clear here too.
+- It pruned five `*.ducklake.files` stores (995,076 machine-generated parquet
+  fragments) and **said so** rather than silently narrowing scope. A sweep that
+  reports what it excluded is auditable; one that doesn't is a number without a
+  denominator.
+
+One new item surfaced: `~/private_key.p8` on the mbp, an encrypted Snowflake key
+sitting loose in `$HOME` rather than in 1Password. Tracked in [TODO.md](TODO.md).
+
 ## 2026-08-02 — agent-harness state excluded from the Tigris backup
 
 `backup/tigris-backup-filter.txt` now excludes the agent-harness stores under
@@ -146,6 +184,10 @@ types something unexpectedly, and it fails open on exactly the material you were
 trying to protect.
 
 ## 2026-08-02 — mbp-side SSH key inventory closed
+
+> **Superseded 2026-08-03** — the mbp was verified locally and both caveats
+> below are now settled on evidence. See the 2026-08-03 entry. Kept unedited as
+> a record of what was and was not known at the time.
 
 Closed the **mbp-side SSH key inventory** item. Scope was local verification
 only — nothing had to be carried across from the mini, since the JumpCloud
