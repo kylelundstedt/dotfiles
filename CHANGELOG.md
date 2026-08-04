@@ -4,6 +4,51 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-08-04 — msgvault Gmail credentials out of the backup, into 1Password
+
+`~/archives/email` held **both halves of working Gmail access to both
+mailboxes**, replicating nightly: the OAuth refresh tokens in `tokens/`, and the
+`msgvault-{home,work}-client-secret.json` clients needed to redeem them. Neither
+was excluded. Validated after: **0** credential files remain in backup scope.
+
+Found while deleting the four third-party keys from the same directory — the
+keys were the item on the list, but the live credentials sitting beside them
+were the larger exposure. Expired 2015–2018 third-party keys versus current
+mailbox access is not a close comparison.
+
+Handled asymmetrically, because the two halves are not equivalent:
+
+- **Refresh tokens** — excluded outright, no stored copy. They are the
+  high-value half (ongoing mailbox access) and the recovery cost is a single
+  browser re-auth, so retaining them anywhere is a bad trade.
+- **Client secrets** — excluded, but only after storing authoritative copies in
+  1Password (`Employee` → "msgvault OAuth client secret — home" / "— work") and
+  **verifying them byte-identical to disk by SHA-256**. An unverified copy is
+  not a copy; excluding first and checking later would have been the wrong
+  order. Individually these are the weaker half — Google _installed-app_ clients
+  are explicitly not confidential and are re-downloadable from the Cloud console
+  — but a token and its client secret together are one working credential, so
+  excluding only the tokens would have been half a fix.
+
+Both files stay on disk at 0600; `config.toml` points msgvault at these paths
+and the scheduled `com.kylelundstedt.msgvault-sync` LaunchAgent keeps running
+unchanged. **Nothing here deletes anything** — this changes what replicates, not
+what exists.
+
+Sequencing note worth keeping: this landed in two commits a day apart because
+1Password locked mid-task. The tokens rule shipped immediately (independent of
+1P); the client-secret rule waited, with the reason written **into the filter
+file** rather than only into a TODO, so the half-finished state could not read
+as finished. A `op whoami` reporting "account is not signed in" while
+`op item list` works is a known quirk of the desktop-app integration — test with
+a real command, not `whoami`.
+
+Still outstanding: the tokens and client secrets uploaded **before** these rules
+are orphaned in `bkup:home` like the `~/.claude` material, since rclone filters
+apply to both source and destination. They should be the **first** target of the
+purge already tracked in [TODO.md](TODO.md) — ahead of the stale OAuth caches,
+which are lower value.
+
 ## 2026-08-03 — the four email-archive private keys deleted
 
 All four cleartext third-party private keys are gone from
