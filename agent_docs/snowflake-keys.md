@@ -165,6 +165,23 @@ pass (which also archived the 4096-bit `Snowflake Key-Pair` orphan); `rsa_key`
 was archived 2026-08-01 00:45Z. `ssh-add -l` on the mini now lists only the three
 ed25519 keys, which is the intended steady state.
 
+**Decided 2026-08-04: both stay archived. Item closed.** The alternative was to
+restore `sqlmesh_user Snowflake RSA Key Pair` as the canonical record and leave
+only the badly-named `rsa_key` duplicate archived. Rejected because restoring
+either one puts a key back into `ssh-add -l` that is registered on **no user in
+any of the four accounts** — CMG_SDW, MAIN and SHARED were swept 2026-07-31,
+SHARETEST on 2026-08-02 (two users, `has_rsa_public_key = false` for both). A
+key visible in the agent listing but registered nowhere is precisely the shape
+that made this an investigation in the first place; restoring it would reseed
+the same confusion for the next sweep.
+
+If `servicemac_acdc` is ever revived, generate a fresh key rather than
+resurrecting this one — it is dormant since 2025-04-19, and **which Snowflake
+account it targeted was never proven** (the identifier lives only in the Doppler
+`servicemac_acdc` / `dev_personal` config, unreadable with the config-scoped
+token stored in 1Password). Closing this item accepts that unknown permanently
+rather than leaving it open indefinitely for a key that grants nothing.
+
 **No remaining doubt — SHARETEST was swept 2026-08-02 and is clean.** The
 account holds exactly two users, `ADMIN` and `AKILLINGER`, and `SHOW USERS`
 reports `has_rsa_public_key = false` for **both**. There is no `sqlmesh_user`

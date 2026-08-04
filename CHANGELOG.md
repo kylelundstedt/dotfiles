@@ -4,6 +4,36 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-08-04 — orphan Snowflake key: both copies stay archived
+
+Decided and closed. The two `Employee` items holding the same RSA-2048
+`sqlmesh_user` key (`rsa_key` and `sqlmesh_user Snowflake RSA Key Pair`,
+Snowflake FP `SHA256:k6bqs5g7…`) remain **archived, not deleted** — restorable
+from the 1Password Archive if ever needed.
+
+The alternative was restoring the well-named copy as the canonical record.
+Rejected: the key is registered on **no user in any of the four accounts**
+(CMG_SDW / MAIN / SHARED swept 2026-07-31, SHARETEST 2026-08-02), so restoring
+it would put a key back into `ssh-add -l` that grants nothing — which is exactly
+the shape that made this an investigation. The 1Password agent publishes every
+`SSH_KEY` item, so a Snowflake key stored under that category appears in the SSH
+agent listing with no `~/.ssh/config` entry, no `known_hosts` host and no git
+remote behind it. Restoring would reseed that confusion for the next sweep.
+
+Closing this **accepts one unknown permanently**: which Snowflake account the
+key targeted was never proven. The identifier exists only in the Doppler
+`servicemac_acdc` / `dev_personal` config, and the Doppler credential in
+1Password is a config-scoped token for a different project, so reading it would
+need an interactive `doppler login`. That is not worth doing for a key that
+authenticates nothing and a repo dormant since 2025-04-19. If that project is
+ever revived, generate a fresh key.
+
+Worth keeping as a general lesson: **agent listing is not usage.** `ssh-add -l`
+enumerates what the vault publishes, not what anything authenticates with. The
+negative results — no config entry, no known_hosts, no remote, no registration —
+were what settled this, and they took far longer to establish than finding the
+key did.
+
 ## 2026-08-04 — Snowflake SHARED MFA re-enrolled; the burned seed is dead
 
 The one live exposure from this whole pass is closed. The TOTP seed leaked into
