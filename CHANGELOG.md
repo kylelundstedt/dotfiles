@@ -4,6 +4,44 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-08-03 — the four email-archive private keys deleted
+
+All four cleartext third-party private keys are gone from
+`~/archives/email/attachments/`. `~/archives` now contains **zero** private
+keys of any kind.
+
+They were identified from the msgvault index before deletion, rather than by
+filename — the store is content-addressed, so the files themselves are opaque
+hashes:
+
+| Storage path   | Filename                    | Type                             |
+| -------------- | --------------------------- | -------------------------------- |
+| `53/53934b60…` | `dchristensen.key`          | OpenSSH private key              |
+| `da/daf21f11…` | `dchristensen.key` (v2)     | RSA private key                  |
+| `49/49c1fd04…` | `private.pem`               | RSA private key                  |
+| `1d/1df61644…` | `FIS_Data_Services_sec.asc` | PGP **secret** key, 2 references |
+
+The last is worth naming: a vendor's PGP secret key, emailed as an attachment.
+Nothing here belonged to us, and none was ever ours to hold.
+
+**The five index rows in `attachments` were deliberately left in place.** They
+now point at absent files, which is a dangling reference — but that is the
+better outcome. The row preserves the fact that a message carried an attachment
+of that name and size, while the key material itself is gone. Deleting the rows
+would have erased the record that it ever arrived, which is a fidelity loss
+beyond the one intended. Archive integrity here means keeping the metadata and
+dropping the secret, not dropping both. If msgvault ever errors on a missing
+blob, that is the expected consequence, not a bug to chase.
+
+Backup: `~/archives` is in the Tigris path, so the deletion propagates on the
+next 04:30 sync, after which the bucket's 30-day soft-delete applies. Recoverable
+until roughly 2026-09-02 if that turns out to be wrong.
+
+Noted in passing, not acted on: `~/archives/email/` also holds
+`msgvault-home-client-secret.json` and `msgvault-work-client-secret.json` —
+OAuth client secrets sitting unencrypted in the backup path. Not private keys,
+so out of scope for this item, but the same class of question.
+
 ## 2026-08-03 — GAM DwD scopes verified clean, empirically
 
 The last open question about the GAM service account is settled: **`cloud-platform`,
