@@ -4,6 +4,63 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-08-04 — Snowflake SHARED MFA re-enrolled; the burned seed is dead
+
+The one live exposure from this whole pass is closed. The TOTP seed leaked into
+an agent transcript on 2026-08-02 no longer authenticates anything.
+
+Verified three ways, none of which involved seeing the new secret:
+
+- `HAS_MFA = true` on `ADMIN` — re-enrolled.
+- The 1P item's `updated_at` moved to `2026-08-04T22:53Z`, after the leak, so
+  the field was genuinely replaced rather than left stale.
+- **A passcode generated from the 1P field authenticated successfully.** This is
+  the check that actually matters — the first two are consistent with a URI
+  pasted wrong. Only a live login proves the stored secret is the correct one.
+
+### The unenroll was greyed out in Snowsight
+
+Snowflake gates MFA unenrollment to an admin action on this version; nothing was
+wrong with the account (`LOCK_DETAILS` all false). Done admin-side instead:
+
+```sql
+ALTER USER ADMIN SET DISABLE_MFA = TRUE;   -- cancels enrollment
+ALTER USER ADMIN UNSET DISABLE_MFA;        -- REQUIRED, see below
+```
+
+**The second statement is not optional.** Leaving `DISABLE_MFA` set cancels the
+enrollment _and_ blocks re-enrolling, which would have stranded a break-glass
+account password-only with no way back. Note `DISABLE_MFA` does not appear in
+`DESC USER` on this version — it is an `ALTER USER` verb, not a visible
+property, so you cannot confirm its state by inspection. Unset it in the same
+session you set it.
+
+### Why this was safe
+
+Checked before touching anything, not after:
+
+- `SHOW AUTHENTICATION POLICIES IN ACCOUNT` returns nothing, so nothing
+  _mandates_ MFA — password-only login keeps working with enrollment cancelled,
+  which is what makes the cancel/re-enroll cycle recoverable.
+- The apparent break-glass fallback is **not usable**, and it is worth recording
+  why. `KLUNDSTEDT` on SHARED holds `ACCOUNTADMIN` and `ORGADMIN` and
+  authenticates by key-pair — no password, no MFA — which looks like a perfect
+  second way in. Its registered fingerprint is
+  `SHA256:SyKWSjPaLHnjJMQXppJaA7PVDu+iR/xq1s8/0iboYo4=`, which is **not** the
+  CMG key and whose private half exists nowhere: no 1P item holds it and neither
+  machine sweep found it. It is a registration without a key. Do not plan
+  recovery around it.
+
+### Open question this surfaced
+
+`ALLOW_CLIENT_MFA_CACHING` is `true` at account level on SHARED — non-default
+(the default is `false`). MFA authentications are cached, so re-enrolling does
+not necessarily invalidate an already-cached session immediately. It did not
+change the plan here, but "the old seed died the instant we re-enrolled" is
+slightly too strong, and caching MFA on a break-glass ACCOUNTADMIN is worth a
+deliberate decision rather than an inherited default. Tracked in
+[TODO.md](TODO.md).
+
 ## 2026-08-04 — msgvault Gmail credentials out of the backup, into 1Password
 
 `~/archives/email` held **both halves of working Gmail access to both
