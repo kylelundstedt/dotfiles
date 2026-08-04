@@ -39,6 +39,20 @@
 # Derived DuckDB rebuilt nightly from the source DBs (regenerable)
 - /archives/hub/hub.duckdb
 - /archives/hub/hub.duckdb.tmp
+# msgvault live Gmail credentials. These are OAuth REFRESH TOKENS granting
+# ongoing access to both mailboxes — the highest-value credential in ~/archives,
+# and the archive itself (msgvault.db, attachments) is backed up around them.
+# Excluded rather than kept because the recovery cost is one browser re-auth,
+# whereas replicating them puts live mailbox access in the bucket indefinitely.
+# 0600 on disk; msgvault regenerates them on re-authentication.
+- /archives/email/tokens/**
+# NOTE: msgvault-{home,work}-client-secret.json in the same directory are NOT
+# yet excluded — deliberately, pending an authoritative copy in 1Password.
+# They are Google *installed-app* OAuth clients, which Google does not treat as
+# confidential (they ship inside distributed desktop apps) and which are
+# re-downloadable from the Cloud console, so they are the weaker half. But the
+# token and the client secret are two halves of one working credential, so
+# leaving them co-located in the backup is only half a fix. Finish this.
 # Agent harness state (~/.claude, ~/.codex). Three separate reasons, kept
 # separate because they are NOT equally strong.
 #
