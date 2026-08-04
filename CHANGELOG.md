@@ -4,6 +4,40 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-08-03 — GAM DwD scopes verified clean, empirically
+
+The last open question about the GAM service account is settled: **`cloud-platform`,
+`iam` and `cloud-identity` are NOT delegated to it.** No privilege-escalation path.
+
+This did not need the admin console after all. `gam check svcacct` reports those
+three under "Deprecated scopes that GAM should NEVER have DwD access to" as
+`PASS`, with ambiguous semantics — `PASS` could mean "correctly absent" or
+"present". Rather than infer, the delegation was tested directly: a service
+account can only mint a token for a scope that is actually delegated to it, so
+attempt the exchange and see.
+
+| Scope                 | Result                                    |
+| --------------------- | ----------------------------------------- |
+| `calendar` (control)  | token granted — delegation works          |
+| `cloud-platform`      | `unauthorized_client` — **not delegated** |
+| `iam`                 | `unauthorized_client` — **not delegated** |
+| `cloud-identity`      | `unauthorized_client` — **not delegated** |
+| bogus scope (control) | `invalid_scope` — distinct failure        |
+
+The two controls are what make this conclusive rather than suggestive. The
+positive control proves the test can detect delegation at all (without it, three
+denials might just mean the harness was broken). The negative control proves
+`unauthorized_client` is specifically "real scope, not delegated" rather than a
+generic error — a nonexistent scope fails differently, with `invalid_scope`.
+
+So GAM's `PASS` did mean correctly-absent, and the earlier inference was right.
+It is now verified rather than reasoned. Reproduce with `google-auth`,
+`Credentials.from_service_account_file(..., subject=<admin>)`, then `refresh()`.
+
+Generalizable: when a tool's output is ambiguous, prefer a direct behavioural
+test over parsing its wording — and include controls in both directions, since a
+test that can only fail one way proves nothing.
+
 ## 2026-08-03 — mbp verified locally; the credential-hygiene pass is closed
 
 The mbp ran the corrected handoff block locally and all five checks came back
