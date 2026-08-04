@@ -74,6 +74,18 @@ recorded `private_key`, which no longer resolves. Get the current path from the
 `files[].section.label` in `op item get --format json` rather than trusting a
 hard-coded reference.
 
+**This CMG key also lives on `klundstedt-mbp` at `~/private_key.p8`** — the same
+key (Snowflake fingerprint `SHA256:Y30BLsi8/…`, verified 2026-08-03 against this
+item's `RSA_PUBLIC_KEY_FP`, the item's own p8 attachment, and the live CMG_SDW
+registration for `KLUNDSTEDT@INDUSTRYVAULT.COM`), encrypted PKCS#8, mode 0600.
+It is the keyfile for the **`default` dbt profile** (`~/.dbt/profiles.yml` →
+`private_key_path: ~/private_key.p8`, passphrase from the `PRIVATE_KEY_PASSPHRASE`
+env var at runtime, not stored beside the key), used across the `dbt_cmg_*`
+repos. **Kept deliberately — it is an active credential, not stray key
+material.** The authoritative copy and its passphrase are in this 1P item, so the
+on-disk file is reproducible; it is safe to delete only if dbt is first
+repointed to source the key from 1Password at runtime.
+
 ## Key-pair registrations, 2026-07-31
 
 Every user enumerated with `SHOW USERS` then `DESC USER` under `ACCOUNTADMIN`,

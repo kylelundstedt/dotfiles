@@ -39,8 +39,18 @@ Two things worth carrying forward from how that sweep was run:
   reports what it excluded is auditable; one that doesn't is a number without a
   denominator.
 
-One new item surfaced: `~/private_key.p8` on the mbp, an encrypted Snowflake key
-sitting loose in `$HOME` rather than in 1Password. Tracked in [TODO.md](TODO.md).
+One new item surfaced and was then resolved the same day: `~/private_key.p8` on
+the mbp. It is **not** stray — it is the CMG_SDW key-pair private key for
+`KLUNDSTEDT@INDUSTRYVAULT.COM` (fingerprint `SHA256:Y30BLsi8/…`, verified against
+the live registration, the 1P `Snowflake CMG CLI - klundstedt` item, and that
+item's stored FP) and the active keyfile for the **`default` dbt profile**
+(`~/.dbt/profiles.yml`, used across the `dbt_cmg_*` repos). Kept deliberately:
+encrypted PKCS#8, mode 0600, passphrase supplied from `PRIVATE_KEY_PASSPHRASE` at
+runtime (not co-located), authoritative copy and passphrase already in 1Password.
+The mini-side TODO framing ("loose duplicate → delete") was wrong for the mbp,
+where dbt actually runs — deleting it would break Snowflake auth. Recorded in
+[agent_docs/snowflake-keys.md](agent_docs/snowflake-keys.md); safe to delete only
+if dbt is first repointed to source the key from 1Password at runtime.
 
 ## 2026-08-02 — agent-harness state excluded from the Tigris backup
 
