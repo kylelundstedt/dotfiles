@@ -37,7 +37,7 @@ IMAGE_DEFAULT="ghcr.io/kylelundstedt/exeslim-dev:2026-08-01.7.1"
 DISK=15GB
 CPU=2
 MEM=8GB
-IV_PIN=""            # iv-image sha/tag; empty = default branch tip
+IV_PIN="2.9.0"       # tested immutable iv-image release; override with --iv-pin
 COLLECTOR_CONF="$HOME/.agentsview/config.toml"
 COLLECTOR_LABEL="gui/$(id -u)/com.kylelundstedt.agentsview"
 TAILNET_DOMAIN="dojo-sun.ts.net"
