@@ -31,7 +31,7 @@
 # the server there — do not restore the vm-url column, which would put work-org
 # GitHub API access back on every VM.
 
-motherduck | team | https://api-motherduck-mcp.int.exe.xyz/mcp | https://api.motherduck.com/mcp
+motherduck | team | https://mcp-motherduck.int.exe.xyz/mcp | https://api.motherduck.com/mcp
 github-work | team | - | pat:industryvault.1password.com:op://Employee/GitHub PAT IV/token
 github-home | personal | https://mcp-github-home.int.exe.xyz/mcp/ | pat:lundstedts.1password.com:op://Private/GitHub PAT Home/token
 tigris | personal | https://mcp.storage.dev/mcp | https://mcp.storage.dev/mcp
