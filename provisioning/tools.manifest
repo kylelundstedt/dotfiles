@@ -13,8 +13,10 @@
 #             install.sh may still install these (need-guarded) for macOS and
 #             non-exeuntu hosts.
 #   team      pinned and installed by iv-image provision-iv.sh on VMs.
-#             install.sh also installs duckdb/quarto/tigris/herdr/agentsview
-#             (floating) so macOS gets them — a known, intentional overlap.
+#             install.sh also installs duckdb/quarto/tigris/herdr/agentsview and
+#             uv/claude/codex (floating) so macOS gets them — a known,
+#             intentional overlap. want() skips team tools on IV VMs so the
+#             floating copy never shadows provision-iv.sh's pin.
 #   personal  dotfiles-only: installed by install.sh, absent from iv-image.
 #   personal-mac  like personal, but macOS-only — install.sh skips it on Linux
 #             VMs (see the gh/croc note below). Same drift invariants as personal.
@@ -48,12 +50,19 @@ team render-site
 team provision-docsite
 team gen-llms-txt
 team install-cloud-cli
+# Agent/Python CLIs: provision-iv.sh installs and version-pins these on VMs, so
+# they are team, not personal -- a personal label made install.sh's floating
+# copy shadow the pin on IV VMs (want() skips team tools there) while the
+# manifest's own `personal ∩ provision-iv.sh = ∅` invariant read as violated.
+# install.sh still installs them on macOS, where want() does not skip team.
+team uv
+team claude
+team codex
 
 # personal layer (install.sh)
 personal stow
 personal zsh
 personal starship
-personal uv
 personal atuin
 personal direnv
 personal zoxide
@@ -69,6 +78,4 @@ personal carapace
 personal-mac croc
 personal cship
 personal snow
-personal claude
-personal codex
 personal op
