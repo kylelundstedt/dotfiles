@@ -33,6 +33,6 @@
 
 motherduck | team | https://api-motherduck-mcp.int.exe.xyz/mcp | https://api.motherduck.com/mcp
 github-work | team | - | pat:industryvault.1password.com:op://Employee/GitHub PAT IV/token
-github-home | personal | https://api-github-copilot-home.int.exe.xyz/mcp/ | pat:lundstedts.1password.com:op://Private/GitHub PAT Home/token
+github-home | personal | https://mcp-github-home.int.exe.xyz/mcp/ | pat:lundstedts.1password.com:op://Private/GitHub PAT Home/token
 tigris | personal | https://mcp.storage.dev/mcp | https://mcp.storage.dev/mcp
 readwise | personal | https://mcp2.readwise.io/mcp | https://mcp2.readwise.io/mcp
