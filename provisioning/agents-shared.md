@@ -1,8 +1,9 @@
 <!-- Canonical shared agent-instruction sections (Core decision 1 + plan item
 U6): the single source for the sections that appear in BOTH the IV team
-AGENTS.md (iv-image, vendored at the pinned dotfiles commit) and the personal
-AGENTS.md (agents/.agents/AGENTS.md, embedded verbatim between shared
-markers). Edit HERE; diff-provisioning.sh flags any copy that drifts. -->
+AGENTS.md (iv-provision agent/AGENTS.md, spliced between the shared markers by
+vendor-skills.sh) and the personal AGENTS.md (dotfiles
+agents/.agents/AGENTS.md, embedded verbatim between the same markers). Edit
+HERE. -->
 
 ## Code
 

@@ -5,8 +5,10 @@
 # installer owns its "how" — this script only flags set divergence.
 #
 # Usage: diff-provisioning.sh [--manifest-dir DIR]
-#   IV_IMAGE_DIR  iv-image clone (default ~/github/kylelundstedt/iv-image);
-#                 iv-image-side checks are skipped with a warning if absent.
+#   IV_PROVISION_DIR  iv-provision clone (default ~/iv-provision, then
+#                 ~/github/kylelundstedt/iv-provision); its checks are skipped
+#                 with a warning if absent. IV_IMAGE_DIR is still honored as a
+#                 legacy alias for the pre-rename name.
 #
 # Exit 0 = no drift; exit 1 = drift found. Run by test-install.sh (mode
 # `provisioning`) and on demand after editing either installer or a manifest.
@@ -16,7 +18,18 @@ MANIFEST_DIR="$(cd "$(dirname "$0")" && pwd)"
 [[ "${1:-}" == "--manifest-dir" ]] && MANIFEST_DIR="$(cd "$2" && pwd)"
 DOTFILES="$(cd "$(dirname "$0")/.." && pwd)"
 INSTALL_SH="$DOTFILES/install.sh"
-IV_IMAGE_DIR="${IV_IMAGE_DIR:-$HOME/github/kylelundstedt/iv-image}"
+# Repo was renamed iv-image -> iv-provision. Resolve the clone from the new
+# name/locations, honoring the legacy IV_IMAGE_DIR override if a caller still
+# sets it. Variable name kept as IV_IMAGE_DIR internally to limit the diff.
+if [[ -n "${IV_PROVISION_DIR:-}" ]]; then
+  IV_IMAGE_DIR="$IV_PROVISION_DIR"
+elif [[ -n "${IV_IMAGE_DIR:-}" ]]; then
+  : # caller-provided legacy override
+elif [[ -d "$HOME/iv-provision" ]]; then
+  IV_IMAGE_DIR="$HOME/iv-provision"
+else
+  IV_IMAGE_DIR="$HOME/github/kylelundstedt/iv-provision"
+fi
 
 source "$DOTFILES/backup/_lib.sh"   # job_trim (canonical manifest-field trim)
 
@@ -49,24 +62,10 @@ if [[ -n "$hard_skills" ]]; then drift "install.sh hardcodes skill installs (mus
 if $have_iv; then
     if grep -q 'skills\.manifest' "$IV_IMAGE_DIR/vendor-skills.sh"; then
         ok "vendor-skills.sh reads skills.manifest (manifest consumer)"
-        pin="$(tr -d '[:space:]' < "$IV_IMAGE_DIR/dotfiles-manifest.pin" 2>/dev/null || true)"
-        if [[ "$pin" =~ ^[0-9a-f]{40}$ ]]; then
-            ok "dotfiles-manifest.pin is a full SHA (${pin:0:12})"
-            # Pin lag on the rows that matter: team rows at the pin vs local manifest
-            if git -C "$DOTFILES" cat-file -e "$pin" 2>/dev/null; then
-                pinned_team="$(git -C "$DOTFILES" show "$pin:provisioning/skills.manifest" 2>/dev/null | grep -vE '^[[:space:]]*#|^[[:space:]]*$' | awk '$1=="team"' || true)"
-                current_team="$(rows skills.manifest | awk '$1=="team"')"
-                if [[ "$pinned_team" == "$current_team" ]]; then
-                    ok "team skill rows unchanged since iv-image pin"
-                else
-                    drift "team skill rows changed since iv-image's pin — rerun vendor-skills.sh (DOTFILES_SHA=<new sha>) in iv-image and commit"
-                fi
-            else
-                skip "pin commit not in local dotfiles history — cannot check pin lag"
-            fi
-        else
-            drift "iv-image dotfiles-manifest.pin missing or malformed"
-        fi
+        # dotfiles-manifest.pin was retired when the provisioning manifests moved
+        # in-tree to iv-provision (2026-08-18); there is no pin to lag against
+        # anymore, so the pin-lag and pin-format checks that used to live here
+        # are gone rather than left to drift on a removed artifact.
         hard_vendor="$(code_lines "$IV_IMAGE_DIR/vendor-skills.sh" | grep 'npx -y skills add' | grep -v '\$args' || true)"
         if [[ -n "$hard_vendor" ]]; then drift "vendor-skills.sh hardcodes skill installs (must come from skills.manifest):$hard_vendor"; else ok "no hardcoded skill installs in vendor-skills.sh"; fi
     else
@@ -112,24 +111,17 @@ if [[ -f "$shared_src" ]]; then
         drift "personal AGENTS.md shared block differs from agents-shared.md — re-embed verbatim"
     fi
     if $have_iv && grep -q '>>> shared' "$IV_IMAGE_DIR/agent/AGENTS.md" 2>/dev/null; then
-        iv_pin="$(tr -d '[:space:]' < "$IV_IMAGE_DIR/dotfiles-manifest.pin" 2>/dev/null || true)"
-        if [[ "$iv_pin" =~ ^[0-9a-f]{40}$ ]] && git -C "$DOTFILES" cat-file -e "$iv_pin" 2>/dev/null; then
-            if diff -q <(extract_shared "$IV_IMAGE_DIR/agent/AGENTS.md") \
-                       <(git -C "$DOTFILES" show "$iv_pin:provisioning/agents-shared.md" 2>/dev/null) >/dev/null 2>&1; then
-                ok "iv-image AGENTS.md shared block matches agents-shared.md at its pin"
-            else
-                drift "iv-image AGENTS.md shared block differs from agents-shared.md at pin ${iv_pin:0:12} — rerun vendor-skills.sh in iv-image"
-            fi
-            if diff -q <(git -C "$DOTFILES" show "$iv_pin:provisioning/agents-shared.md" 2>/dev/null) "$shared_src" >/dev/null 2>&1; then
-                ok "agents-shared.md unchanged since iv-image pin"
-            else
-                drift "agents-shared.md changed since iv-image's pin — bump the pin (DOTFILES_SHA=<new> ./vendor-skills.sh) and commit in iv-image"
-            fi
+        # No dotfiles-manifest.pin anymore (retired 2026-08-18): the provisioning
+        # manifests moved in-tree, so iv-provision's agent/AGENTS.md now tracks
+        # agents-shared.md at HEAD rather than at a pinned dotfiles SHA. Compare
+        # the current shared block directly.
+        if diff -q <(extract_shared "$IV_IMAGE_DIR/agent/AGENTS.md") "$shared_src" >/dev/null 2>&1; then
+            ok "iv-provision AGENTS.md shared block matches agents-shared.md"
         else
-            skip "iv-image pin unavailable — cannot check its shared AGENTS.md block"
+            drift "iv-provision AGENTS.md shared block differs from agents-shared.md — re-embed the shared block in iv-provision/agent/AGENTS.md"
         fi
     elif $have_iv; then
-        skip "iv-image AGENTS.md has no shared markers yet (pre-U6 clone)"
+        skip "iv-provision AGENTS.md has no shared markers yet"
     fi
 else
     drift "provisioning/agents-shared.md missing"

@@ -1131,7 +1131,10 @@ setup_agents() {
 
     # Claude Code CLI (native installer, npm fallback for arm64 Linux).
     # The native installer reinstalls latest, so --upgrade forces a refresh.
-    if { need claude && [[ ! -f "$LOCAL_BIN/claude" ]]; } || [[ "$UPGRADE" == true ]]; then
+    # want() (not a bare need/UPGRADE guard) so that on an IV VM, where claude is
+    # a team tool pinned by provision-iv.sh, --upgrade does NOT reinstall the
+    # floating copy over the pin; on macOS want() installs/upgrades as before.
+    if want claude; then
         echo "  Installing Claude Code CLI..."
         if curl -fsSL https://claude.ai/install.sh | bash >/dev/null 2>&1 && command -v claude >/dev/null 2>&1; then
             echo "  [+] Claude Code"
