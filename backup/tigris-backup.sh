@@ -141,17 +141,41 @@ sync_one() { # label src dest [extra...]
     # treats "${empty[@]}" as an unbound-variable error under `set -u` — the bug
     # that killed reconcile's first run 2026-07-26. Guard with the ${a[@]+...}
     # idiom so an empty array expands to nothing instead of aborting.
+    # Capture this phase's rclone output to classify its errors below, while still
+    # streaming to the main dated log (tee's stdout -> job_log's tee). PIPESTATUS[0]
+    # is run_bounded's rc (rclone's own, or 124 on the wall-clock backstop).
+    local phaselog; phaselog=$(mktemp -t "tigris-$label") 2>/dev/null || phaselog=/dev/null
     run_bounded $(( remaining + 180 )) \
         caffeinate -i rclone sync "$src" "$dest" "${FLAGS[@]}" ${MODE_FLAGS[@]+"${MODE_FLAGS[@]}"} \
-        --max-duration "${remaining}s" "$@"; local rc=$?
+        --max-duration "${remaining}s" "$@" 2>&1 | tee -a "$phaselog"
+    local rc=${PIPESTATUS[0]}
     if [[ $rc -ne 0 ]]; then
-        echo "WARN $label sync rc=$rc"
-        FAILURES+=("$label(rc=$rc)")
         if [[ $rc -eq 10 || $rc -eq 124 ]]; then
+            echo "WARN $label sync rc=$rc"
+            FAILURES+=("$label(rc=$rc)")
             echo "ABORT remaining phases: $label hit the run-wide duration limit (rc=$rc)"
             ABORT_REMAINING=1
+        else
+            # A live system changes files mid-copy (active git repos, DB WAL, logs):
+            # rclone logs "corrupted on transfer: sizes differ" (or md5 differ), KEEPS
+            # the prior good copy — no corruption is written — and exits non-zero. That
+            # benign churn must NOT fail the whole backup: the file is recopied on a
+            # later quiescent run, and the weekly reconcile's exact size+mtime pass
+            # catches anything genuinely wrong. So fail the phase only when a NON-benign
+            # error is also present (permission, IO, missing source). 2026-08: 1142
+            # benign 'sizes differ' had kept the check red for weeks with data intact.
+            local nfail nbenign
+            nfail=$(grep -cE 'ERROR : .*Failed to (copy|update)' "$phaselog" 2>/dev/null); nfail=${nfail//[^0-9]/}; : "${nfail:=0}"
+            nbenign=$(grep -E 'ERROR : .*Failed to (copy|update)' "$phaselog" 2>/dev/null | grep -cE 'corrupted on transfer|being updated'); nbenign=${nbenign//[^0-9]/}; : "${nbenign:=0}"
+            if (( nfail > 0 && nfail == nbenign )); then
+                echo "NOTE $label: rc=$rc but all $nbenign copy-error(s) are benign mid-copy changes (recopied next quiescent run; reconcile verifies). Phase OK."
+            else
+                echo "WARN $label sync rc=$rc (benign=$nbenign of $nfail copy-error(s); $(( nfail - nbenign )) non-benign)"
+                FAILURES+=("$label(rc=$rc)")
+            fi
         fi
     fi
+    [[ "$phaselog" != /dev/null ]] && rm -f "$phaselog"
 }
 
 # Flush WAL into the main file so rclone copies a consistent single-file snapshot

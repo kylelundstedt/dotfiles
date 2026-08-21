@@ -4,6 +4,15 @@
 # which misses root-level files).
 - .DS_Store
 - *.sock
+# Hot SQLite/DuckDB write-ahead sidecars anywhere: transient and constantly
+# rewritten by live DBs (atuin, duckdb, app state), so they churn mid-copy every
+# run. The main DB file is self-consistent to its last checkpoint without them,
+# so excluding these gives a consistent (if seconds-stale) restore and removes a
+# standing source of 'sizes differ' backup failures (2026-08). The important DBs
+# (msgvault) are checkpointed before the sync regardless.
+- *-wal
+- *-shm
+- *.duckdb.wal
 - **/node_modules/**
 - **/.venv/**
 - **/venv/**
