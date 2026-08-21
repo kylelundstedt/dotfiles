@@ -353,6 +353,14 @@ test_provisioning() {
     else
         log_fail "monitoring drift found — see /tmp/check-monitoring.out"
     fi
+    # entire-push-check's probe + dedupe. Hermetic (real git repos in a temp
+    # HOME, no network, no healthchecks ping), so it belongs in the local
+    # provisioning section rather than behind a VM.
+    if "$DOTFILES_DIR/maint/test-entire-push-check.sh" > /tmp/entire-push-check-test.out 2>&1; then
+        log_pass "entire-push-check probe and dedupe (test-entire-push-check.sh)"
+    else
+        log_fail "entire-push-check tests failed — see /tmp/entire-push-check-test.out"
+    fi
     test_skills_on_disk
 }
 

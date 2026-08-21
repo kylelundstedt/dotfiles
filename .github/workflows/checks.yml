@@ -25,6 +25,11 @@ jobs:
       - name: AgentsView snapshot and restore staging
         run: backup/test_agentsview_snapshot.sh
 
+      # Hermetic: builds real git repos and linked worktrees in a temp HOME.
+      # No Keychain, no network, no healthchecks ping.
+      - name: entire-push-check probe and dedupe
+        run: maint/test-entire-push-check.sh
+
       - name: validate launchd plists
         run: |
           python3 - <<'EOF'

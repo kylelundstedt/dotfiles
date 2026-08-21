@@ -51,10 +51,25 @@ fi
 # `command -v`: non-interactive SSH gets a PATH without ~/.local/bin, which
 # silently reports user-installed tools as absent (agent_docs/vm-disposability.md).
 # Finds worktrees too — a linked worktree's .git is a FILE, not a directory.
+#
+# Emits `repo|common-dir|ref|n`. The common-dir is what makes the finding
+# COUNTABLE: linked worktrees share one object store, so N worktrees of the
+# same repo each report the same refs, and a naive count multiplies one
+# undurable record into N. Measured on iv-foundry-stage2 2026-08-21: 15
+# findings, 3 actual refs — seven ave-adapters worktrees all resolving to
+# ave-adapters-native/.git. Reporting 15 things to fix when there are 3 is how
+# a fail-closed check stops being read.
 read -r -d '' PROBE <<'EOS'
 find "$HOME" -name .git -maxdepth 6 \( -type d -o -type f \) 2>/dev/null | while read -r g; do
     r="$(dirname "$g")"
     git -C "$r" rev-parse --git-dir >/dev/null 2>&1 || continue
+    # The shared object store. --path-format=absolute needs git >= 2.31; the
+    # fallback resolves it by hand for anything older, since --git-common-dir
+    # alone returns a bare ".git" for a main worktree and an absolute path for a
+    # linked one, which would not group.
+    c=$(git -C "$r" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || c=""
+    [ -n "$c" ] || c=$(cd "$r" && cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd -P) || c=""
+    [ -n "$c" ] || c="$r/.git"
     # 'refs/heads/entire/**', not 'entire/*': for-each-ref patterns are
     # pathname-aware, so a single * stops at the slash and matches NOTHING
     # under entire/checkpoints/v1 — the check passed vacuously until this was
@@ -62,7 +77,7 @@ find "$HOME" -name .git -maxdepth 6 \( -type d -o -type f \) 2>/dev/null | while
     git -C "$r" for-each-ref --format='%(refname:short)' 'refs/heads/entire/**' 2>/dev/null | while read -r ref; do
         [ -n "$ref" ] || continue
         n=$(git -C "$r" rev-list --count "$ref" --not --remotes 2>/dev/null || echo 0)
-        [ "$n" -gt 0 ] && echo "${r#"$HOME"/}|$ref|$n"
+        [ "$n" -gt 0 ] && echo "${r#"$HOME"/}|${c#"$HOME"/}|$ref|$n"
     done
 done
 EOS
@@ -93,19 +108,54 @@ while IFS= read -r h; do [[ -n "$h" ]] && EXEVMS+=("$h"); done < <(
 in_list() { local h=$1; shift; local x; for x in "$@"; do [[ "$x" == "$h" ]] && return 0; done; return 1; }
 
 findings=() checked=0 unreachable=() excused_n=0
+# Parallel arrays, not an associative array: the mini's /bin/bash is 3.2, which
+# has no `declare -A`. SEEN holds "host|common-dir|ref" for each finding already
+# recorded; SEEN_EXTRA counts the additional worktrees that resolved to it.
+SEEN=() SEEN_EXTRA=() dup_n=0
+
+index_of() {  # index_of <needle> <haystack...> -> echoes index, or -1
+    local needle=$1; shift
+    local i=0 x
+    for x in "$@"; do
+        [[ "$x" == "$needle" ]] && { echo "$i"; return 0; }
+        i=$((i + 1))
+    done
+    echo -1
+}
 
 record() {  # record <host> <probe-output>
-    local host=$1 out=$2 line repo key
+    local host=$1 out=$2 line repo common ref n key idx
     while IFS= read -r line; do
         [[ -n "$line" ]] || continue
-        repo="${line%%|*}"
+        IFS='|' read -r repo common ref n <<<"$line"
+        [[ -n "$repo" && -n "$ref" ]] || continue
+
+        # Exclusions are still matched per WORKTREE path, before dedupe, so the
+        # existing host:repo entries in entire-push-exclude.txt keep their exact
+        # meaning. Excusing one worktree of a shared repo does not excuse the
+        # others; the survivors simply collapse into a single finding below.
         key="$host:$repo"
         if in_list "$key" ${EXCLUDED[@]+"${EXCLUDED[@]}"}; then
             excused_n=$((excused_n + 1))
             [[ $DRY_RUN -eq 1 ]] && echo "  excused  $key"
             continue
         fi
-        findings+=("$host:$line")
+
+        # One undurable record per (host, object store, ref) -- NOT per
+        # worktree. Linked worktrees share refs, so without this a repo with
+        # seven worktrees reports seven identical findings and the operator is
+        # told to push seven things that are one thing.
+        key="$host|$common|$ref"
+        idx=$(index_of "$key" ${SEEN[@]+"${SEEN[@]}"})
+        if [[ "$idx" != "-1" ]]; then
+            SEEN_EXTRA[$idx]=$(( ${SEEN_EXTRA[$idx]} + 1 ))
+            dup_n=$((dup_n + 1))
+            [[ $DRY_RUN -eq 1 ]] && echo "  (also in $host:$repo, same object store)"
+            continue
+        fi
+        SEEN+=("$key")
+        SEEN_EXTRA+=(0)
+        findings+=("$host:$repo|$ref|$n")
     done <<<"$out"
 }
 
@@ -140,8 +190,22 @@ for u in ${unreachable[@]+"${unreachable[@]}"}; do
 done
 
 if [[ ${#findings[@]} -gt 0 ]]; then
-    for f in "${findings[@]}"; do echo "  UNPUSHED $f"; done
-    fail "${#findings[@]} unpushed Entire checkpoint ref(s): ${findings[*]} — push the repo so the record leaves the host"
+    i=0
+    for f in "${findings[@]}"; do
+        extra=${SEEN_EXTRA[$i]:-0}
+        if [[ $extra -gt 0 ]]; then
+            echo "  UNPUSHED $f (+${extra} more worktree(s) sharing this ref)"
+        else
+            echo "  UNPUSHED $f"
+        fi
+        i=$((i + 1))
+    done
+    # Count distinct refs, and say so. "18 unpushed checkpoints" for three refs
+    # reads as a much larger backlog than it is, and an alert that overstates
+    # its own severity is one you learn to discount.
+    dupnote=""
+    [[ $dup_n -gt 0 ]] && dupnote=" (${dup_n} duplicate worktree finding(s) collapsed)"
+    fail "${#findings[@]} unpushed Entire checkpoint ref(s)${dupnote}: ${findings[*]} — push the repo so the record leaves the host"
 fi
 
 [[ $DRY_RUN -eq 1 ]] || job_hc
