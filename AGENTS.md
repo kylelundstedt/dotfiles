@@ -15,12 +15,22 @@ GNU Stow–managed dotfiles and AI agent platform for macOS and Linux. Each top-
 
 ## Repository authoring boundary
 
-- GitHub is the canonical source of truth.
-- Author, commit, merge, and push both dotfiles and iv-image only from
-  `klundstedt-mini` (`~/dotfiles` and `~/github/kylelundstedt/iv-image`).
-- exe.dev VMs are read-only consumers or disposable test targets. Do not create
-  source commits there. Create Linux canaries on demand and delete them after
-  validation.
+- GitHub is the canonical source of truth. Changes land on `master` by pull
+  request.
+- **The writable integration is the boundary**, not a named machine. A host can
+  author here iff it carries `repo-dotfiles-rw`; anything else cannot push, so
+  "where did this change come from" has a mechanical answer rather than an
+  honour-system one.
+- Today that is `klundstedt-mini` and the `iv-provision` VM.
+
+> **Corrected 2026-08-23.** This section used to name `klundstedt-mini` as the
+> only authoring host, and told agents that exe.dev VMs were read-only
+> consumers. That had stopped being true: `iv-provision` carries
+> `repo-dotfiles-rw`, so the grant said one thing and the prose said another --
+> and the prose was the part being read. It also still referred to `iv-image`,
+> a repo renamed to `iv-provision` in its 3.0.0 release. A rule that contradicts
+> the permissions is worse than no rule: it gets quoted at people who are
+> correctly following the grants.
 
 ## Conventions
 
