@@ -1,5 +1,10 @@
-# VMs the recreate cycle must never pick up on its own. One name per line.
-# recreate-fleet reads this; passing a name explicitly still overrides it.
+# VMs that must never be recreated unattended. One name per line.
+#
+# NO LONGER READ BY ANYTHING (2026-08-23). recreate-fleet was its only consumer
+# and is deleted; recreates are now a deliberate human sequence, per
+# iv-provision/retiring.md. Kept because the REASONS below are still true and
+# still worth reading before recreating any of these -- each names a way the VM
+# is not disposable. Treat it as a checklist, not a config file.
 #
 # rss-feed          deployment lane, not a dev VM — already on exeslim, and the
 #                   dev profile would install an agent stack it has no business
