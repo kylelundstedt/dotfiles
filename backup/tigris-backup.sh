@@ -164,9 +164,18 @@ sync_one() { # label src dest [extra...]
             # catches anything genuinely wrong. So fail the phase only when a NON-benign
             # error is also present (permission, IO, missing source). 2026-08: 1142
             # benign 'sizes differ' had kept the check red for weeks with data intact.
-            local nfail nbenign
-            nfail=$(grep -cE 'ERROR : .*Failed to (copy|update)' "$phaselog" 2>/dev/null); nfail=${nfail//[^0-9]/}; : "${nfail:=0}"
-            nbenign=$(grep -E 'ERROR : .*Failed to (copy|update)' "$phaselog" 2>/dev/null | grep -cE 'corrupted on transfer|being updated'); nbenign=${nbenign//[^0-9]/}; : "${nbenign:=0}"
+            # Match per-object error lines, NOT the 'Failed to copy:' prefix: rclone
+            # only wraps an error in "Failed to copy:" when the copy call itself
+            # returns it (e.g. a PutObject failure). A post-transfer size mismatch is
+            # logged bare as "ERROR : <path>: corrupted on transfer: ...", so keying on
+            # that prefix made the two patterns disjoint and this whole branch dead —
+            # it matched 0 lines on every run between 2026-08-21 and 2026-08-26 while
+            # reporting "benign=0 of 0". Drop the run-level summaries, which restate an
+            # error already counted per object.
+            local nfail nbenign summary_re
+            summary_re='ERROR : (Attempt [0-9]+/[0-9]+ failed|.*: not deleting (files|directories) as there were IO errors)'
+            nfail=$(grep -E 'ERROR : ' "$phaselog" 2>/dev/null | grep -cvE "$summary_re"); nfail=${nfail//[^0-9]/}; : "${nfail:=0}"
+            nbenign=$(grep -E 'ERROR : ' "$phaselog" 2>/dev/null | grep -vE "$summary_re" | grep -cE 'corrupted on transfer|being updated'); nbenign=${nbenign//[^0-9]/}; : "${nbenign:=0}"
             if (( nfail > 0 && nfail == nbenign )); then
                 echo "NOTE $label: rc=$rc but all $nbenign copy-error(s) are benign mid-copy changes (recopied next quiescent run; reconcile verifies). Phase OK."
             else
