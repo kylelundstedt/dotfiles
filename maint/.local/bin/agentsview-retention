@@ -67,7 +67,12 @@ echo "  live sessions: $count_before, eligible: $eligible"
 
 if [[ "$eligible" -eq 0 ]]; then
     echo "OK: nothing older than $CUTOFF"
-    [[ "$APPLY" == true ]] && job_hc --data-raw "agentsview-retention $(date '+%F %T') nothing to prune (live=$count_before)"
+    # The empty first arg is the ping PATH (bare = success), not a typo: job_hc is
+    # `job_hc [path] [curl-args...]`, so passing --data-raw as $1 appends it to the
+    # URL instead (hc-ping.com/<uuid>--data-raw -> 404, swallowed by job_hc's
+    # `|| true`). That silently starved this check from creation to 2026-08-26 —
+    # both of its success paths did it, so it could only ever report failure.
+    [[ "$APPLY" == true ]] && job_hc "" --data-raw "agentsview-retention $(date '+%F %T') nothing to prune (live=$count_before)"
     exit 0
 fi
 
@@ -144,4 +149,5 @@ fi
 
 msg="pruned $removed session(s) older than $CUTOFF (exported to $RETIRED_DIR); live $count_before -> $count_after; residual ${residual:-0}"
 echo "OK: $msg"
-job_hc --data-raw "agentsview-retention $(date '+%F %T') $msg"
+# Empty first arg = bare success ping; see the note on the other success path above.
+job_hc "" --data-raw "agentsview-retention $(date '+%F %T') $msg"
