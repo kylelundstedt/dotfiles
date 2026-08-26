@@ -25,12 +25,26 @@
 - **/target/**
 # iCloud exclusions first (first match wins). Evicted/dataless items anywhere
 # under Mobile Documents fail with 'resource deadlock avoided' on read and
-# rc=1 the whole home sync. Two classes bitten so far: the iCloud trash
-# (2026-07-04) and app containers (iCloud~com~microsoft~Office~Excel,
-# 2026-07-11..13). App containers (iCloud~*) are app-synced data that lives in
-# the vendor's own cloud — excluded wholesale rather than whack-a-mole.
+# rc=1 the whole home sync. Three classes bitten so far: the iCloud trash
+# (2026-07-04), app containers (iCloud~com~microsoft~Office~Excel,
+# 2026-07-11..13) and WhatsApp (2026-08). App containers (iCloud~*) are
+# app-synced data that lives in the vendor's own cloud — excluded wholesale
+# rather than whack-a-mole.
 - /Library/Mobile Documents/.Trash/**
 - /Library/Mobile Documents/iCloud~*/**
+# WhatsApp is the same class but NOT named like it. A container declared via an
+# App Group gets a <TEAMID>~ prefix instead of iCloud~, so iCloud~* never matched
+# 57T9237FN3~net~whatsapp~WhatsApp and its evicted backup blobs (Media.tar,
+# ChatStorage.sqlite.enc, ...) EDEADLK'd on every run, failing home with 90
+# errors/night from before 2026-08-01 until this rule.
+#
+# Deliberately narrow: as of 2026-08-26 this is the ONLY container that has ever
+# errored (1980 EDEADLK reads across all of August; every other container, incl.
+# the 12 other <TEAMID>~ ones, copied clean). A blanket <TEAMID>~ rule would also
+# drop Ulysses, Readdle and FoldingText documents, so the failing container is
+# named instead. If a second one evicts, prefer widening the rule to reviewing
+# this decision — the naming split above is the trap, not the app.
+- /Library/Mobile Documents/*~net~whatsapp~WhatsApp/**
 # Keep iCloud Drive proper (com~apple~CloudDocs = the user's real files, kept
 # fully downloaded on this machine) — real user data
 + /Library/Mobile Documents/**

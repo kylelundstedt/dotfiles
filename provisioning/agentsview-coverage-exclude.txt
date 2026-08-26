@@ -20,3 +20,16 @@
 # later cannot trip the coverage check. Its 10 collected sessions stay in the
 # archive. See agent_docs/vm-disk-weight.md.
 rss-feed
+
+# quack substrate experiment, created 2026-08-21 on stock boldsoftware/exeuntu.
+# Never joined the tailnet, so coverage sees them only via the exe.dev inventory
+# pass. Zero Claude and zero Codex sessions as of 2026-08-26; quack-client holds
+# ~/quack-experiment, quack-server an empty home.
+#
+# NOTE this is a weaker excuse than rss-feed's: the stock image ships .claude and
+# .codex, so unlike a service appliance these CAN accumulate agent history, and
+# it would go uncollected. Excused as short-lived experiment boxes on the
+# understanding that they are deleted when the experiment ends — if either starts
+# doing real agent work, enroll it instead of leaving this entry in place.
+quack-client
+quack-server
