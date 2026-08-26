@@ -21,6 +21,23 @@
 # archive. See agent_docs/vm-disk-weight.md.
 rss-feed
 
+# Tailscale Aperture node (AI gateway), part of a pilot — a service appliance
+# that runs no agent harness, so it has no agent history to collect. Same
+# category as llm-gateway above, and the successor the gateway doc anticipated:
+# agent_docs/llm-gateway.md records that team scale-out should move to metered
+# keys behind a sanctioned gateway "e.g. Tailscale Aperture".
+#
+# Verified 2026-08-26: online Linux tailnet peer 100.66.95.94, created
+# 2026-08-11, untagged, NOT an exe.dev VM (absent from `ssh exe.dev ls --json`),
+# and it does not accept SSH from the mini — which is why entire-push-check also
+# logs it as "unreachable — not inspected".
+#
+# HONEST CAVEAT: unlike rss-feed, this excuse rests on identification, not
+# inspection. The SSH timeout means the absence of an agent harness could not be
+# confirmed on the host itself. If Aperture ever grows a shell that runs agents,
+# this entry silently stops covering it — re-check rather than assume.
+ai
+
 # quack substrate experiment, created 2026-08-21 on stock boldsoftware/exeuntu.
 # Never joined the tailnet, so coverage sees them only via the exe.dev inventory
 # pass. Zero Claude and zero Codex sessions as of 2026-08-26; quack-client holds

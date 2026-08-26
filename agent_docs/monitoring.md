@@ -49,6 +49,26 @@ Grace sizing rules (each learned the hard way):
   recently", never "every source contributed". Same family as the mcp-server
   lesson above: assert the dependency, not the wrapper. The check now asserts
   zero failed sources and probes each configured source itself.
+- **A log classifier is a guess about another tool's output format — replay it
+  before trusting it.** `tigris-backup`'s benign-change branch keyed on
+  `ERROR : .*Failed to (copy|update)` and then re-grepped that subset for
+  `corrupted on transfer`. rclone only writes the `Failed to copy:` wrapper when
+  the copy call itself errors; a post-transfer size mismatch is logged bare. The
+  two patterns were **disjoint**, so the branch matched 0 lines on every run for
+  the five days it existed while printing `benign=0 of 0` — a suppression rule
+  that suppressed nothing, and read as working. One `grep -c` over an existing
+  log would have caught it. Any new log-parsing rule must be replayed against
+  several days of real logs, and the counts it reports must be non-zero
+  somewhere before the rule is believed.
+- **`check-monitoring.sh` asserts configuration, not arrival.** It verifies
+  schedule, timezone, grace and channel against the manifest — and passed
+  `agentsview-retention` every run from 2026-07-28 to 2026-08-26 while that
+  check sat at `n_pings=0`, having never received a single ping. The URL was
+  right, the Keychain item was right, the manifest row was right; the _call_ was
+  malformed (`job_hc --data-raw "…"` puts `--data-raw` in the URL path, and
+  `job_hc` swallows the 404 with `|| true`). Same family as the "wired to no
+  channel" lesson above, one level deeper: right config with nothing arriving is
+  worse than no check, because the drift check vouches for it.
 - **Report the fan-out count in the success line.** Printing "8 source(s)
   reachable" immediately exposed a config parser that silently covered only 6
   of 8 — a check that quietly skips half its targets still reports OK.
@@ -80,7 +100,9 @@ library properties, not per-script conventions.
 A **fail-closed** coverage check: every running exe.dev VM **and** every online
 Linux tailnet node must be either a configured AgentsView source or listed in
 `provisioning/agentsview-coverage-exclude.txt` (currently: `rss-feed`, the
-deployment-lane VM). Since 2026-07-28 it enumerates the exe.dev inventory as
+deployment-lane VM; `ai`, a Tailscale Aperture gateway appliance; and
+`quack-client`/`quack-server`, experiment VMs — the last three excused
+2026-08-26). Since 2026-07-28 it enumerates the exe.dev inventory as
 well as tailnet peers — enumerating peers alone left the guarantee open exactly
 where coverage was most likely missing, because a VM nobody enrolled is not a
 peer. That change immediately surfaced three uncovered VMs, one created the
@@ -101,12 +123,21 @@ durable **only once pushed** — an unpushed checkpoint dies with the host and
 nothing else notices. Found for real on 2026-07-28 (`iv-foundry-stage2` held 5
 on `fannie-sflpd`).
 
+**The check itself lives in `iv-provision` (`bin/entire-push-check`) since
+2026-08-24 (#22).** What stays here is the personal scheduling concern: the
+launchd job, the Keychain ping URL and the log. `maint/.local/bin/entire-push-check`
+is a thin wrapper that resolves the real check by naming candidate checkout
+paths and **fails loudly** (pinging `/fail`) if none is found — a wrapper that
+silently no-opped after a checkout moved would report green forever.
+
 `com.kylelundstedt.entire-push-check` runs it **daily**, not hourly: it SSHes
 to every fleet host and reaches exe.dev-only hosts over the rate-limited
 `*.exe.xyz` path, and an unpushed checkpoint is a slow-moving condition.
-Keychain `entire-push-check:healthcheck-url`; exclusions in
-`provisioning/entire-push-exclude.txt` (empty). `--dry-run` reports without
-pinging.
+Keychain `entire-push-check:healthcheck-url`; exclusions moved with the check to
+**`iv-provision/provisioning/entire-push-exclude.txt`** and are resolved relative
+to the script there (one entry: `iv-foundry-stage2:worktrees/entire-agent-shelley-m4`,
+excused 2026-08-26 — a bootstrap ref that cannot be pushed because that VM's
+integration for the repo is read-only). `--dry-run` reports without pinging.
 
 Host discovery comes from `ssh exe.dev ls --json`, the same authoritative
 inventory `agentsview-coverage` now uses — **not** the tailnet, which cannot
@@ -195,3 +226,33 @@ responsibility.
   (age is integer seconds), so it's python-version-proof. Lesson: launchd
   jobs get the system python, not your shell's — don't rely on a newer
   interpreter's leniency.
+- 2026-08-26: four checks DOWN at once, four unrelated causes, **zero config
+  drift** — `check-monitoring.sh` reported every schedule, grace and channel
+  correct throughout. (a) `tigris-backup`/`-reconcile`: the benign-change
+  classifier added five days earlier matched nothing (see the log-classifier
+  rule above), so ~350 benign Photos-index `sizes differ` errors failed the
+  phase every night. (b) The same run's real failure was 90 EDEADLK reads on
+  `57T9237FN3~net~whatsapp~WhatsApp` — the 2026-07-11 `iCloud~*` exclusion never
+  matched it, because a container declared via an **App Group** is named
+  `<TEAMID>~vendor~app`, not `iCloud~…`. Scoped the new rule to that one
+  container: it is the only one that has ever errored, and a blanket `<TEAMID>~`
+  rule would also have dropped Ulysses, Readdle and FoldingText **documents**
+  from the backup. (c) `agentsview-retention` had never pinged at all (see the
+  arrival rule above). (d) `agentsview-coverage` and `entire-push-check` both
+  starved on `ssh exe.dev ls --json` — coverage failed that way **578 times**
+  between 2026-07-28, when the inventory pass landed, and 2026-08-26, i.e.
+  essentially every hourly run for a month, with two successes. It recovered on
+  its own.
+  **The expensive part was (d) masking the rest**: a month of alerts on the
+  _probe_ hid the gap the check exists to find. When the inventory finally
+  answered, coverage immediately named four uncovered agent-capable hosts
+  (`ai`, `iv-cli`, `quack-client`, `quack-server`) and `entire-push-check` named
+  two unpushed Entire checkpoints. A fail-closed check whose dependency fails
+  closed _first_ reports the dependency forever and the finding never. Suspect
+  the hourly cadence is self-inflicting the exe.dev SYN-drop lockout documented
+  in `AGENTS.md` — back the inventory call off or cache it.
+  Resolution: `iv-cli` enrolled as a real source; `quack-*` excused as
+  experiment VMs; `ai` excused as a Tailscale Aperture gateway appliance; the
+  `ave-adapters` checkpoint pushed; the `entire-agent-shelley` one excused,
+  since `iv-foundry-stage2`'s integration for that repo is **read-only** (403)
+  and the ref was a bootstrap commit carrying no transcript.
