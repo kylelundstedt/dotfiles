@@ -21,6 +21,14 @@ DRY_RUN=0
 
 source "$HOME/dotfiles/backup/_lib.sh"
 job_require_mini agentsview-coverage
+
+# Collector-role guard (2026-09-02 demotion): fleet coverage is meaningful only
+# where the [[remote_hosts]] fan-in lives. The mini is now a plain source
+# daemon; the global collector (and this check's future home) is iv-agentsview.
+if ! grep -q '^\[\[remote_hosts\]\]' "$HOME/.agentsview/config.toml" 2>/dev/null; then
+    echo "no [[remote_hosts]] configured; not the collector, skipping coverage check."
+    exit 0
+fi
 [[ $DRY_RUN -eq 1 ]] || { job_hc_init "agentsview-coverage:healthcheck-url"; job_log "$HOME/Library/Logs/agentsview-coverage"; }
 
 fail() {

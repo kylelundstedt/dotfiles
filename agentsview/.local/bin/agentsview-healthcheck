@@ -17,7 +17,9 @@ fail() {
     exit 1
 }
 
-TOKEN=$(job_kc "agentsview:auth-token")
+# Token lives in the mode-0600 config (Keychain fan-out never happened;
+# the collector role that needed it has moved to iv-agentsview anyway).
+TOKEN=$(sed -nE 's/^auth_token[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' "$HOME/.agentsview/config.toml" | head -1)
 if [[ -z "$TOKEN" && -f "$HOME/.agentsview/config.toml" ]]; then
     TOKEN=$(sed -nE \
         's/^auth_token[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' \
@@ -27,12 +29,13 @@ fi
 TS_BIN=$(command -v tailscale || true)
 [[ -n "$TS_BIN" ]] || [[ ! -x /opt/homebrew/bin/tailscale ]] || TS_BIN=/opt/homebrew/bin/tailscale
 [[ -n "$TS_BIN" ]] || fail "tailscale not installed"
-# Probe the collector through the TLS front (tailscale serve :8443 -> loopback),
+# Probe the source daemon directly on loopback (the :8443 collector front was
+# retired 2026-09-02; the global collector now runs on iv-agentsview),
 # so this exercises the same path a browser hits — real cert, proxy, and auth —
 # not just the loopback backend. A cert or proxy fault now trips the check.
 TS_FQDN=$($TS_BIN status --json 2>/dev/null | jq -r '.Self.DNSName // empty' | sed 's/\.$//')
 [[ -n "$TS_FQDN" ]] || fail "no Tailscale MagicDNS name"
-BASE="https://${TS_FQDN}:8443"
+BASE="http://127.0.0.1:8080"
 
 job_hc /start
 curl -fsS --max-time 15 -H "Authorization: Bearer $TOKEN" \
