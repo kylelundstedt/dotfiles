@@ -27,9 +27,11 @@ printf 'HC_URL=%s\n' "$HC" | ssh -o ConnectTimeout=30 -o BatchMode=yes "$VM" '
         sudo install -m 0644 /tmp/agentsview.service /etc/systemd/system/agentsview.service; restart=1
     fi
     # No bearer for the collector anywhere: the unit passes no --require-auth,
-    # and the config must not re-enable it (require_auth) or hold a stale token.
-    if grep -qE "^[[:space:]]*(auth_token|require_auth)[[:space:]]*=" ~/.agentsview/config.toml; then
-        sed -i -E "/^[[:space:]]*(auth_token|require_auth)[[:space:]]*=/d" ~/.agentsview/config.toml; restart=1
+    # and the config must not re-enable it (require_auth). The daemon regenerates
+    # an auth_token line on every start; without require_auth it is inert, so it
+    # is left alone (deleting it would just make every deploy a restart).
+    if grep -qE "^[[:space:]]*require_auth[[:space:]]*=" ~/.agentsview/config.toml; then
+        sed -i -E "/^[[:space:]]*require_auth[[:space:]]*=/d" ~/.agentsview/config.toml; restart=1
     fi
     rm -f /tmp/agentsview-coverage /tmp/agentsview-reconcile /tmp/agentsview.service /tmp/agentsview-coverage.service /tmp/agentsview-coverage.timer
     sudo systemctl daemon-reload

@@ -14,7 +14,9 @@
 #   - a block whose url is an av-src-* host with no matching integration is a
 #     retired VM and is dropped;
 #   - every other block (klundstedt-mini on the tailnet path) is left alone.
-# The daemon reads config only at start, so a changed file restarts it.
+# The daemon reads config only at start, so a changed file restarts it. The
+# daemon also rewrites the file on start (regenerating auth_token and
+# cursor_secret in the head); the head is kept verbatim and never compared.
 # Discovery uses the reflection integration (attached auto:all), so nothing
 # here needs a credential. Pass --dry-run to print the diff without writing.
 set -uo pipefail
@@ -39,7 +41,9 @@ NEW=$(mktemp)
 awk -v peers="$PEERS" -v tok="$FLEET_TOKEN" '
 BEGIN { n = split(peers, p, ","); for (i = 1; i <= n; i++) want[p[i]] = 1 }
 function canon(h) {
-    printf "\n[[remote_hosts]]\n  host = \"%s\"\n  interval = \"15m\"\n  transport = \"http\"\n  url = \"https://av-src-%s.int.exe.xyz\"\n  token = \"%s\"\n", h, h, tok
+    # Key order matches how the daemon re-serialises config.toml on start
+    # (alphabetical), so a reconciled file is byte-stable across restarts.
+    printf "\n[[remote_hosts]]\n  host = \"%s\"\n  interval = \"15m\"\n  token = \"%s\"\n  transport = \"http\"\n  url = \"https://av-src-%s.int.exe.xyz\"\n", h, tok, h
 }
 function flush() {
     if (!inblock) return
@@ -50,6 +54,14 @@ function flush() {
 /^\[\[remote_hosts\]\]/ { flush(); inblock = 1; block = $0 "\n"; host = ""; url = ""; next }
 {
     if (inblock) {
+        # The daemon appends its own auth_token/cursor_secret at the END of the
+        # file on some restarts, which textually lands inside the last block.
+        # Hoist them to the head (once) so they never travel with a block.
+        if ($0 ~ /^[[:space:]]*(auth_token|cursor_secret)[[:space:]]*=/) {
+            k = $0; sub(/^[[:space:]]+/, "", k); key = k; sub(/[[:space:]]*=.*/, "", key)
+            if (index(head, key " =") == 0) head = k "\n" head
+            next
+        }
         block = block $0 "\n"
         if ($0 ~ /^[[:space:]]*host[[:space:]]*=/) { h = $0; sub(/^[^"]*"/, "", h); sub(/".*/, "", h); host = h }
         if ($0 ~ /^[[:space:]]*url[[:space:]]*=/)  { u = $0; sub(/^[^"]*"/, "", u); sub(/".*/, "", u); url = u }
@@ -64,7 +76,11 @@ END {
     if (dropped != "") print "  retired:" dropped  > "/dev/stderr"
 }' "$CONFIG" > "$NEW"
 
-if cmp -s "$CONFIG" "$NEW"; then
+# Compare ignoring the two keys the daemon regenerates on start; their value and
+# position churn, and rewriting the file for them would restart the collector
+# every day for nothing.
+strip() { grep -vE '^[[:space:]]*(auth_token|cursor_secret)[[:space:]]*=' "$1"; }
+if cmp -s <(strip "$CONFIG") <(strip "$NEW"); then
     rm -f "$NEW"; echo "OK: fan-in already matches ${PEERS//,/ }"; exit 0
 fi
 if [[ $DRY_RUN -eq 1 ]]; then
