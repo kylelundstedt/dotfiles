@@ -7,4 +7,5 @@ Wants=network-online.target
 Type=oneshot
 User=exedev
 EnvironmentFile=-/home/exedev/.config/agentsview-coverage/env
+ExecStartPre=-/home/exedev/.local/bin/agentsview-reconcile
 ExecStart=/home/exedev/.local/bin/agentsview-coverage

@@ -1,0 +1,21 @@
+# AgentsView GLOBAL COLLECTOR on iv-agentsview. Bound to loopback with no
+# --require-auth: the exe.dev auth proxy is the only way in (owner login for
+# humans, the `agentsview` peer integration for VMs), so no bearer exists for
+# it anywhere. Sources are pulled through av-src-* peer integrations; see
+# agentsview-reconcile. Deployed by provisioning/iv-agentsview/deploy.sh.
+[Unit]
+Description=AgentsView global collector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=exedev
+Environment=AGENTSVIEW_DATA_DIR=/home/exedev/.agentsview
+ExecStart=/usr/local/bin/agentsview serve --host 127.0.0.1 --port 8000 --public-url https://iv-agentsview.exe.xyz --no-browser --no-update-check
+Restart=on-failure
+RestartSec=10
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

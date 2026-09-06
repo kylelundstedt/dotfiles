@@ -15,6 +15,8 @@ Platform product decision.
 > the mini from `tag:dev` to `tag:mini`: fleet VMs now reach it only on
 > `tcp:22` and `tcp:8080`; `tcp:443` (personal-mcp) is restricted to
 > `tag:relay` (the `iv-personal-mcp-relay` VM) and Kyle's own devices.
+> **2026-09-06:** the data path moved off the tailnet onto exe.dev peer
+> integrations — see [agentsview-peer-path.md](agentsview-peer-path.md).
 > Sections below describing the collector ON the mini (its `:8443` front, the
 > Keychain token fan-out, coverage/healthcheck as collector checks) are
 > historical; the scripts in `agentsview/` are already role-aware.

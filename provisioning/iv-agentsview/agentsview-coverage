@@ -11,8 +11,12 @@
 #
 # Inputs, none of which put a secret on this VM:
 #   inventory  POST ls to the api-exe-ls exe.dev integration (token scoped to
-#              the single command `ls`, held at the exe.dev edge). Never follow
+#              `ls` and `share show`, held at the exe.dev edge). Never follow
 #              redirects: curl -L drops the POST body and the edge answers 403.
+#   shares     POST share show <vm> for every source pulled through a peer
+#              integration: its daemon is on loopback behind the VM's exe.dev
+#              auth proxy with a public constant as sync token, so a proxy
+#              flipped public on :8080 would expose that archive. Fail-closed.
 #   tailnet    tailscale status --json (this VM is a tailnet member)
 #   sources    ~/.agentsview/config.toml, the collector's own fan-in
 #   excuses    fetched from dotfiles master, cached for the next run
@@ -49,9 +53,19 @@ SELF=$(hostname)
 CONFIGURED=() EXCLUDED=() ONLINE=() uncovered=()
 in_list() { local h=$1; shift; local x; for x in "$@"; do [[ "$x" == "$h" ]] && return 0; done; return 1; }
 
-# Configured sources (host names from every [[remote_hosts]] block).
-while IFS= read -r h; do [[ -n "$h" ]] && CONFIGURED+=("$h"); done < <(
-    grep -oE 'host[[:space:]]*=[[:space:]]*"[^"]+"' "$CONFIG" | sed -E 's/.*"([^"]+)".*/\1/')
+# Configured sources (host names from every [[remote_hosts]] block), and the
+# subset pulled through an av-src-* peer integration.
+PEERED=()
+while read -r h u; do
+    [[ -n "$h" ]] || continue
+    CONFIGURED+=("$h")
+    [[ "$u" == https://av-src-*.int.exe.xyz* ]] && PEERED+=("$h")
+done < <(awk -F'"' '
+    function flush() { if (h != "") print h, u; h = ""; u = "" }
+    /^\[\[remote_hosts\]\]/ { flush(); next }
+    /^[[:space:]]*host[[:space:]]*=/ { h = $2 }
+    /^[[:space:]]*url[[:space:]]*=/  { u = $2 }
+    END { flush() }' "$CONFIG")
 
 # Excuses: the committed list on dotfiles master, cached so a GitHub blip does
 # not alarm. Neither fresh nor cached is a failure — an excuse list we cannot
@@ -117,6 +131,21 @@ if [[ ${#uncovered[@]} -gt 0 ]]; then
     fail "agent-capable host(s) neither configured nor excused: ${uncovered[*]} — enroll a source or add to agentsview-coverage-exclude.txt"
 fi
 
+# Public-port check for peer-path sources. status is the VM's proxy visibility
+# and port the one port that setting applies to; alternate ports stay
+# owner-only (exe.dev doc: proxy). A share to a user, a link, or team access
+# also reaches alternate ports, so those are reported, not failed: they are
+# deliberate lobby actions, but worth seeing next to the archive they open.
+for h in ${PEERED[@]+"${PEERED[@]}"}; do
+    SH=$(curl -fsS -m 60 -X POST "$EXE_API/exec" -d "share show $h --json" 2>/dev/null) && jq -e '.status' <<<"$SH" >/dev/null 2>&1 ||
+        fail "share status unavailable for peer source $h (POST share show via $EXE_API)"
+    st=$(jq -r '.status' <<<"$SH"); port=$(jq -r '.port' <<<"$SH")
+    [[ "$st" == "public" && "$port" == "8080" ]] && fail "source $h has its exe.dev proxy PUBLIC on :8080 — its archive is exposed; run: share set-private $h"
+    extra=$(jq -r '[(.users|length), (.links|length), (if .team_access then 1 else 0 end)] | @tsv' <<<"$SH")
+    IFS=$'\t' read -r nu nl ta <<<"$extra"
+    (( nu + nl + ta == 0 )) || echo "  note: peer source '$h' is shared (users=$nu links=$nl team=$ta) — those principals can reach its :8080"
+done
+
 for h in ${offtailnet[@]+"${offtailnet[@]}"}; do
     echo "  note: '$h' is a running exe.dev VM but not an online tailnet peer — visible only via the inventory pass"
 done
@@ -125,4 +154,4 @@ for e in ${EXCLUDED[@]+"${EXCLUDED[@]}"}; do
 done
 
 hc
-echo "OK: ${covered} covered (incl. self), ${excused} excused, 0 uncovered (${#ONLINE[@]} agent-capable host(s): ${tailnet_only} online Linux tailnet, ${#EXEVMS[@]} running exe.dev VM(s), ${#offtailnet[@]} inventory-only)"
+echo "OK: ${covered} covered (incl. self), ${excused} excused, 0 uncovered, ${#PEERED[@]} peer source(s) private (${#ONLINE[@]} agent-capable host(s): ${tailnet_only} online Linux tailnet, ${#EXEVMS[@]} running exe.dev VM(s), ${#offtailnet[@]} inventory-only)"

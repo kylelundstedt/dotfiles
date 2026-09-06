@@ -1,7 +1,10 @@
 # AgentsView data path over exe.dev peer integrations
 
-Status: **canary proven 2026-09-06 on `iv-cmg`**; fleet cutover and automatic
-enrollment not started. Decision pending on the token model (below).
+Status: **cut over 2026-09-06.** All 15 exe.dev sources pull through peer
+integrations, the collector runs with auth off behind its own proxy, the
+sync token is the public fleet constant (model B below, chosen), enrollment is
+automatic (`create-vm` + the collector's daily reconcile). The mini is the one
+tailnet-path source left. Open items at the end.
 
 ## Why
 
@@ -78,3 +81,47 @@ even with `--require-auth` off. Two models, both proven above:
 
 Recommendation: **B**. The value the per-host token protected (network
 reachability of the archive) is now enforced by exe.dev, mechanically.
+
+## Cutover record (2026-09-06)
+
+- **iv-provision 3.0.23** (PR #50): daemon on `127.0.0.1:8080`, `--public-url
+https://<vm>.exe.xyz:8080`, no `--require-auth`, `AGENTSVIEW_FLEET_TOKEN`
+  written on every provision; `create-vm` creates `av-src-<name>` after `new`
+  (its token widened to `integrations add`; `attach`/`edit`/`remove`/`rm`
+  verified 403).
+- **Collector** (`provisioning/iv-agentsview/`): unit rewritten (loopback, no
+  auth; `auth_token`/`require_auth` stripped from config), `agentsview-reconcile`
+  runs as `ExecStartPre` of the daily coverage service, coverage gained the
+  public-port check (`api-exe-ls` token now `ls` + `share show`). iv-provision's
+  `agentsview` reader integration recreated without its stale bearer.
+- **Fleet**: every VM re-provisioned at 3.0.23 in place (`upgrade-vm` path),
+  one at a time, then reconciled and synced. `iv-ave-adapters` and `aom-build`
+  time out on SSH from the mini both via `<vm>.exe.xyz` and the tailnet;
+  relaying through the lobby (`ssh exe.dev ssh <vm> …`) works. `agentsview
+sync --host` right after re-creating an integration can 401/502 for a
+  minute while the edge catches up — probe `/api/v1/version` first.
+- **Found**: `aom-build` (8 sessions) and `fannie-sflpd-poc` (15) had never
+  been collected. First full coverage run on the new path: 16 covered, 5
+  excused, 0 uncovered, 15 peer sources private.
+- **Cleanup done**: mini Keychain `agentsview:auth-token` deleted (retired
+  collector token, no reader); `provisioning/keys.manifest` row updated.
+
+### Open
+
+- **1Password**: the 12 per-host source tokens and the collector UI token in
+  "AgentsView fleet tokens" are dead; only the mini's source token is live.
+  Delete them (Kyle).
+- **Shared VMs.** A user the VM is shared with reaches its alternate ports, so
+  on the peer path they can read that VM's own archive unauthenticated. Today
+  only `kgl-songs` (3 users); the coverage check reports it every run as a
+  note, not a failure. Decide: acceptable (their own collaboration sessions),
+  or exclude `kgl-songs` from collection.
+- **Tailnet grants** allowing fleet → `:8080` are now unused by the fleet
+  (only the mini still serves there); tighten in the console when convenient.
+- **Overlay** `install.sh` fails on `iv-foundry-stage2`, `iv-entire-agent-shelley`
+  and `iv-ave-adapters`: stow conflict, `.config/shelley/hooks/new-conversation`
+  is a real file there, not a link. Pre-existing (provision-iv.sh does not write
+  it); those VMs have never had the overlay hooks. Fix by moving the file aside
+  and re-running `install.sh`.
+- Old create-vm keys `iv-provision-newvm` and `iv-bootstrap` on the exe.dev
+  account are probably orphaned by the rotation; confirm and delete (Kyle).

@@ -119,7 +119,7 @@ enrolled). Source lives in `provisioning/iv-agentsview/`, pushed by its
 check (period 86400s, grace 7200s). Inputs, with no secret on the VM:
 
 - **inventory**: `POST ls` to the `api-exe-ls` exe.dev http-proxy integration,
-  whose token is scoped to the single command `ls` and held at the exe.dev
+  whose token is scoped to `ls` and `share show` and held at the exe.dev
   edge (every other command answers 403 `not allowed by token permissions`).
   Never `curl -L` it — following the redirect drops the POST body and the edge
   answers 403 `integration not found`.
@@ -127,6 +127,12 @@ check (period 86400s, grace 7200s). Inputs, with no secret on the VM:
 - **sources**: the collector's own `~/.agentsview/config.toml`; the collector
   itself counts as covered, since an AgentsView server indexes its own dirs.
 - **excuses**: fetched from dotfiles master, cached for the next run.
+
+Since the 2026-09-06 peer-path cutover (`agent_docs/agentsview-peer-path.md`)
+the service first runs `agentsview-reconcile` (`ExecStartPre`), which enrolls
+every attached `av-src-*` peer integration into the collector's fan-in, and the
+check then asserts each peer source's exe.dev proxy is **private** on `:8080`
+(`share show`; a shared user/link/team is reported as a note).
 
 The one value that lives on the VM is the ping URL, in
 `~/.config/agentsview-coverage/env` (mode 0600, loaded by the unit) — it can
