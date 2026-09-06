@@ -50,3 +50,10 @@ ai
 # doing real agent work, enroll it instead of leaving this entry in place.
 quack-client
 quack-server
+
+# exe.dev relay for personal-mcp, created 2026-09-02 bare on exeslim (not
+# exeslim-dev): no Shelley, no provisioning, no agent harness — a dumb proxy
+# that holds zero secrets and zero state by design (agent_docs/agentsview-pilot.md,
+# 2026-09-02 topology change). Same category as rss-feed. If an agent is ever
+# provisioned onto it, enroll it instead of leaving this entry in place.
+iv-personal-mcp-relay

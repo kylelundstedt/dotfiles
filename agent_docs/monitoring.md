@@ -95,24 +95,43 @@ runs, locks, dated logs) live in `backup/_lib.sh`, sourced by
 tigris-backup.sh, sync-repos.sh, and restore-drill.sh — the rules above are
 library properties, not per-script conventions.
 
-### AgentsView fleet coverage (`agentsview-coverage`, live 2026-07-25)
+### AgentsView fleet coverage (`agentsview-coverage`, live 2026-07-25, on the collector since 2026-09-06)
 
 A **fail-closed** coverage check: every running exe.dev VM **and** every online
 Linux tailnet node must be either a configured AgentsView source or listed in
 `provisioning/agentsview-coverage-exclude.txt` (currently: `rss-feed`, the
-deployment-lane VM; `ai`, a Tailscale Aperture gateway appliance; and
-`quack-client`/`quack-server`, experiment VMs — the last three excused
-2026-08-26). Since 2026-07-28 it enumerates the exe.dev inventory as
+deployment-lane VM; `ai`, a Tailscale Aperture gateway appliance;
+`quack-client`/`quack-server`, experiment VMs; and `iv-personal-mcp-relay`, a
+bare exeslim proxy). Since 2026-07-28 it enumerates the exe.dev inventory as
 well as tailnet peers — enumerating peers alone left the guarantee open exactly
 where coverage was most likely missing, because a VM nobody enrolled is not a
-peer. That change immediately surfaced three uncovered VMs, one created the
-same day. A new agent-capable VM collected by
-neither trips it — the gap that left six VMs silently uncollected (2026-07-22)
-and that the per-source probes can't catch, since they only see hosts already in
-config. `com.kylelundstedt.agentsview-coverage` runs it hourly and pings the
-`agentsview-coverage` check (period 3600s, grace 7200s, Keychain
-`agentsview-coverage:healthcheck-url`). Run `agentsview-coverage --dry-run` to
-classify without pinging.
+peer. A new agent-capable VM collected by neither trips it — the gap that left
+six VMs silently uncollected (2026-07-22) and that the per-source probes can't
+catch, since they only see hosts already in config.
+
+**Where it runs.** On the collector, `iv-agentsview`, where the
+`[[remote_hosts]]` fan-in lives (it followed the collector off the mini; the
+mini-side copy self-skipped from the 2026-09-02 demotion until this move, and
+the first run on the collector found three VMs created in that window and never
+enrolled). Source lives in `provisioning/iv-agentsview/`, pushed by its
+`deploy.sh` from the mini — the VM is exeslim with no dotfiles clone. Daily via
+`agentsview-coverage.timer` (randomised 15 min), pinging the `agentsview-coverage`
+check (period 86400s, grace 7200s). Inputs, with no secret on the VM:
+
+- **inventory**: `POST ls` to the `api-exe-ls` exe.dev http-proxy integration,
+  whose token is scoped to the single command `ls` and held at the exe.dev
+  edge (every other command answers 403 `not allowed by token permissions`).
+  Never `curl -L` it — following the redirect drops the POST body and the edge
+  answers 403 `integration not found`.
+- **tailnet**: `tailscale status --json` (the VM is a tailnet member).
+- **sources**: the collector's own `~/.agentsview/config.toml`; the collector
+  itself counts as covered, since an AgentsView server indexes its own dirs.
+- **excuses**: fetched from dotfiles master, cached for the next run.
+
+The one value that lives on the VM is the ping URL, in
+`~/.config/agentsview-coverage/env` (mode 0600, loaded by the unit) — it can
+only spoof a heartbeat. Run `agentsview-coverage --dry-run` there to classify
+without pinging; `journalctl -u agentsview-coverage` has the run log.
 
 ### Entire checkpoint durability (`entire-push-check`, live 2026-07-28)
 
