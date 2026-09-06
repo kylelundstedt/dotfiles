@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Local health/freshness check for the mini's AgentsView collector.
+# Local health/freshness check for the mini's AgentsView source daemon
+# (demoted from global collector 2026-09-02; the collector is iv-agentsview).
 # An optional healthchecks.io ping URL may be stored as
 # agentsview:healthcheck-url in the login Keychain.
 set -euo pipefail
@@ -17,24 +18,14 @@ fail() {
     exit 1
 }
 
-# Token lives in the mode-0600 config (Keychain fan-out never happened;
-# the collector role that needed it has moved to iv-agentsview anyway).
-TOKEN=$(sed -nE 's/^auth_token[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' "$HOME/.agentsview/config.toml" | head -1)
-if [[ -z "$TOKEN" && -f "$HOME/.agentsview/config.toml" ]]; then
-    TOKEN=$(sed -nE \
-        's/^auth_token[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' \
-        "$HOME/.agentsview/config.toml" | head -1)
-fi
-[[ -n "$TOKEN" ]] || fail "auth token missing from Keychain and config.toml"
-TS_BIN=$(command -v tailscale || true)
-[[ -n "$TS_BIN" ]] || [[ ! -x /opt/homebrew/bin/tailscale ]] || TS_BIN=/opt/homebrew/bin/tailscale
-[[ -n "$TS_BIN" ]] || fail "tailscale not installed"
-# Probe the source daemon directly on loopback (the :8443 collector front was
-# retired 2026-09-02; the global collector now runs on iv-agentsview),
-# so this exercises the same path a browser hits — real cert, proxy, and auth —
-# not just the loopback backend. A cert or proxy fault now trips the check.
-TS_FQDN=$($TS_BIN status --json 2>/dev/null | jq -r '.Self.DNSName // empty' | sed 's/\.$//')
-[[ -n "$TS_FQDN" ]] || fail "no Tailscale MagicDNS name"
+# Token lives in the mode-0600 config (the Keychain fan-out never happened;
+# the collector role that wanted it has moved to iv-agentsview anyway).
+TOKEN=$(sed -nE 's/^auth_token[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' \
+    "$HOME/.agentsview/config.toml" 2>/dev/null | head -1)
+[[ -n "$TOKEN" ]] || fail "auth_token missing from config.toml"
+# Probe the source daemon on loopback. The :8443 tailscale-serve front was
+# retired with the demotion, so there is no cert or proxy left to exercise;
+# the collector's own pull is what verifies the tailnet path.
 BASE="http://127.0.0.1:8080"
 
 job_hc /start
