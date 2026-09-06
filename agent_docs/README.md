@@ -44,3 +44,5 @@ always-on rules live in `AGENTS.md`.
 | `vm-disk-weight.md`          | Measured fleet disk (2026-07-27) — forked-exeslim deployment lane, prune plan, rejected dev image       |
 | `vm-disposability.md`        | Audit (2026-07-28): can we delete any VM? Gap is 10 unpushed commits; Shelley history is covered        |
 | `exe-dev-remediation.md`     | Capability exposure + disk weight, in three tracks. Tracks 0 & 1 done (~7.8 GB, `auto:all` 6→3); 2 open |
+
+- [agentsview-peer-path.md](agentsview-peer-path.md) — AgentsView data path over exe.dev peer integrations: canary results, design, open token-model decision
