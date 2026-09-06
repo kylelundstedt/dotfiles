@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Supervised AgentsView collector on klundstedt-mini. launchd owns this
-# foreground process; do not replace it with `agentsview daemon start`.
+# AgentsView SOURCE DAEMON on klundstedt-mini (demoted from global collector
+# 2026-09-02; the collector now runs on iv-agentsview). Serves this machine
+# agent sessions on :8080 for the collector to pull, token-authed
+# (auth_token in mode-0600 config.toml). launchd owns this foreground process.
 set -euo pipefail
 umask 077
 
@@ -8,62 +10,24 @@ source "$HOME/dotfiles/backup/_lib.sh"
 job_require_mini agentsview
 
 DATA_DIR=${AGENTSVIEW_DATA_DIR:-$HOME/.agentsview}
-mkdir -p "$DATA_DIR"
-chmod 700 "$DATA_DIR"
+mkdir -p "$DATA_DIR"; chmod 700 "$DATA_DIR"
 [[ -f "$DATA_DIR/config.toml" ]] && chmod 600 "$DATA_DIR/config.toml"
 
 AGENTSVIEW_BIN=$(command -v agentsview || true)
 [[ -n "$AGENTSVIEW_BIN" ]] || [[ ! -x /opt/homebrew/bin/agentsview ]] || AGENTSVIEW_BIN=/opt/homebrew/bin/agentsview
 [[ -n "$AGENTSVIEW_BIN" ]] || { echo "FATAL: agentsview not installed" >&2; exit 1; }
 
-TS_BIN=$(command -v tailscale || true)
-[[ -n "$TS_BIN" ]] || [[ ! -x /opt/homebrew/bin/tailscale ]] || TS_BIN=/opt/homebrew/bin/tailscale
-[[ -n "$TS_BIN" ]] || { echo "FATAL: tailscale not installed" >&2; exit 1; }
-# The backend binds loopback; `tailscale serve` (set up separately, persisted in
-# tailscaled state) terminates real TLS on :8443 and proxies to it — the mini's
-# existing pattern (hub-mcp on :443). This gives https://<magicdns>:8443 with a
-# valid cert and moves the bearer token off app-layer plaintext, while the wire
-# was already WireGuard-encrypted. AgentsView must TRUST that proxied origin or
-# it rejects the forwarded request, so pass it as --public-url.
-TS_FQDN=$($TS_BIN status --json 2>/dev/null | jq -r '.Self.DNSName // empty' | sed 's/\.$//')
-[[ -n "$TS_FQDN" ]] || { echo "FATAL: no Tailscale MagicDNS name" >&2; exit 1; }
-PUBLIC_URL="https://${TS_FQDN}:8443"
-
-AGENTSVIEW_AUTH_TOKEN=$(job_kc "agentsview:auth-token")
-# Remote/locked login Keychains may be unavailable during bootstrap. AgentsView
-# already requires remote-host tokens in its mode-0600 config, so accept its
-# native auth_token field as the fail-closed fallback until Keychain fan-out is
-# completed from an unlocked GUI login.
-if [[ -z "$AGENTSVIEW_AUTH_TOKEN" && -f "$DATA_DIR/config.toml" ]]; then
-    AGENTSVIEW_AUTH_TOKEN=$(sed -nE \
-        's/^auth_token[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' \
-        "$DATA_DIR/config.toml" | head -1)
-fi
-[[ -n "$AGENTSVIEW_AUTH_TOKEN" ]] || {
-    echo "FATAL: agentsview:auth-token is absent from Keychain and config.toml" >&2
-    exit 1
-}
-export AGENTSVIEW_DATA_DIR="$DATA_DIR" AGENTSVIEW_AUTH_TOKEN
-
-# Muzzle every agent root that lives under ~/Library. macOS (Sequoia+) guards
-# other apps' data with a TCC prompt ("access data from other apps"); a launchd
-# background agent that hits it BLOCKS at session discovery and never binds the
-# port — the collector was down ~3 days this way (2026-07-25) with the prompt
-# stuck behind whatever had console focus. The pilot's scope is Claude Code +
-# Codex + Shelley, none of which live under ~/Library, so point the Library-based
-# agents at an empty directory. Same mechanism as the Zed fix in iv-image's
-# source daemon. Re-audit if a new Library-based agent app is installed:
-#   agentsview serve --no-sync + GET /api/v1/settings, look for existing
-#   /Library/ paths in agent_dirs.
+# Muzzle every agent root under ~/Library (TCC prompt blocks headless agents;
+# see prior outage 2026-07-25). Scope: Claude Code + Codex + Shelley only.
 NO_SCAN="$DATA_DIR/no-scan"
 mkdir -p "$NO_SCAN"
 export COWORK_DIR="$NO_SCAN" ZED_DIR="$NO_SCAN" \
        WARP_DIR="$NO_SCAN" VSCODE_COPILOT_DIR="$NO_SCAN"
+export AGENTSVIEW_DATA_DIR="$DATA_DIR"
 
 exec "$AGENTSVIEW_BIN" serve \
-    --host 127.0.0.1 \
+    --host 0.0.0.0 \
     --port 8080 \
-    --public-url "$PUBLIC_URL" \
     --no-browser \
     --no-update-check \
     --require-auth

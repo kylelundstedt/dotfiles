@@ -4,6 +4,21 @@ Status: **pilot in progress** (approved and Phase 0/1 canaries started
 2026-07-22). This is an internal KGL/IV development-fleet pilot, not an IV
 Platform product decision.
 
+> **TOPOLOGY CHANGE 2026-09-02 — collector moved off the mini.** The global
+> collector now runs on the `iv-agentsview` exe.dev VM (exeslim, systemd unit
+> `agentsview`, tailnet `tag:dev`), reached by agents through the `agentsview`
+> exe.dev peer integration (`https://agentsview.int.exe.xyz`, bearer held at
+> the exe.dev edge) and by humans at `https://iv-agentsview.exe.xyz`. The mini
+> was demoted to a plain **source daemon** on `:8080` (fresh token, old
+> collector token retired) and is pulled as the 13th `[[remote_hosts]]` source.
+> The mini's `:8443` tailscale-serve front is retired. Tailnet policy moved
+> the mini from `tag:dev` to `tag:mini`: fleet VMs now reach it only on
+> `tcp:22` and `tcp:8080`; `tcp:443` (personal-mcp) is restricted to
+> `tag:relay` (the `iv-personal-mcp-relay` VM) and Kyle's own devices.
+> Sections below describing the collector ON the mini (its `:8443` front, the
+> Keychain token fan-out, coverage/healthcheck as collector checks) are
+> historical; the scripts in `agentsview/` are already role-aware.
+
 ## Decision
 
 Deploy AgentsView on every active agent-capable exe.dev VM and Apple Container
