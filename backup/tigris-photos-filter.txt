@@ -1,0 +1,49 @@
+# rclone filter for the photos backup (paths relative to the .photoslibrary
+# bundle). First match wins. Excludes ONLY derived caches that Photos rebuilds
+# by itself — never originals, never the library database.
+#
+# WHY THIS FILE EXISTS (2026-09-06). macOS Tahoe 26.6.2 (installed 2026-08-26
+# 13:46) rewrote the Photos compute caches en masse: 12,426 files in the 18:00
+# hour alone, against a ~350/day baseline. From the next run (08-27) the photos
+# phase logged 30k-62k 'corrupted on transfer: sizes differ' errors per night,
+# never converged, and burned its entire share of the run-wide budget — rc=124,
+# every night for 11 days. Three knock-on effects, all from that one phase:
+#   1. photos never completed, so ~13k cache files never uploaded;
+#   2. the four archive phases after it (awss3, box, iphone, msgatt) were
+#      SKIPPED every night by the ABORT_REMAINING guard;
+#   3. the daily overran 06:00, so the weekly reconcile hit the rclone lock and
+#      died instantly ('rclone already running') on 08-30 and 09-06.
+# Verified 2026-09-06: no data was lost — originals, Photos.sqlite, msgvault and
+# all four archive sources were byte-complete at the destination, and rclone had
+# refused to delete anything ("not deleting files as there were IO errors").
+#
+# SCOPING (measured, not guessed — from the 09-06 log's 47,733 phase errors):
+#   resources/caches                43,615 errors  38,162 files   381M  -> EXCLUDE
+#   resources/derivatives            3,729 errors  63,281 files   8.0G  -> KEEP
+#   database                           276 errors                       -> KEEP
+#   private/com.apple.photoanalysisd     56 errors      41 files   149M  -> EXCLUDE
+#   private/com.apple.mediaanalysisd     21 errors      16 files   437M  -> EXCLUDE
+# The three exclusions remove ~91.5% of the errors for ~967M of pure derived
+# cache. derivatives is deliberately KEPT: it is only 8% of the errors and 8.0G
+# of thumbnails that a restore would otherwise have to regenerate.
+
+# Photos' own compute/thumbnail caches. Regenerated on demand; this is the
+# subtree macOS 26.6.2 rewrote and the sole reason the phase stopped converging.
+- /resources/caches/**
+
+# Vision/analysis caches: scene classification, face graph, location and
+# knowledge-graph sqlite stores. Rebuilt by photoanalysisd/mediaanalysisd from
+# the originals, and they hold hot WALs that churn during every run. Only 666K
+# of the 586M was ever successfully stored anyway.
+- /private/com.apple.mediaanalysisd/**
+- /private/com.apple.photoanalysisd/**
+
+# Everything else — originals/, database/, resources/derivatives|cpl|journals/,
+# internal/ — is backed up.
++ /**
+
+# NOTE ON CLEANUP: rclone applies filters to BOTH source and destination, so
+# these rules stop future syncing but leave the ~25k already-uploaded cache
+# objects ORPHANED in bkup:photos rather than deleting them. Enumerate with
+# `rclone lsf bkup:photos/resources/caches/ -R` and purge deliberately with
+# --dry-run first; the bucket's 30-day soft-delete then applies to the removal.
