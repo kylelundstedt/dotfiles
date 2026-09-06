@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# agentsview-reconcile — collector-side AgentsView enrollment over exe.dev peer
+# integrations. Runs ON THE COLLECTOR (iv-agentsview), before agentsview-coverage.
+#
+# Every peer integration named av-src-<vm> that is attached to this VM is a
+# source the collector should pull at https://av-src-<vm>.int.exe.xyz. This
+# job makes the [[remote_hosts]] fan-in in ~/.agentsview/config.toml match
+# that list, in both directions:
+#   - a peer with no block, or a block for that host on the old tailnet path,
+#     gets the canonical peer block (the fleet sync token is a public constant:
+#     with the source bound to loopback behind its own exe.dev auth proxy, the
+#     peer integration is the access control and the token a protocol formality
+#     -- agent_docs/agentsview-peer-path.md);
+#   - a block whose url is an av-src-* host with no matching integration is a
+#     retired VM and is dropped;
+#   - every other block (klundstedt-mini on the tailnet path) is left alone.
+# The daemon reads config only at start, so a changed file restarts it.
+# Discovery uses the reflection integration (attached auto:all), so nothing
+# here needs a credential. Pass --dry-run to print the diff without writing.
+set -uo pipefail
+umask 077
+
+DRY_RUN=0
+[[ "${1:-}" == "--dry-run" ]] && DRY_RUN=1
+CONFIG="${AGENTSVIEW_CONFIG:-$HOME/.agentsview/config.toml}"
+REFLECTION="${AGENTSVIEW_REFLECTION_URL:-https://reflection.int.exe.xyz/integrations}"
+FLEET_TOKEN="${AGENTSVIEW_FLEET_TOKEN:-agentsview-fleet-peer}"
+
+fail() { echo "FAIL: $1"; exit 1; }
+for c in jq curl; do command -v "$c" >/dev/null 2>&1 || fail "$c not found"; done
+[[ -f "$CONFIG" ]] || fail "collector config missing: $CONFIG"
+
+PEERS=$(curl -fsS -m 20 --retry 2 "$REFLECTION" 2>/dev/null |
+    jq -r '.integrations[]? | select(.type == "http-proxy") | .name | select(startswith("av-src-")) | sub("^av-src-"; "")' |
+    sort -u | paste -sd, -) || fail "reflection integration unavailable at $REFLECTION"
+[[ -n "$PEERS" ]] || fail "reflection listed no av-src-* peer integrations; refusing to reconcile toward an empty fan-in"
+
+NEW=$(mktemp)
+awk -v peers="$PEERS" -v tok="$FLEET_TOKEN" '
+BEGIN { n = split(peers, p, ","); for (i = 1; i <= n; i++) want[p[i]] = 1 }
+function canon(h) {
+    printf "\n[[remote_hosts]]\n  host = \"%s\"\n  interval = \"15m\"\n  transport = \"http\"\n  url = \"https://av-src-%s.int.exe.xyz\"\n  token = \"%s\"\n", h, h, tok
+}
+function flush() {
+    if (!inblock) return
+    if (host in want)      { canon(host); seen[host] = 1; if (url !~ /av-src-/ || block !~ ("token = \"" tok "\"")) changed = changed " " host }
+    else if (url ~ /av-src-[^.\/]+\.int\.exe\.xyz/) { dropped = dropped " " host }
+    else                   { sub(/\n+$/, "\n", block); printf "\n%s", block }
+}
+/^\[\[remote_hosts\]\]/ { flush(); inblock = 1; block = $0 "\n"; host = ""; url = ""; next }
+{
+    if (inblock) {
+        block = block $0 "\n"
+        if ($0 ~ /^[[:space:]]*host[[:space:]]*=/) { h = $0; sub(/^[^"]*"/, "", h); sub(/".*/, "", h); host = h }
+        if ($0 ~ /^[[:space:]]*url[[:space:]]*=/)  { u = $0; sub(/^[^"]*"/, "", u); sub(/".*/, "", u); url = u }
+    } else head = head $0 "\n"
+}
+END {
+    sub(/\n+$/, "\n", head); printf "%s", head
+    flush()
+    for (i = 1; i <= n; i++) if (!(p[i] in seen)) { canon(p[i]); added = added " " p[i] }
+    if (added != "")   print "  enrolled:" added   > "/dev/stderr"
+    if (changed != "") print "  rewritten:" changed > "/dev/stderr"
+    if (dropped != "") print "  retired:" dropped  > "/dev/stderr"
+}' "$CONFIG" > "$NEW"
+
+if cmp -s "$CONFIG" "$NEW"; then
+    rm -f "$NEW"; echo "OK: fan-in already matches ${PEERS//,/ }"; exit 0
+fi
+if [[ $DRY_RUN -eq 1 ]]; then
+    diff -u "$CONFIG" "$NEW" | sed -E 's/(token = ")[^"]+/\1***/' || true
+    rm -f "$NEW"; echo "DRY RUN: config would change"; exit 0
+fi
+cp -p "$CONFIG" "$CONFIG.bak-reconcile-$(date +%Y%m%d%H%M%S)"
+install -m 0600 "$NEW" "$CONFIG"; rm -f "$NEW"
+ls -t "$CONFIG".bak-reconcile-* 2>/dev/null | tail -n +6 | xargs -r rm -f
+sudo systemctl restart agentsview || fail "collector restart failed after config change"
+sleep 3
+[[ "$(systemctl is-active agentsview)" == "active" ]] || fail "collector not active after restart"
+echo "OK: fan-in reconciled to ${PEERS//,/ }; collector restarted"
