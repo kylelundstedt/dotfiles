@@ -1,0 +1,10 @@
+[Unit]
+Description=AgentsView fleet-coverage check (fail-closed, runs on the collector)
+After=network-online.target agentsview.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=exedev
+EnvironmentFile=-/home/exedev/.config/agentsview-coverage/env
+ExecStart=/home/exedev/.local/bin/agentsview-coverage

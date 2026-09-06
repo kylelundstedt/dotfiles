@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+# Fail-closed AgentsView fleet-coverage check — runs ON THE COLLECTOR
+# (iv-agentsview, systemd timer agentsview-coverage.timer, daily).
+#
+# Every running exe.dev VM and every online Linux tailnet node must be EITHER a
+# configured [[remote_hosts]] source in this collector's config OR explicitly
+# excused in provisioning/agentsview-coverage-exclude.txt (dotfiles master).
+# A new agent-capable VM that is neither trips the check. The collector itself
+# is covered by definition: an AgentsView server always indexes its own local
+# agent directories, so its sessions land in this database without a source.
+#
+# Inputs, none of which put a secret on this VM:
+#   inventory  POST ls to the api-exe-ls exe.dev integration (token scoped to
+#              the single command `ls`, held at the exe.dev edge). Never follow
+#              redirects: curl -L drops the POST body and the edge answers 403.
+#   tailnet    tailscale status --json (this VM is a tailnet member)
+#   sources    ~/.agentsview/config.toml, the collector's own fan-in
+#   excuses    fetched from dotfiles master, cached for the next run
+# The healthchecks.io ping URL is the one value that must live here, in
+# ~/.config/agentsview-coverage/env (HC_URL=..., mode 0600, loaded by the unit).
+# It can only spoof a heartbeat. Pass --dry-run to classify without pinging.
+set -uo pipefail
+umask 077
+
+DRY_RUN=0
+[[ "${1:-}" == "--dry-run" ]] && DRY_RUN=1
+
+CONFIG="${AGENTSVIEW_COVERAGE_CONFIG:-$HOME/.agentsview/config.toml}"
+EXE_API="${AGENTSVIEW_COVERAGE_EXE_API:-https://api-exe-ls.int.exe.xyz}"
+EXCLUDE_URL="${AGENTSVIEW_COVERAGE_EXCLUDE_URL:-https://raw.githubusercontent.com/kylelundstedt/dotfiles/master/provisioning/agentsview-coverage-exclude.txt}"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/agentsview-coverage"
+EXCLUDE_CACHE="$STATE_DIR/exclude.txt"
+mkdir -p "$STATE_DIR"
+
+hc() { [[ -n "${HC_URL:-}" && $DRY_RUN -eq 0 ]] && curl -fsS -m 10 --retry 3 "${HC_URL}${1:-}" "${@:2}" >/dev/null 2>&1 || true; }
+fail() {
+    local reason=$1
+    echo "FAIL: $reason"
+    hc /fail --data-raw "agentsview-coverage $(date '+%F %T') $reason"
+    exit 1
+}
+
+for c in jq curl tailscale; do command -v "$c" >/dev/null 2>&1 || fail "$c not found"; done
+[[ -f "$CONFIG" ]] || fail "collector config.toml missing"
+grep -q '^\[\[remote_hosts\]\]' "$CONFIG" || fail "no [[remote_hosts]] in $CONFIG — this is not the collector"
+
+hc /start
+SELF=$(hostname)
+CONFIGURED=() EXCLUDED=() ONLINE=() uncovered=()
+in_list() { local h=$1; shift; local x; for x in "$@"; do [[ "$x" == "$h" ]] && return 0; done; return 1; }
+
+# Configured sources (host names from every [[remote_hosts]] block).
+while IFS= read -r h; do [[ -n "$h" ]] && CONFIGURED+=("$h"); done < <(
+    grep -oE 'host[[:space:]]*=[[:space:]]*"[^"]+"' "$CONFIG" | sed -E 's/.*"([^"]+)".*/\1/')
+
+# Excuses: the committed list on dotfiles master, cached so a GitHub blip does
+# not alarm. Neither fresh nor cached is a failure — an excuse list we cannot
+# read would let a silently-added host pass, which is the gap being closed.
+if curl -fsS -m 20 --retry 2 "$EXCLUDE_URL" -o "$EXCLUDE_CACHE.new" 2>/dev/null && [[ -s "$EXCLUDE_CACHE.new" ]]; then
+    mv -f "$EXCLUDE_CACHE.new" "$EXCLUDE_CACHE"
+else
+    rm -f "$EXCLUDE_CACHE.new"
+    [[ -s "$EXCLUDE_CACHE" ]] || fail "exclusion list unavailable from $EXCLUDE_URL and no cached copy"
+    echo "  note: using cached exclusion list from $(date -r "$EXCLUDE_CACHE" '+%F %T')"
+fi
+while IFS= read -r h; do [[ -n "$h" ]] && EXCLUDED+=("$h"); done < <(
+    grep -vE '^[[:space:]]*#|^[[:space:]]*$' "$EXCLUDE_CACHE")
+
+# Online Linux tailnet peers — the set that COULD be agent-capable sources.
+# macOS/iOS peers (the mini, laptops, phones) are not fleet VMs; the mini is a
+# configured source and answers to agentsview-healthcheck on its own side.
+TS_JSON=$(tailscale status --json 2>/dev/null) || fail "tailscale status unavailable"
+while IFS= read -r h; do [[ -n "$h" ]] && ONLINE+=("$h"); done < <(
+    jq -r '.Peer[]? | select(.Online == true and .OS == "linux") | .HostName' <<<"$TS_JSON" | sort -u)
+
+# exe.dev inventory — the authoritative VM list, and the half the tailnet pass
+# is structurally blind to (a VM that never joined the tailnet is not a peer).
+# Serial with backoff: exe.dev drops SYNs past a per-source-IP rate.
+EXE_JSON=""
+for attempt in 1 2; do
+    EXE_JSON=$(curl -fsS -m 60 -X POST "$EXE_API/exec" -d ls 2>/dev/null) && jq -e '.vms' <<<"$EXE_JSON" >/dev/null 2>&1 && break
+    EXE_JSON=""
+    [[ $attempt -eq 1 ]] && sleep 45
+done
+[[ -n "$EXE_JSON" ]] || fail "exe.dev inventory unavailable after 2 attempts (POST ls via $EXE_API)"
+
+EXEVMS=()
+while IFS= read -r h; do [[ -n "$h" ]] && EXEVMS+=("$h"); done < <(
+    jq -r '.vms[]? | select(.status == "running") | .vm_name' <<<"$EXE_JSON" | sort -u)
+[[ ${#EXEVMS[@]} -gt 0 ]] || fail "exe.dev inventory parsed to zero running VMs — refusing to pass vacuously"
+
+# Union: every running exe.dev VM, plus any online Linux tailnet host that is
+# not an exe.dev VM. Tracked separately so the summary can say which hosts
+# only the inventory saw.
+tailnet_only=${#ONLINE[@]}
+offtailnet=()
+for h in ${EXEVMS[@]+"${EXEVMS[@]}"}; do
+    in_list "$h" ${ONLINE[@]+"${ONLINE[@]}"} && continue
+    ONLINE+=("$h")
+    offtailnet+=("$h")
+done
+
+covered=0 excused=0
+for h in ${ONLINE[@]+"${ONLINE[@]}"}; do
+    if [[ "$h" == "$SELF" ]]; then
+        covered=$((covered + 1)); [[ $DRY_RUN -eq 1 ]] && echo "  self      $h (collector indexes its own agent dirs)"
+    elif in_list "$h" ${CONFIGURED[@]+"${CONFIGURED[@]}"}; then
+        covered=$((covered + 1)); [[ $DRY_RUN -eq 1 ]] && echo "  source    $h"
+    elif in_list "$h" ${EXCLUDED[@]+"${EXCLUDED[@]}"}; then
+        excused=$((excused + 1)); [[ $DRY_RUN -eq 1 ]] && echo "  excused   $h"
+    else
+        uncovered+=("$h"); [[ $DRY_RUN -eq 1 ]] && echo "  UNCOVERED $h"
+    fi
+done
+
+if [[ ${#uncovered[@]} -gt 0 ]]; then
+    fail "agent-capable host(s) neither configured nor excused: ${uncovered[*]} — enroll a source or add to agentsview-coverage-exclude.txt"
+fi
+
+for h in ${offtailnet[@]+"${offtailnet[@]}"}; do
+    echo "  note: '$h' is a running exe.dev VM but not an online tailnet peer — visible only via the inventory pass"
+done
+for e in ${EXCLUDED[@]+"${EXCLUDED[@]}"}; do
+    in_list "$e" ${ONLINE[@]+"${ONLINE[@]}"} || echo "  note: excluded host '$e' is not currently online (stale exclusion?)"
+done
+
+hc
+echo "OK: ${covered} covered (incl. self), ${excused} excused, 0 uncovered (${#ONLINE[@]} agent-capable host(s): ${tailnet_only} online Linux tailnet, ${#EXEVMS[@]} running exe.dev VM(s), ${#offtailnet[@]} inventory-only)"
