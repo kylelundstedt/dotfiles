@@ -2003,8 +2003,22 @@ setup_power_management() {
     [[ "$DRY_RUN" == true ]] && return 0
     echo ""
     echo "=== Power management (klundstedt-mini) ==="
+    # Current values are readable without sudo; only ask for it when something
+    # differs. Before this, every unattended run printed "sudo required" for
+    # settings that had been in effect for months (mac audit 2026-09-10).
+    local pm_cur pm_want="ac:sleep=0 autorestart=1 womp=1 ups:sleep=0 haltremain=3 haltlevel=15"
+    pm_cur=$( { pmset -g custom; pmset -g ups; } 2>/dev/null | awk '
+        /^AC Power:/  { sect="ac" }  /^UPS Power:/ { sect="ups" }
+        sect=="ac"  && $1=="sleep"       { ac_s=$2 }   sect=="ac"  && $1=="autorestart" { ac_a=$2 }
+        sect=="ac"  && $1=="womp"        { ac_w=$2 }   sect=="ups" && $1=="sleep"       { up_s=$2 }
+        $1=="haltremain" { hr=$3 }  $1=="haltlevel" { hl=$3 }
+        END { printf "ac:sleep=%s autorestart=%s womp=%s ups:sleep=%s haltremain=%s haltlevel=%s", ac_s, ac_a, ac_w, up_s, hr, hl }')
+    if [[ "$pm_cur" == "$pm_want" ]]; then
+        echo "  [=] already set ($pm_want)"
+        return 0
+    fi
     if ! sudo -n true 2>/dev/null; then
-        echo "  [!] sudo required. Run:"
+        echo "  [!] differs (current: $pm_cur). sudo required. Run:"
         echo "      sudo pmset -c sleep 0 autorestart 1 womp 1"
         echo "      sudo pmset -u sleep 0 haltremain 3 haltlevel 15"
         return 0
