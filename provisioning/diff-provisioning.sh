@@ -183,6 +183,17 @@ prov="$IV_IMAGE_DIR/provision-iv.sh"
 # on the producer when -q exits early), so match against variables instead.
 install_code="$(code_lines "$INSTALL_SH")"
 prov_code=""; $have_iv && prov_code="$(code_lines "$prov")"
+# Runtime presence guard (team tools, macOS only). The install.sh grep below is
+# static — it proves install.sh *references* the tool, not that the tool landed
+# on PATH. install.sh's team-tool installs fail non-fatally (e.g. `brew install
+# --cask agentsview … || echo "[!] failed"`), so a cask/curl failure leaves the
+# Mac silently missing a tool this check still passed (agentsview, 2026-09-10).
+# On a Mac install.sh is the ONLY provider of these, so assert presence. Off on
+# Linux (VM team tools come from provision-iv.sh) and on IV VMs (want() skips
+# team there). Assumes the caller's provisioned PATH — i.e. run from a login
+# shell or test-install.sh, the same env these tools live in.
+check_presence=false
+[[ "$(uname -s)" == "Darwin" && ! -f "$HOME/iv-provision.lock" ]] && check_presence=true
 while read -r layer tool; do
     case "$layer" in
         base) ok "base tool $tool (exeuntu-provided, informational)" ;;
@@ -190,7 +201,19 @@ while read -r layer tool; do
             if $have_iv; then
                 grep -qwF "$tool" <<<"$prov_code" && ok "team tool $tool in provision-iv.sh" || drift "team tool $tool missing from provision-iv.sh"
             fi
-            grep -qwF "$tool" <<<"$install_code" && info "team tool $tool also installed by install.sh (macOS overlap — expected)" || true
+            if grep -qwF "$tool" <<<"$install_code"; then
+                info "team tool $tool also installed by install.sh (macOS overlap — expected)"
+                # On a Mac, install.sh is the only provider — presence must hold.
+                if [[ "$check_presence" == true ]]; then
+                    command -v "$tool" >/dev/null 2>&1 \
+                        && ok "team tool $tool on PATH (macOS)" \
+                        || drift "team tool $tool absent from PATH — install.sh is the Mac's only provider and its install failed silently"
+                fi
+            elif [[ "$check_presence" == true ]]; then
+                # Not installed by install.sh: VM-only (shelley, render-site, …),
+                # provided by provision-iv.sh. Expected absent on a Mac.
+                info "team tool $tool not in install.sh (VM-only; expected absent on macOS)"
+            fi
             ;;
         personal | personal-mac | personal-linux)
             # personal-mac = personal, but installed on macOS only (install.sh
