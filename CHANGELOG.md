@@ -4,6 +4,52 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-09-10 — Mac audit run on the mini; install.sh down to two prompts
+
+Ran `provisioning/mac-audit.md` on klundstedt-mini (merged as #20 the same
+day, author corrected; it had sat unmerged since 2026-08-20 and had never been
+run on either Mac). Verdict: on the full-install path, no coupling to
+iv-provision, but drifted. Report: `~/mac-audit-klundstedt-mini-2026-09-10.md`.
+Fixed the same day:
+
+- **Two 1Password prompts per install, not fourteen; zero Keychain prompts,
+  not ten** (#35). `op_resolve_all` runs one `op inject` per account into a
+  mode-0600 cache; `op_get` serves every read from it. Two traps: `op inject`
+  resolves _bare_ `op://` references too, so the cache key is the reference
+  without its prefix; and bash runs EXIT traps inside `( )` subshells, so the
+  cache cleanup is guarded by `BASH_SUBSHELL`. `kc_set` compares the stored
+  Keychain value before writing — `add-generic-password -U` asks for the login
+  keychain password on every overwrite, even an identical one. Measured with an
+  `op`-counting shim: 2 inject calls, 11/11 secrets, 5/5 MCP rows, 10/10
+  Keychain items.
+- **croc never installed unattended** (#34). The vendor installer runs sudo
+  for any non-root user regardless of prefix; every run since 2026-07-20 printed
+  `[!] croc failed`. Now `install_github_binary` like bat/fzf/rg (croc is
+  personal-mac, so the API rate limit that motivated the vendor path does not
+  apply).
+- **The 1Password item "Tailscale OAuth Dev" no longer exists** — retitled
+  "Tailscale OAuth". Six references (install.sh, test-install.sh, keys.manifest,
+  secrets.md, exe-dev.md, upgrade-vm and apple-containers skills) updated; the
+  missing item was failing the whole `op inject` batch. install.sh now requests
+  it only when the Mac actually needs to join the tailnet.
+- **`personal-linux` layer** in tools.manifest for archil (#32): install.sh is
+  Linux-only for it, so the `personal` row read as Mac drift.
+- **Skills: only Claude Code needs links** (#32, #33). The audit's "Codex sees 1
+  of 63 skills" was wrong — Codex reads `~/.agents/skills` natively (the skills
+  CLI calls it "universal"). The stale part was CLAUDE.md/README claiming both
+  agents get symlinks; corrected, and `test_skills_on_disk` now asserts the
+  Claude links, which nothing checked.
+- **A re-run of install.sh cleared the machine drift**: `exe-dev` skill
+  installed, hub-mcp registered in Codex, github-home MCP connected again (the
+  PAT was fine; the stored copy was stale — no rotation needed).
+- **Tailscale**: old 1.98.5 keg removed and the daemon restarted (1.102.3, SSH
+  on). Homebrew relabelled the service `sh.brew.tailscale`; nothing in the repo
+  keys on the label. Order matters: restart _before_ removing the old keg — I
+  did it the other way round and the daemon ran from a deleted binary until the
+  restart.
+
+Still open from the audit → TODO.
+
 ## 2026-08-04 — orphan Snowflake key: both copies stay archived
 
 Decided and closed. The two `Employee` items holding the same RSA-2048
