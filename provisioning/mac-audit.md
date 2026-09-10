@@ -123,13 +123,15 @@ claude mcp list
 codex mcp list
 ```
 
-Expected on a Mac: all five rows registered in Claude Code
-(`motherduck github-work github-home tigris readwise`) — the two `pat:` rows
+Expected on a Mac: the two `pat:` rows registered in Claude Code
+(`github-work github-home`); the three `codex:` rows (`motherduck tigris
+readwise`) must NOT be in Claude Code (claude.ai connectors cover them) and
+must be in Codex — the two `pat:` rows
 (`github-work`, `github-home`) read a token from 1Password at install time, so
 if 1Password was locked during the last `install.sh` they will be **absent**,
-which is a real finding worth reporting. Codex gets only the non-`pat:` rows
-(`motherduck tigris readwise`) plus `hub-mcp`, because Codex disallows inline
-bearer tokens.
+which is a real finding worth reporting. Codex gets the `codex:` rows
+(`motherduck tigris readwise`) plus `hub-mcp`; it never gets `pat:` rows,
+because Codex disallows inline bearer tokens.
 
 Report **connection status**, not just presence — `claude mcp list` shows
 connected/failed, and a registered-but-403 server is the failure mode I have hit
