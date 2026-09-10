@@ -17,11 +17,18 @@ GNU Stow–managed dotfiles and AI agent platform for macOS and Linux. Each top-
 
 - GitHub is the canonical source of truth. Changes land on `master` by pull
   request.
-- **The writable integration is the boundary**, not a named machine. A host can
-  author here iff it carries `repo-dotfiles-rw`; anything else cannot push, so
-  "where did this change come from" has a mechanical answer rather than an
-  honour-system one.
-- Today that is `klundstedt-mini` and the `iv-provision` VM.
+- **The write credential is the boundary**, not a named machine. There are two
+  kinds, and "where did this change come from" has a mechanical answer either
+  way:
+  - **Macs** push with GitHub CLI credentials (`gh auth login` with the Home
+    PAT, done by `install.sh`). Any Mac where `gh auth status` is logged in can
+    author here -- today `klundstedt-mini` and `klundstedt-mbp`.
+  - **exe.dev VMs** push only through the `repo-dotfiles-rw` integration, held
+    at the exe.dev edge and attached per VM -- today `iv-provision` alone. A VM
+    without it cannot push; the grant is the rule.
+- A Mac is not "carrying `repo-dotfiles-rw`": that name is the VM integration.
+  Saying so (2026-09-10, mbp) is how the previous version of this section came
+  to list one Mac and leave the other out.
 
 > **Corrected 2026-08-23.** This section used to name `klundstedt-mini` as the
 > only authoring host, and told agents that exe.dev VMs were read-only
@@ -31,6 +38,10 @@ GNU Stow–managed dotfiles and AI agent platform for macOS and Linux. Each top-
 > a repo renamed to `iv-provision` in its 3.0.0 release. A rule that contradicts
 > the permissions is worse than no rule: it gets quoted at people who are
 > correctly following the grants.
+>
+> **Corrected again 2026-09-10.** It then said the integration was the _only_
+> boundary and named the mini as the one Mac -- while the mbp had been pushing
+> with `gh` credentials all along. Two credential kinds, stated above.
 
 ## Conventions
 
