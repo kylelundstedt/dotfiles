@@ -57,6 +57,13 @@ team tool `install.sh` provides is actually on PATH on a Mac, and names VM-only
 team tools as expected absences. Verified on the mini: 8 present, 5 expected
 absent, no drift.
 
+- **OAuth MCP rows are Codex-only on macOS** (#42, mirrored as iv-provision
+  #51). `motherduck`, `tigris`, `readwise` sat at "Needs authentication" in
+  Claude Code on both Macs because nobody logs in to a duplicate: Claude Code
+  reaches those services through claude.ai connectors. New mac-column form
+  `codex:<url>`; install.sh removes such a row from Claude Code if present and
+  registers it in Codex as before.
+
 Still open from the audit → TODO.
 
 ## 2026-08-04 — orphan Snowflake key: both copies stay archived
