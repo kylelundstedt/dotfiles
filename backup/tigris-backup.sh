@@ -39,6 +39,10 @@ job_require_mini "$JOB_NAME"
 
 LOCKDIR=/tmp/tigris-backup.lock
 FILTER="$HOME/dotfiles/backup/tigris-backup-filter.txt"
+# Photos gets its own filter: the home rules are ~-relative and would not apply,
+# and the only thing to drop from a Photos library is derived cache. See that
+# file's header for why it exists (macOS 26.6.2 cache rewrite, 2026-08-26).
+PHOTOS_FILTER="$HOME/dotfiles/backup/tigris-photos-filter.txt"
 EXT=/Volumes/OWC8TB
 # Max personal Photos originals allowed missing-from-disk before we refuse to
 # sync the library (see photos_originals_complete). 0 = strict; bump a little if
@@ -172,12 +176,34 @@ sync_one() { # label src dest [extra...]
             # it matched 0 lines on every run between 2026-08-21 and 2026-08-26 while
             # reporting "benign=0 of 0". Drop the run-level summaries, which restate an
             # error already counted per object.
-            local nfail nbenign summary_re
+            # A second benign class, added 2026-09-06: an EVICTED iCloud item.
+            # macOS returns EDEADLK ('resource deadlock avoided') when the
+            # FileProvider cannot materialise a dataless file, and rclone reports
+            # it per object. This is not a backup defect — by definition the file
+            # is resident in the vendor's cloud, which is the same reasoning the
+            # filter already uses to drop iCloud~* containers wholesale. Treating
+            # it as fatal made one evicted app cache fail the entire home phase:
+            # WhatsApp did it for weeks (fixed by exclusion 2026-08-26), then
+            # Ulysses, Note and SoundHound did the same within two days. Excluding
+            # each container as it evicts is whack-a-mole AND drops that app's real
+            # documents from the backup; this instead keeps backing up everything
+            # readable and stops an eviction failing the run. SCOPED to Mobile
+            # Documents: EDEADLK anywhere else is a genuine fault and still fatal.
+            # The paths are reported, not silently swallowed — a permanently
+            # evicted file is a real (if unavoidable) gap and must stay visible.
+            local nfail nbenign nevict summary_re
             summary_re='ERROR : (Attempt [0-9]+/[0-9]+ failed|.*: not deleting (files|directories) as there were IO errors)'
             nfail=$(grep -E 'ERROR : ' "$phaselog" 2>/dev/null | grep -cvE "$summary_re"); nfail=${nfail//[^0-9]/}; : "${nfail:=0}"
             nbenign=$(grep -E 'ERROR : ' "$phaselog" 2>/dev/null | grep -vE "$summary_re" | grep -cE 'corrupted on transfer|being updated'); nbenign=${nbenign//[^0-9]/}; : "${nbenign:=0}"
+            nevict=$(grep -E 'ERROR : ' "$phaselog" 2>/dev/null | grep -vE "$summary_re" | grep -cE 'Library/Mobile Documents/.*resource deadlock avoided'); nevict=${nevict//[^0-9]/}; : "${nevict:=0}"
+            if (( nevict > 0 )); then
+                echo "NOTE $label: $nevict evicted iCloud item(s) unreadable this run (EDEADLK); not backed up, still resident in iCloud. Containers:"
+                grep -E 'ERROR : ' "$phaselog" 2>/dev/null | grep -E 'Library/Mobile Documents/.*resource deadlock avoided' \
+                    | grep -oE 'Mobile Documents/[^/]+' | sort -u | sed 's/^/    /'
+                nbenign=$(( nbenign + nevict ))
+            fi
             if (( nfail > 0 && nfail == nbenign )); then
-                echo "NOTE $label: rc=$rc but all $nbenign copy-error(s) are benign mid-copy changes (recopied next quiescent run; reconcile verifies). Phase OK."
+                echo "NOTE $label: rc=$rc but all $nbenign copy-error(s) are benign (mid-copy changes and/or evicted iCloud items; recopied next quiescent run; reconcile verifies). Phase OK."
             else
                 echo "WARN $label sync rc=$rc (benign=$nbenign of $nfail copy-error(s); $(( nfail - nbenign )) non-benign)"
                 FAILURES+=("$label(rc=$rc)")
@@ -250,7 +276,7 @@ else
 fi
 sync_one home   "$HOME/"                          bkup:home --filter-from "$FILTER"
 if photos_originals_complete; then
-    sync_one photos "$EXT/Photos Library.photoslibrary" bkup:photos
+    sync_one photos "$EXT/Photos Library.photoslibrary" bkup:photos --filter-from "$PHOTOS_FILTER"
 else
     photos_gate_rc=$?
     case "$photos_gate_rc" in
