@@ -109,7 +109,7 @@ sync --host` right after re-creating an integration can 401/502 for a
 ### Open
 
 - **1Password**: the 12 per-host source tokens and the collector UI token in
-  "AgentsView fleet tokens" are dead; only the mini's source token is live.
+  "AgentsView" are dead; only the mini's source token is live.
   Delete them (Kyle).
 - **Shared VMs.** A user the VM is shared with reaches its alternate ports, so
   on the peer path they can read that VM's own archive unauthenticated. Today

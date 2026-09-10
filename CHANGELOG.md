@@ -64,6 +64,14 @@ absent, no drift.
   `codex:<url>`; install.sh removes such a row from Claude Code if present and
   registers it in Codex as before.
 
+- **`check-key-expiry.sh --verify-refs`**: one `op item list` per account
+  asserts every `keys.manifest` reference still names an existing item
+  (item-level on purpose — the failure class is a retitled or moved item; two
+  prompts, default only when interactive so the monthly launchd run never
+  pops a dialog). Two lessons from its first run: the default vault answers to
+  `Personal`/`Private`/`Employee` and must be normalised, and the AgentsView
+  token item had been retitled to `AgentsView` — references fixed.
+
 Still open from the audit → TODO.
 
 ## 2026-08-04 — orphan Snowflake key: both copies stay archived

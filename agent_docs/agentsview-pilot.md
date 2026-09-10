@@ -286,7 +286,7 @@ already in sync with its AgentsView source-daemon work.
 
 ### Token authority moved to 1Password
 
-`op://Personal/AgentsView fleet tokens` (industryvault) is now the authority: a
+`op://Employee/AgentsView` (industryvault) is now the authority: a
 Secure Note with one concealed field per consumer — `collector` for the mini's
 UI/API token, then one field per source host. The collector field is mirrored to
 login Keychain `agentsview:auth-token`, which `agentsview-service` already
@@ -603,7 +603,7 @@ placeholders (iCloud/OneDrive/Dropbox/Box) shares this exposure.
 - [x] Create a local-only central data directory with restrictive permissions.
 - [x] Configure central UI/API access over the tailnet only.
 - [x] Move per-source token authority into 1Password/Keychain
-      (`op://Personal/AgentsView fleet tokens`; collector mirrored to Keychain
+      (`op://Employee/AgentsView`; collector mirrored to Keychain
       `agentsview:auth-token`, 2026-07-22).
 - [x] Add consistent SQLite snapshot, Tigris inclusion, and restore procedure.
 - [ ] Complete health monitoring by adding the external healthchecks.io ping.
@@ -718,7 +718,7 @@ blocks day-to-day use; both get expensive to decide late.
 
 2. **Token fan-out.** `secrets.md` still calls the mode-`0600` `source.env`
    pattern a temporary pilot delivery mechanism. Permanent infrastructure needs
-   a real provisioning path from `op://Personal/AgentsView fleet tokens` to each
+   a real provisioning path from `op://Employee/AgentsView` to each
    host, rather than hand-placement repeated per host. `iv-image` already owns
    the unit; the token step is the manual remainder.
 
