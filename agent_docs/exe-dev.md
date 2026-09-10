@@ -81,7 +81,7 @@ Each entry's `help` field gives the literal command — clone URLs come back as
 
 Integration **comments carry provenance** and show up here, e.g. the
 `tailscale-api` entry reads "Tailscale OAuth client (auth_keys+devices:core,
-tag:dev) — U11 2026-07; creds in 1P: Tailscale OAuth Dev". Keep writing them
+tag:dev) — U11 2026-07; creds in 1P: Tailscale OAuth". Keep writing them
 that way: it is the only place a VM can learn where its credentials came from.
 Verified live on `iv-home`, 2026-07-22.
 

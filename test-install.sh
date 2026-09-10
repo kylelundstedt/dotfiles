@@ -32,8 +32,8 @@ case "$mode" in container|sprite|exe|overlay|all)
     # (U11 — replaced the static iv-internal-test auth key). Reusable because
     # one test run may join several VMs; 1h expiry, ephemeral nodes.
     if [ -z "${TS_AUTHKEY:-}" ] && command -v op >/dev/null 2>&1; then
-        _ts_cid="$(op read "op://Employee/Tailscale OAuth Dev/Client ID" --account industryvault.1password.com 2>/dev/null || true)"
-        _ts_csec="$(op read "op://Employee/Tailscale OAuth Dev/Client secret" --account industryvault.1password.com 2>/dev/null || true)"
+        _ts_cid="$(op read "op://Employee/Tailscale OAuth/Client ID" --account industryvault.1password.com 2>/dev/null || true)"
+        _ts_csec="$(op read "op://Employee/Tailscale OAuth/Client secret" --account industryvault.1password.com 2>/dev/null || true)"
         if [ -n "$_ts_cid" ] && [ -n "$_ts_csec" ]; then
             _ts_tok="$(curl -fsS -m 15 -u "$_ts_cid:$_ts_csec" -d "grant_type=client_credentials" \
                 https://api.tailscale.com/api/v2/oauth/token 2>/dev/null | jq -r '.access_token // empty' || true)"

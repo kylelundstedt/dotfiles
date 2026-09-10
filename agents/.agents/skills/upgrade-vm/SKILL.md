@@ -76,7 +76,7 @@ Otherwise the new VM gets a `-1` suffix. Mint a short-lived token from the
 Tailscale OAuth client (1Password; the old static API key is revoked — 2026-07):
 
 ```bash
-TOKEN=$(curl -fsS -u "$(op read 'op://Employee/Tailscale OAuth Dev/Client ID' --account industryvault.1password.com):$(op read 'op://Employee/Tailscale OAuth Dev/Client secret' --account industryvault.1password.com)" \
+TOKEN=$(curl -fsS -u "$(op read 'op://Employee/Tailscale OAuth/Client ID' --account industryvault.1password.com):$(op read 'op://Employee/Tailscale OAuth/Client secret' --account industryvault.1password.com)" \
   -d grant_type=client_credentials https://api.tailscale.com/api/v2/oauth/token | jq -r .access_token)
 NODE_ID=$(curl -fsSL -H "Authorization: Bearer $TOKEN" \
   https://api.tailscale.com/api/v2/tailnet/-/devices \
