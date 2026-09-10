@@ -48,6 +48,15 @@ Fixed the same day:
   did it the other way round and the daemon ran from a deleted binary until the
   restart.
 
+**klundstedt-mbp, same day (session on the mbp).** On the dotfiles-only path.
+Two real gaps, both of the _silent non-fatal install_ class: `agentsview` absent
+(its `brew install --cask` had failed without failing the run) and `github-home`
+MCP failing (same stale stored PAT as the mini), plus skill cruft. All fixed on
+the machine. #38 closes the class: `diff-provisioning.sh` now asserts every
+team tool `install.sh` provides is actually on PATH on a Mac, and names VM-only
+team tools as expected absences. Verified on the mini: 8 present, 5 expected
+absent, no drift.
+
 Still open from the audit → TODO.
 
 ## 2026-08-04 — orphan Snowflake key: both copies stay archived
