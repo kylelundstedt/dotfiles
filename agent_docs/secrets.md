@@ -180,7 +180,7 @@ Machine-readable expiry dates live in `provisioning/keys.manifest`, checked mont
 
 | Credential                           | 1Password item (account)                                        | Expires | Fan-out (rotation must touch all)                                                                                            |
 | ------------------------------------ | --------------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Tailscale OAuth client               | `op://Employee/Tailscale OAuth Dev` (industryvault)             | none    | exe.dev `tailscale-api` integration (Basic header), install.sh (mini + VM joins), test-install.sh, skills                    |
+| Tailscale OAuth client               | `op://Employee/Tailscale OAuth` (industryvault)             | none    | exe.dev `tailscale-api` integration (Basic header), install.sh (mini + VM joins), test-install.sh, skills                    |
 | GitHub PAT Home                      | `op://Private/GitHub PAT Home/token` (lundstedts)               | unknown | `claude mcp` github-home (macOS), gh auth headless fallback, exe.dev `github-mcp-home` integration                           |
 | GitHub PAT IV                        | `op://Employee/GitHub PAT IV/token` (industryvault)             | unknown | `claude mcp` github-work (macOS), Keychain `sync-repos:IndustryVault`, exe.dev `github-mcp-work` integration                 |
 | GitHub PAT IV-CMG                    | `op://Employee/GitHub PAT IV-CMG/token` (industryvault)         | unknown | Keychain `sync-repos:iv-cmg`                                                                                                 |
@@ -195,7 +195,7 @@ Machine-readable expiry dates live in `provisioning/keys.manifest`, checked mont
 **Tailscale OAuth client** (U11, 2026-07 — replaced the expiring API key AND the static `iv-internal-*` auth keys; nothing expires anymore): scopes `Auth Keys: Write` + `Devices Core: Write`, tag `tag:dev`. The raw client secret is NOT accepted as a static Bearer/Basic API credential — consumers do the standard OAuth exchange (`POST /api/v2/oauth/token`, `client_secret_basic`) for a 1h token. The exe.dev integration injects `Authorization: Basic base64(client_id:client_secret)`, so VM flows exchange THROUGH the proxy and then hit the public API with the token. If the client is ever compromised/rotated:
 
 1. Admin console → Settings → OAuth clients → regenerate the secret (scopes/tags are editable in place).
-2. Update both fields in 1P `Tailscale OAuth Dev`, then swap the integration:
+2. Update both fields in 1P `Tailscale OAuth`, then swap the integration:
    `ssh exe.dev integrations remove tailscale-api` and
    `ssh exe.dev integrations add http-proxy --name=tailscale-api --target=https://api.tailscale.com --header='Authorization:Basic <base64(client_id:client_secret)>'`
    — **do NOT re-add with `--attach=auto:all`.** This is tailnet administration

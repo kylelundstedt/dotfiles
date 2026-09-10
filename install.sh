@@ -175,6 +175,92 @@ _fetch_and_place() {
 # tools whose asset filename is version-less (the /latest/download/ redirect needs
 # the literal name). For version-stamped assets, use install_github_binary instead.
 # Usage: install_release_asset <owner/repo> <asset_name> <binary_name> [<path_inside_archive>]
+# Login-Keychain write that is silent when nothing changed. `security
+# add-generic-password -U` overwrites an existing item and macOS asks for the
+# login keychain password on EVERY such overwrite, even with an identical value
+# — ten prompts per install.sh run (2026-09-10). Reading is prompt-free (the
+# item's ACL lists /usr/bin/security, which is how the launchd jobs read it), so
+# compare first and write only on a real change or a missing item.
+kc_set() {  # kc_set <service> <value> ; returns 0 on set/unchanged, 1 on failure
+    local svc="$1" val="$2" cur
+    cur=$(security find-generic-password -a "$USER" -s "$svc" -w 2>/dev/null || true)
+    [[ "$cur" == "$val" ]] && return 0
+    kc_set "$svc" "$val"
+}
+
+# 1Password, resolved ONCE per account. Every `op` process prompts the desktop
+# app for authorization, so fourteen scattered `op read`s meant fourteen prompts
+# per install (2026-09-10). Instead one `op inject` per account resolves every
+# reference this host needs into a mode-0600 cache, and op_get serves reads from
+# it. A batch that fails (locked app, denied prompt, missing item) leaves that
+# account's references empty and every consumer reports "1Password read
+# failed/empty" as before — it never falls back to per-reference reads, so the
+# prompt count is bounded by the number of accounts (two), not references.
+OP_CACHE=""
+op_get() {  # op_get <op://vault/item/field> -> value on stdout ('' if unresolved)
+    [[ -n "$OP_CACHE" && -s "$OP_CACHE" ]] || return 0
+    local k="${1#op://}"   # cache keys carry no op:// prefix (see op_batch)
+    awk -F'\t' -v k="$k" '$1 == k { print substr($0, length(k) + 2); exit }' "$OP_CACHE"
+}
+op_batch() {  # op_batch <account> <ref>... : one op process, appends ref<TAB>value lines
+    local acct="$1"; shift
+    [[ $# -gt 0 ]] || return 0
+    local tpl="" r
+    # op inject resolves BARE op:// references too, not only {{ }} ones — a key
+    # column holding the reference came back as the secret (2026-09-10). Keys
+    # are the reference without its op:// prefix, which inject leaves alone.
+    for r in "$@"; do tpl+="${r#op://}"$'\t'"{{ ${r} }}"$'\n'; done
+    local out
+    if out=$(printf '%s' "$tpl" | op inject --account "$acct" 2>/dev/null) && [[ -n "$out" ]]; then
+        printf '%s\n' "$out" >> "$OP_CACHE"
+        echo "  [+] 1Password: $# secret(s) resolved from $acct (one prompt)"
+    else
+        echo "  [!] 1Password: could not resolve $# secret(s) from $acct — dependent steps will report as unavailable"
+    fi
+}
+op_resolve_all() {  # macOS only; called once, before anything reads a secret
+    [[ "$OS" == "macos" && "$DRY_RUN" != true ]] || return 0
+    command -v op >/dev/null 2>&1 && [[ -n "$(op account list 2>/dev/null || true)" ]] || return 0
+    OP_CACHE=$(mktemp "${TMPDIR:-/tmp}/op-cache.XXXXXX"); chmod 600 "$OP_CACHE"
+    # bash runs EXIT traps in explicit ( ) subshells too — an unguarded rm here
+    # deleted the cache the first time any later step forked one, and every read
+    # after that came back empty (2026-09-10). Only the top-level shell cleans up.
+    trap '[[ "$BASH_SUBSHELL" -eq 0 ]] && rm -f "$OP_CACHE"' EXIT
+    local -a iv=("op://Employee/GitHub PAT IV/token" "op://Employee/GitHub PAT IV-CMG/token")
+    local -a home=("op://Private/GitHub PAT Home/token")
+    if [[ "$(scutil --get LocalHostName 2>/dev/null)" == "klundstedt-mini" ]]; then
+        iv+=("op://Personal/Tigris mini-backup rclone key/access_key_id"
+             "op://Personal/Tigris mini-backup rclone key/password"
+             "op://Personal/Tigris mini-backup rclone crypt/password"
+             "op://Personal/Tigris mini-backup rclone crypt/salt"
+             "op://Personal/Tigris mini-backup rclone key/healthcheck_url"
+             "op://Personal/Tigris mini-backup rclone key/reconcile_healthcheck_url"
+             "op://Personal/OWC8TB disk encryption/password"
+             "op://Personal/sync-repos-healthcheck/password")
+        # The Tailscale OAuth client is needed only to mint a join key, i.e. when
+        # this Mac is not on the tailnet. One unresolvable reference fails the
+        # whole batch, so never ask for it on a joined host (and never for a
+        # reference that may legitimately be absent).
+        local ts_bin; ts_bin=$(command -v tailscale || true); [[ -n "$ts_bin" ]] || ts_bin=/opt/homebrew/bin/tailscale
+        if [[ -z "${TS_AUTHKEY:-}" ]] && ! "$ts_bin" status --json 2>/dev/null | grep -q '"BackendState": *"Running"'; then
+            iv+=("op://Employee/Tailscale OAuth/Client ID" "op://Employee/Tailscale OAuth/Client secret")
+        fi
+    fi
+    # pat: rows in mcp.manifest name their own reference; add any not listed above.
+    local m_name m_layer m_vm m_mac ref acct
+    while IFS='|' read -r m_name m_layer m_vm m_mac; do
+        m_mac=$(mtrim "$m_mac"); [[ "$m_mac" == pat:* ]] || continue
+        acct="${m_mac#pat:}"; acct="${acct%%:*}"; ref="${m_mac#pat:*:}"
+        case "$acct" in
+            industryvault.1password.com) [[ " ${iv[*]} " == *" $ref "* ]] || iv+=("$ref") ;;
+            lundstedts.1password.com)    [[ " ${home[*]} " == *" $ref "* ]] || home+=("$ref") ;;
+        esac
+    done <<< "$(manifest_rows "$DOTFILES_DIR/provisioning/mcp.manifest" 2>/dev/null || true)"
+    echo "  Resolving 1Password secrets (one prompt per account)..."
+    op_batch industryvault.1password.com "${iv[@]}"
+    op_batch lundstedts.1password.com "${home[@]}"
+}
+
 install_release_asset() {
     local repo="$1" asset_name="$2" bin_name="$3"
     local inner_path="${4:-$bin_name}"
@@ -1303,7 +1389,7 @@ setup_agents() {
                     fi
                     m_acct="${m_mac#pat:}"; m_acct="${m_acct%%:*}"
                     m_opref="${m_mac#pat:*:}"
-                    m_tok=$(op read "$m_opref" --account "$m_acct" 2>/dev/null) || true
+                    m_tok=$(op_get "$m_opref")
                     if [[ -z "$m_tok" ]]; then
                         echo "  [!] $m_name: 1Password read failed/empty ($m_opref)"; m_fail=$((m_fail+1))
                     elif claude mcp add-json --scope user "$m_name" \
@@ -1328,7 +1414,7 @@ setup_agents() {
             fi
             if [[ "$op_configured" == true ]]; then
                 local pat_work
-                pat_work=$(op read "op://Employee/GitHub PAT IV/token" --account industryvault.1password.com 2>/dev/null) || true
+                pat_work=$(op_get "op://Employee/GitHub PAT IV/token")
 
                 # sync-repos.sh reads per-org GitHub PATs from the local login
                 # Keychain (fine-grained PATs are scoped per owner; gh's Home
@@ -1338,15 +1424,15 @@ setup_agents() {
                 # pat_work is the IV token (reused); -T allows the `security`
                 # tool to read it back non-interactively from the launchd job.
                 local pat_ivcmg kc_added=0
-                pat_ivcmg=$(op read "op://Employee/GitHub PAT IV-CMG/token" --account industryvault.1password.com 2>/dev/null) || true
+                pat_ivcmg=$(op_get "op://Employee/GitHub PAT IV-CMG/token")
                 if [[ -n "$pat_work" ]]; then
-                    security add-generic-password -a "$USER" -s "sync-repos:IndustryVault" -T /usr/bin/security -U -w "$pat_work" 2>/dev/null && kc_added=$((kc_added+1)) \
+                    kc_set "sync-repos:IndustryVault" "$pat_work" && kc_added=$((kc_added+1)) \
                         || echo "  [!] Keychain write failed: sync-repos:IndustryVault"
                 else
                     echo "  [!] 1Password read failed/empty: GitHub PAT IV (sync-repos:IndustryVault not provisioned)"
                 fi
                 if [[ -n "$pat_ivcmg" ]]; then
-                    security add-generic-password -a "$USER" -s "sync-repos:iv-cmg" -T /usr/bin/security -U -w "$pat_ivcmg" 2>/dev/null && kc_added=$((kc_added+1)) \
+                    kc_set "sync-repos:iv-cmg" "$pat_ivcmg" && kc_added=$((kc_added+1)) \
                         || echo "  [!] Keychain write failed: sync-repos:iv-cmg"
                 else
                     echo "  [!] 1Password read failed/empty: GitHub PAT IV-CMG (sync-repos:iv-cmg not provisioned)"
@@ -1359,20 +1445,20 @@ setup_agents() {
                 # unattended launchd jobs read them non-interactively. Items live
                 # in the industryvault account, Personal vault.
                 if [[ "$(scutil --get LocalHostName 2>/dev/null)" == "klundstedt-mini" ]]; then
-                    local tb_acc=industryvault.1password.com tb_n=0
+                    local tb_n=0
                     local tb_keyid tb_keysec tb_cpw tb_csalt tb_hc tb_hc_reconcile
-                    tb_keyid=$(op read "op://Personal/Tigris mini-backup rclone key/access_key_id" --account "$tb_acc" 2>/dev/null) || true
-                    tb_keysec=$(op read "op://Personal/Tigris mini-backup rclone key/password" --account "$tb_acc" 2>/dev/null) || true
-                    tb_cpw=$(op read "op://Personal/Tigris mini-backup rclone crypt/password" --account "$tb_acc" 2>/dev/null) || true
-                    tb_csalt=$(op read "op://Personal/Tigris mini-backup rclone crypt/salt" --account "$tb_acc" 2>/dev/null) || true
-                    tb_hc=$(op read "op://Personal/Tigris mini-backup rclone key/healthcheck_url" --account "$tb_acc" 2>/dev/null) || true
-                    tb_hc_reconcile=$(op read "op://Personal/Tigris mini-backup rclone key/reconcile_healthcheck_url" --account "$tb_acc" 2>/dev/null) || true
-                    [[ -n "$tb_keyid"  ]] && security add-generic-password -a "$USER" -s "tigris-backup:s3-key-id"      -T /usr/bin/security -U -w "$tb_keyid"  2>/dev/null && tb_n=$((tb_n+1)) || true
-                    [[ -n "$tb_keysec" ]] && security add-generic-password -a "$USER" -s "tigris-backup:s3-secret"      -T /usr/bin/security -U -w "$tb_keysec" 2>/dev/null && tb_n=$((tb_n+1)) || true
-                    [[ -n "$tb_cpw"    ]] && security add-generic-password -a "$USER" -s "tigris-backup:crypt-password" -T /usr/bin/security -U -w "$tb_cpw"    2>/dev/null && tb_n=$((tb_n+1)) || true
-                    [[ -n "$tb_csalt"  ]] && security add-generic-password -a "$USER" -s "tigris-backup:crypt-salt"     -T /usr/bin/security -U -w "$tb_csalt"  2>/dev/null && tb_n=$((tb_n+1)) || true
-                    [[ -n "$tb_hc"     ]] && security add-generic-password -a "$USER" -s "tigris-backup:healthcheck-url" -T /usr/bin/security -U -w "$tb_hc"    2>/dev/null && tb_n=$((tb_n+1)) || true
-                    [[ -n "$tb_hc_reconcile" ]] && security add-generic-password -a "$USER" -s "tigris-backup-reconcile:healthcheck-url" -T /usr/bin/security -U -w "$tb_hc_reconcile" 2>/dev/null && tb_n=$((tb_n+1)) || true
+                    tb_keyid=$(op_get "op://Personal/Tigris mini-backup rclone key/access_key_id")
+                    tb_keysec=$(op_get "op://Personal/Tigris mini-backup rclone key/password")
+                    tb_cpw=$(op_get "op://Personal/Tigris mini-backup rclone crypt/password")
+                    tb_csalt=$(op_get "op://Personal/Tigris mini-backup rclone crypt/salt")
+                    tb_hc=$(op_get "op://Personal/Tigris mini-backup rclone key/healthcheck_url")
+                    tb_hc_reconcile=$(op_get "op://Personal/Tigris mini-backup rclone key/reconcile_healthcheck_url")
+                    [[ -n "$tb_keyid"  ]] && kc_set "tigris-backup:s3-key-id" "$tb_keyid" && tb_n=$((tb_n+1)) || true
+                    [[ -n "$tb_keysec" ]] && kc_set "tigris-backup:s3-secret" "$tb_keysec" && tb_n=$((tb_n+1)) || true
+                    [[ -n "$tb_cpw"    ]] && kc_set "tigris-backup:crypt-password" "$tb_cpw" && tb_n=$((tb_n+1)) || true
+                    [[ -n "$tb_csalt"  ]] && kc_set "tigris-backup:crypt-salt" "$tb_csalt" && tb_n=$((tb_n+1)) || true
+                    [[ -n "$tb_hc"     ]] && kc_set "tigris-backup:healthcheck-url" "$tb_hc" && tb_n=$((tb_n+1)) || true
+                    [[ -n "$tb_hc_reconcile" ]] && kc_set "tigris-backup-reconcile:healthcheck-url" "$tb_hc_reconcile" && tb_n=$((tb_n+1)) || true
                     if [[ "$tb_n" -eq 6 ]]; then
                         echo "  [+] tigris-backup creds → Keychain (6/6)"
                     else
@@ -1382,9 +1468,9 @@ setup_agents() {
                     # owc8tb-unlock.sh to auto-mount the drive after a reboot so
                     # the nightly can read the archive sources + Photos library.
                     local owc_pw
-                    owc_pw=$(op read "op://Personal/OWC8TB disk encryption/password" --account "$tb_acc" 2>/dev/null) || true
+                    owc_pw=$(op_get "op://Personal/OWC8TB disk encryption/password")
                     if [[ -n "$owc_pw" ]]; then
-                        security add-generic-password -a "$USER" -s "owc8tb-encryption" -T /usr/bin/security -U -w "$owc_pw" 2>/dev/null \
+                        kc_set "owc8tb-encryption" "$owc_pw" \
                             && echo "  [+] OWC8TB disk passphrase → Keychain" \
                             || echo "  [!] Keychain write failed: owc8tb-encryption"
                     else
@@ -1392,9 +1478,9 @@ setup_agents() {
                     fi
                     # sync-repos dead-man's-switch ping URL (mini-only heartbeat)
                     local sr_hc
-                    sr_hc=$(op read "op://Personal/sync-repos-healthcheck/password" --account "$tb_acc" 2>/dev/null) || true
+                    sr_hc=$(op_get "op://Personal/sync-repos-healthcheck/password")
                     if [[ -n "$sr_hc" ]]; then
-                        security add-generic-password -a "$USER" -s "sync-repos:healthcheck-url" -T /usr/bin/security -U -w "$sr_hc" 2>/dev/null \
+                        kc_set "sync-repos:healthcheck-url" "$sr_hc" \
                             && echo "  [+] sync-repos healthcheck → Keychain" \
                             || echo "  [!] Keychain write failed: sync-repos:healthcheck-url"
                     else
@@ -1472,7 +1558,7 @@ setup_agents() {
             fi
         elif [[ "$op_configured" == true ]]; then
             local pat_home_gh
-            pat_home_gh=$(op read "op://Private/GitHub PAT Home/token" --account lundstedts.1password.com 2>/dev/null) || true
+            pat_home_gh=$(op_get "op://Private/GitHub PAT Home/token")
             if [[ -n "$pat_home_gh" ]]; then
                 if printf '%s\n' "$pat_home_gh" | gh auth login --hostname github.com --with-token \
                     && GIT_CONFIG_GLOBAL="$git_config_local" gh auth setup-git --hostname github.com; then
@@ -1606,8 +1692,8 @@ setup_tailscale() {
                 local ts_key="${TS_AUTHKEY:-}"
                 if [[ -z "$ts_key" && "$(scutil --get LocalHostName 2>/dev/null)" == "klundstedt-mini" ]] && command -v op >/dev/null 2>&1; then
                     local ts_cid ts_csec ts_token
-                    ts_cid=$(op read "op://Employee/Tailscale OAuth Dev/Client ID" --account industryvault.1password.com 2>/dev/null) || true
-                    ts_csec=$(op read "op://Employee/Tailscale OAuth Dev/Client secret" --account industryvault.1password.com 2>/dev/null) || true
+                    ts_cid=$(op_get "op://Employee/Tailscale OAuth/Client ID")
+                    ts_csec=$(op_get "op://Employee/Tailscale OAuth/Client secret")
                     if [[ -n "$ts_cid" && -n "$ts_csec" ]]; then
                         ts_token=$(curl -fsS -m 15 -u "$ts_cid:$ts_csec" -d "grant_type=client_credentials" https://api.tailscale.com/api/v2/oauth/token 2>/dev/null | jq -r '.access_token // empty') || true
                         [[ -n "$ts_token" ]] && ts_key=$(curl -fsS -m 15 -X POST -H "Authorization: Bearer $ts_token" -H "Content-Type: application/json" \
@@ -1970,6 +2056,7 @@ install_system_deps
 install_cli_tools
 install_python_clis
 setup_node
+op_resolve_all
 setup_tailscale
 setup_power_management
 setup_git
