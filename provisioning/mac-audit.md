@@ -87,6 +87,8 @@ I care about beyond presence:
 The `shelley render-site provision-docsite gen-llms-txt install-cloud-cli` rows
 are VM-only in practice (iv-provision installs them). Report their absence as
 **expected**, not as a failure — but say so explicitly rather than skipping them.
+The same goes for `personal-linux` rows (`archil`): install.sh installs them only
+on Linux, and on a Mac the tool is the separately installed app or nothing.
 
 ## Part 3 — skills.manifest vs ~/.agents/skills
 

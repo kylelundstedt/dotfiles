@@ -107,7 +107,7 @@ Both Claude Code and Codex CLI share a single instruction file (`AGENTS.md`) dep
 - **Global** (`agents/.agents/AGENTS.md`) — rules for every repo: honesty, communication, code conventions, skill usage. Stow creates `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md` as symlinks so both agents read the same file.
 - **Per-project** (`AGENTS.md` at repo root) — context specific to each repo. In this repo, `CLAUDE.md` is a symlink to `AGENTS.md`.
 
-**Skills** — Installed by `npx -y skills add -g -y` (the [skills CLI](https://github.com/vercel-labs/skills)) directly into `~/.claude/skills/` and `~/.codex/skills/`. Canonical source files live in `agents/.agents/skills/`:
+**Skills** — Installed by `npx -y skills add -g -y` (the [skills CLI](https://github.com/vercel-labs/skills)) into `~/.agents/skills/`, with a symlink per skill in `~/.claude/skills/`; Codex reads `~/.agents/skills/` natively and needs no links. Canonical source files live in `agents/.agents/skills/`:
 
 | Skill              | Source                                                                                  | Purpose                                                 |
 | ------------------ | --------------------------------------------------------------------------------------- | ------------------------------------------------------- |

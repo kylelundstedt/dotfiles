@@ -192,10 +192,10 @@ while read -r layer tool; do
             fi
             grep -qwF "$tool" <<<"$install_code" && info "team tool $tool also installed by install.sh (macOS overlap — expected)" || true
             ;;
-        personal | personal-mac)
+        personal | personal-mac | personal-linux)
             # personal-mac = personal, but installed on macOS only (install.sh
-            # skips it on Linux VMs). Same invariants either way: present in
-            # install.sh, never on VMs — the latter is automatic for macOS-only.
+            # skips it on Linux VMs); personal-linux the mirror image. Same
+            # invariants either way: present in install.sh, never in provision-iv.sh.
             grep -qwF "$tool" <<<"$install_code" && ok "$layer tool $tool in install.sh" || drift "$layer tool $tool missing from install.sh"
             # provision-iv.sh guards every tool install with `command -v <tool>`,
             # so that's the precise signal (a bare word-grep false-positives on

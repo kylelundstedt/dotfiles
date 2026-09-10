@@ -395,6 +395,26 @@ test_skills_on_disk() {
         log_fail "manifest names skills that are not installed:$missing"
     fi
 
+    # Direction 3 — every skill on disk must be linked into ~/.claude/skills.
+    # Claude Code reads only its own directory; the skills CLI symlinks there.
+    # Codex needs no links: it reads $HOME/.agents/skills natively ("universal"
+    # in the skills CLI's summary), so ~/.codex/skills is deliberately NOT
+    # asserted — the 2026-09-10 mac audit misread its near-emptiness as drift.
+    local claude_dir="$HOME/.claude/skills" unlinked="" total
+    total=$(find "$skills_dir" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
+    if [[ ! -d "$claude_dir" ]]; then
+        log_fail "$claude_dir missing — skills invisible to Claude Code"
+    else
+        for d in "$skills_dir"/*/; do
+            d=${d%/}; [[ -e "$claude_dir/$(basename "$d")" ]] || unlinked+=" $(basename "$d")"
+        done
+        if [[ -z "$unlinked" ]]; then
+            log_pass "all $total skills linked into $claude_dir"
+        else
+            log_fail "$claude_dir is missing $(wc -w <<<"$unlinked" | tr -d ' ') of $total skill links:$(cut -c1-120 <<<"$unlinked")"
+        fi
+    fi
+
     # Direction 2 — a skill this repo once owned, has since deleted, and does not
     # install via the manifest must not still be sitting on disk. Unknown-set
     # upstream repos are untouched by this, so it stays quiet in normal use.
