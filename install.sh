@@ -429,10 +429,14 @@ install_cli_tools() {
         (install_github_binary "ajeetdsouza/zoxide" "zoxide-.*-${target_triple}.*\\.tar\\.gz" "zoxide") &
         pids+=($!)
     else echo "  [=] zoxide"; fi
-    # Official installer pins its current release and verifies the published checksum,
-    # avoiding the GitHub API rate limit shared by exe.dev VMs.
+    # croc is personal-mac, so the GitHub API rate limit that sent this through
+    # the vendor installer (shared by exe.dev VMs) no longer applies. That
+    # installer also runs sudo for any non-root user regardless of prefix, so it
+    # could never complete unattended: every install.sh run since 2026-07-20
+    # printed "[!] croc failed" (mac audit 2026-09-10).
     if want croc; then
-        (curl -fsSL https://getcroc.schollz.com | bash -s -- -p "$LOCAL_BIN" >/dev/null 2>&1 && echo "  [+] croc" || echo "  [!] croc failed") &
+        local croc_asset; case "$arch" in arm64|aarch64) croc_asset="macOS-ARM64" ;; *) croc_asset="macOS-64bit" ;; esac
+        (install_github_binary "schollz/croc" "croc_v.*_${croc_asset}\\.tar\\.gz" "croc") &
         pids+=($!)
     else echo "  [=] croc"; fi
     local tigris_arch; case "$arch" in arm64|aarch64) tigris_arch="arm64" ;; x86_64) tigris_arch="x64" ;; esac
