@@ -4,7 +4,7 @@
 # "what", not the "how".
 #
 # Columns (whitespace-separated):
-#   layer  base | team | personal | personal-mac
+#   layer  base | team | personal | personal-mac | personal-linux
 #   tool   command name on PATH
 #
 # Layers:
@@ -20,9 +20,13 @@
 #   personal  dotfiles-only: installed by install.sh, absent from iv-image.
 #   personal-mac  like personal, but macOS-only — install.sh skips it on Linux
 #             VMs (see the gh/croc note below). Same drift invariants as personal.
+#   personal-linux  like personal, but Linux-only — install.sh installs it only
+#             when OS=linux; on macOS the tool arrives another way (archil: the
+#             macOS app, installed interactively) or not at all. Expected absent
+#             on a Mac; the mac audit must not read it as drift.
 #
 # Consumers: none yet (installers are still imperative); checked by
-# diff-provisioning.sh (team ⊆ provision-iv.sh, personal/personal-mac ⊆
+# diff-provisioning.sh (team ⊆ provision-iv.sh, personal/personal-mac/personal-linux ⊆
 # install.sh, personal ∩ provision-iv.sh = ∅).
 
 # exeuntu-provided (asserted in-repo: jq per iv-image setup-mcp.sh; git/curl
@@ -66,7 +70,7 @@ personal starship
 personal atuin
 personal direnv
 personal zoxide
-personal archil
+personal-linux archil
 personal fnm
 personal node
 personal bat
