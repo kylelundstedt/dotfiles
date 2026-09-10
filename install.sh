@@ -1357,7 +1357,7 @@ setup_agents() {
         # a fresh machine must not finish looking configured while agent
         # capabilities silently failed (2026-07-13 review, same class as the
         # sync-repos listing bug).
-        local m_name m_layer m_vm m_mac m_acct m_opref m_tok m_n=0 m_fail=0
+        local m_name m_layer m_vm m_mac m_acct m_opref m_tok m_n=0 m_fail=0 m_codex=0
         if [[ ! -f "$mcp_manifest" ]]; then
             echo "  [!] $mcp_manifest missing — skipping MCP registration"
         elif [[ "$OS" == "linux" ]]; then
@@ -1398,6 +1398,15 @@ setup_agents() {
                     else
                         echo "  [!] claude mcp add-json $m_name failed"; m_fail=$((m_fail+1))
                     fi
+                elif [[ "$m_mac" == codex:* ]]; then
+                    # Codex-only row: Claude Code has the service as a claude.ai
+                    # connector, so drop a stale local registration if one exists.
+                    if claude mcp get "$m_name" >/dev/null 2>&1; then
+                        claude mcp remove --scope user "$m_name" >/dev/null 2>&1 \
+                            && echo "  [-] $m_name removed from Claude Code (Codex-only row)" \
+                            || echo "  [!] claude mcp remove $m_name failed"
+                    fi
+                    m_codex=$((m_codex+1))
                 else
                     if claude mcp add --transport http --scope user "$m_name" "$m_mac" >/dev/null 2>&1; then
                         m_n=$((m_n+1))
@@ -1406,7 +1415,7 @@ setup_agents() {
                     fi
                 fi
             done 9<<< "$(manifest_rows "$mcp_manifest")"
-            echo "  [+] MCP servers ($m_n registered from mcp.manifest, $m_fail failed)"
+            echo "  [+] MCP servers ($m_n registered from mcp.manifest, $m_fail failed, $m_codex Codex-only)"
             if [[ -n "$hub_url" ]]; then
                 claude mcp add --transport http --scope user hub-mcp "$hub_url" >/dev/null 2>&1 \
                     && echo "  [+] hub-mcp ($hub_url)" \
@@ -1516,6 +1525,7 @@ setup_agents() {
             while IFS='|' read -u 9 -r c_name c_layer c_vm c_mac; do
                 c_name=$(mtrim "$c_name"); c_mac=$(mtrim "$c_mac")
                 [[ -z "$c_name" || -z "$c_mac" || "$c_mac" == pat:* ]] && continue
+                c_mac="${c_mac#codex:}"   # codex:<url> rows are Codex-only; same URL
                 if codex mcp get "$c_name" >/dev/null 2>&1; then
                     echo "  [=] codex mcp: $c_name (already present)"
                 else
