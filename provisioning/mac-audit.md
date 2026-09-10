@@ -170,7 +170,13 @@ IV_PROVISION_DIR=<IV_PROVISION_CLONE> ./test-install.sh provisioning
 ```
 
 Confirm from the output that iv-side checks actually **ran** (no
-`[skip] iv-image clone not found`). On `klundstedt-mini` this also runs
+`[skip] iv-image clone not found`). Then, with 1Password unlocked, verify every
+credential reference in `keys.manifest` still points at an existing item (two
+prompts, one per account):
+
+```bash
+./provisioning/check-key-expiry.sh --dry-run --verify-refs
+``` On `klundstedt-mini` this also runs
 `check-monitoring.sh` against healthchecks.io using the Keychain API key; on the
 mbp that self-skips, which is expected.
 
