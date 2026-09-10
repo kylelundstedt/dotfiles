@@ -16,33 +16,34 @@ memory store. Three stores, cleanly split:
 On-demand workflows live in skills (`agents/.agents/skills/`), not here;
 always-on rules live in `AGENTS.md`.
 
-| File                         | Purpose                                                                                                 |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `hosts.md`                   | Where this runs — the two Macs (mini vs mbp) and the Linux VM fleet + testing                           |
-| `exe-dev.md`                 | exe.dev fleet specifics — SSH rate-limit discipline, no-hook contract, reflection                       |
-| `exe-dev-web.md`             | exe.dev app/Shelley endpoint model + 2026-07-19 fleet web audit                                         |
-| `exe-dev-https-api.md`       | HTTPS API evaluation — token scoping, why it is NOT a lockout fix, deferred to the scheduled cycle      |
-| `git-identity.md`            | Repo layout + commit identity across macOS & exe.dev VMs (hasconfig-by-org)                             |
-| `git-https-migration.md`     | HTTPS-only Git transport migration, canary, fleet rollout, and rollback                                 |
-| `agents-recommendations.md`  | Operating patterns, dual-agent workflows, task routing, maintenance checklists                          |
-| `model-routing-economics.md` | Subscription strategy, model routing, and Shelley cost-evaluation method                                |
-| `repo-boundaries.md`         | Decision: what belongs in dotfiles, split criteria, multi-tenant trigger                                |
-| `tigris-backup-runbook.md`   | klundstedt-mini → Tigris encrypted backup runbook                                                       |
-| `apple-container-vms.md`     | Creating & using Apple Container VMs (exe.dev-equivalent, machine mode + Shelley)                       |
-| `llm-gateway.md`             | **DECOMMISSIONED 2026-07-22** — self-hosted Claude/Codex subscription gateway; record + why retired     |
-| `llm-gateway-migration.md`   | **ABANDONED 2026-07-22** — gateway host→VM migration; executed then torn down (record only)             |
-| `service-placement.md`       | Criterion: AC appliance VM vs. host for mini services (llm-gateway yes, personal-mcp no)                |
-| `shelley-dual-provider.md`   | Verified: exe.dev OpenAI + personal-gateway Claude in one Shelley via a VM-local merge proxy            |
-| `monitoring.md`              | healthchecks.io registry — job↔check schedule pairs, grace rules, incidents                             |
-| `secrets.md`                 | Secret management — exe.dev integrations, 1Password patterns, MCP server auth                           |
-| `snowflake-keys.md`          | The 4 Snowflake accounts, key-pair registrations, break-glass item defects, `rsa_key` orphan closed     |
-| `ssh-keys.md`                | Every SSH key held, the 3 stale JumpCloud registrations deleted 2026-07-31, the mini's 3 inbound paths  |
-| `multi-tenant.md`            | Future multi-tenant plan (gated on first paying client) — decisions, checklist                          |
-| `herdr-pilot.md`             | herdr + Moshi agent-workflow pilot — topology decisions, boundaries, checklist                          |
-| `agentsview-pilot.md`        | Approved fleet pilot — central Shelley/Claude/Codex history across exe.dev and AC VMs                   |
-| `shelley-sovreignty.md`      | Shelley assessment + target architecture for sovereign operating memory                                 |
-| `vm-disk-weight.md`          | Measured fleet disk (2026-07-27) — forked-exeslim deployment lane, prune plan, rejected dev image       |
-| `vm-disposability.md`        | Audit (2026-07-28): can we delete any VM? Gap is 10 unpushed commits; Shelley history is covered        |
-| `exe-dev-remediation.md`     | Capability exposure + disk weight, in three tracks. Tracks 0 & 1 done (~7.8 GB, `auto:all` 6→3); 2 open |
+| File                          | Purpose                                                                                                                                                                 |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hosts.md`                    | Where this runs — the two Macs (mini vs mbp) and the Linux VM fleet + testing                                                                                           |
+| `exe-dev.md`                  | exe.dev fleet specifics — SSH rate-limit discipline, no-hook contract, reflection                                                                                       |
+| `exe-dev-web.md`              | exe.dev app/Shelley endpoint model + 2026-07-19 fleet web audit                                                                                                         |
+| `exe-dev-https-api.md`        | HTTPS API evaluation — token scoping, why it is NOT a lockout fix, deferred to the scheduled cycle                                                                      |
+| `git-identity.md`             | Repo layout + commit identity across macOS & exe.dev VMs (hasconfig-by-org)                                                                                             |
+| `git-https-migration.md`      | HTTPS-only Git transport migration, canary, fleet rollout, and rollback                                                                                                 |
+| `agents-recommendations.md`   | Operating patterns, dual-agent workflows, task routing, maintenance checklists                                                                                          |
+| `model-routing-economics.md`  | Subscription strategy, model routing, and Shelley cost-evaluation method                                                                                                |
+| `repo-boundaries.md`          | Decision: what belongs in dotfiles, split criteria, multi-tenant trigger                                                                                                |
+| `tigris-backup-runbook.md`    | klundstedt-mini → Tigris encrypted backup runbook                                                                                                                       |
+| `apple-container-vms.md`      | Creating & using Apple Container VMs (exe.dev-equivalent, machine mode + Shelley)                                                                                       |
+| `llm-gateway.md`              | **DECOMMISSIONED 2026-07-22** — self-hosted Claude/Codex subscription gateway; record + why retired                                                                     |
+| `llm-gateway-migration.md`    | **ABANDONED 2026-07-22** — gateway host→VM migration; executed then torn down (record only)                                                                             |
+| `service-placement.md`        | Criterion: AC appliance VM vs. host for mini services (llm-gateway yes, personal-mcp no)                                                                                |
+| `shelley-dual-provider.md`    | Verified: exe.dev OpenAI + personal-gateway Claude in one Shelley via a VM-local merge proxy                                                                            |
+| `monitoring.md`               | healthchecks.io registry — job↔check schedule pairs, grace rules, incidents                                                                                             |
+| `secrets.md`                  | Secret management — exe.dev integrations, 1Password patterns, MCP server auth                                                                                           |
+| `snowflake-keys.md`           | The 4 Snowflake accounts, key-pair registrations, break-glass item defects, `rsa_key` orphan closed                                                                     |
+| `ssh-keys.md`                 | Every SSH key held, the 3 stale JumpCloud registrations deleted 2026-07-31, the mini's 3 inbound paths                                                                  |
+| `multi-tenant.md`             | Future multi-tenant plan (gated on first paying client) — decisions, checklist                                                                                          |
+| `herdr-pilot.md`              | herdr + Moshi agent-workflow pilot — topology decisions, boundaries, checklist                                                                                          |
+| `agentsview-pilot.md`         | Approved fleet pilot — central Shelley/Claude/Codex history across exe.dev and AC VMs                                                                                   |
+| `shelley-sovreignty.md`       | Shelley assessment + target architecture for sovereign operating memory                                                                                                 |
+| `vm-disk-weight.md`           | Measured fleet disk (2026-07-27) — forked-exeslim deployment lane, prune plan, rejected dev image                                                                       |
+| `vm-disposability.md`         | Audit (2026-07-28): can we delete any VM? Gap is 10 unpushed commits; Shelley history is covered                                                                        |
+| `exe-dev-remediation.md`      | Capability exposure + disk weight, in three tracks. Tracks 0 & 1 done (~7.8 GB, `auto:all` 6→3); 2 open                                                                 |
+| `mac-audit-mbp-2026-09-10.md` | mbp run of `provisioning/mac-audit.md` — as-found findings (agentsview absent, github-home MCP failing, skill cruft), remediation, and the drift-checker presence guard |
 
 - [agentsview-peer-path.md](agentsview-peer-path.md) — AgentsView data path over exe.dev peer integrations: canary results, design, open token-model decision
