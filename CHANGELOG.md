@@ -4,6 +4,21 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-09-10 — Mini regained outbound tailnet reach (tag:mini as source)
+
+`ssh <vm>` from the mini had been dead since the 2026-09-02 retag from
+`tag:dev` to `tag:mini`. Cause: a tagged node is not `autogroup:member`, and
+every grant/SSH rule that reaches `tag:dev` or `tag:prod` named only
+`autogroup:member` or `tag:dev` as source, so the mini kept the Drive
+capability and nothing else — no dev VMs, no prod `:22`, no own devices, no
+exit nodes. Nothing scheduled on the mini used the tailnet, so only
+interactive SSH was affected. Fixed in the admin console by adding `tag:mini`
+to the source list of the tag:dev→tag:dev (`ip:*`) and tag:dev→tag:prod
+(`tcp:22`) grants and their SSH rules, plus a `tag:mini` policy test so a
+future retag can't silently repeat it. Inbound to the mini is unchanged.
+Verified: `ssh iv-provision` from the mini lands as `exedev` via Tailscale
+SSH. `hosts.md` corrected (it still said `tag:dev`).
+
 ## 2026-09-10 — Mac audit run on the mini; install.sh down to two prompts
 
 Ran `provisioning/mac-audit.md` on klundstedt-mini (merged as #20 the same
