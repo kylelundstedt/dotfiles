@@ -20,7 +20,12 @@ fleet runs here.
 - **Tailscale:** open-source `tailscaled` (brew formula, system daemon via
   `sudo brew services`), not the standard app. Needs `--tailscale-ssh` on the
   **first** `install.sh` run; self-maintains after. It's a **tagged** device
-  (`tag:dev`, persistent) — its rebuild path mints a non-ephemeral key via `op`.
+  (`tag:mini`, persistent) — its rebuild path mints a non-ephemeral key via
+  `op`. It left `tag:dev` on 2026-09-02 (AgentsView collector move, see
+  [agentsview-pilot.md](agentsview-pilot.md)). A tagged node is not
+  `autogroup:member`, so `tag:mini` must be named as a _source_ in the dev-mesh
+  and prod-SSH rules or the mini loses all outbound tailnet reach — which is
+  exactly what happened until 2026-09-10.
   Formula upgrades are a manual ritual (see `AGENTS.md` → Tailscale).
 - **SSH target:** reachable at `klundstedt-mini.dojo-sun.ts.net` via **Tailscale
   SSH** (`RunSSH: true`), which authenticates on tailnet ACLs and never reads
