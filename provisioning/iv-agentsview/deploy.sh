@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Deploy the collector-side jobs to iv-agentsview from the mini. iv-agentsview
-# is exeslim (no dotfiles clone, no agent harness), so the scripts, the systemd
-# units and the healthchecks.io ping URL (mini Keychain
-# agentsview-coverage:healthcheck-url) are pushed over SSH. Idempotent: the
-# collector is restarted only when its unit file changed.
+# Deploy the collector-side services to iv-agentsview from the mini.
+# iv-agentsview is exeslim (no dotfiles clone, no agent harness), so the scripts
+# and systemd units are pushed over SSH. This includes the collector, its daily
+# coverage/reconcile job, and the loopback-only read-only MCP endpoint. The
+# healthchecks.io ping URL stays in the mini Keychain. Idempotent: services are
+# restarted only when their unit files change.
 # One SSH connection at a time — exe.dev drops parallel SYNs from one IP.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -13,7 +14,8 @@ HC=$(security find-generic-password -s agentsview-coverage:healthcheck-url -w 2>
 
 scp -q -o ConnectTimeout=30 -o BatchMode=yes \
     "$HERE/agentsview-coverage" "$HERE/agentsview-reconcile" \
-    "$HERE/agentsview.service" "$HERE/agentsview-coverage.service" "$HERE/agentsview-coverage.timer" \
+    "$HERE/agentsview.service" "$HERE/agentsview-mcp.service" "$HERE/agentsview-mcp.nginx" \
+    "$HERE/agentsview-coverage.service" "$HERE/agentsview-coverage.timer" \
     "$VM:/tmp/"
 printf 'HC_URL=%s\n' "$HC" | ssh -o ConnectTimeout=30 -o BatchMode=yes "$VM" '
     set -euo pipefail; umask 077
@@ -23,6 +25,10 @@ printf 'HC_URL=%s\n' "$HC" | ssh -o ConnectTimeout=30 -o BatchMode=yes "$VM" '
     install -m 0755 /tmp/agentsview-reconcile ~/.local/bin/agentsview-reconcile
     sudo install -m 0644 /tmp/agentsview-coverage.service /tmp/agentsview-coverage.timer /etc/systemd/system/
     restart=0
+    mcp_restart=0
+    if ! sudo cmp -s /tmp/agentsview-mcp.service /etc/systemd/system/agentsview-mcp.service; then
+        sudo install -m 0644 /tmp/agentsview-mcp.service /etc/systemd/system/agentsview-mcp.service; mcp_restart=1
+    fi
     if ! sudo cmp -s /tmp/agentsview.service /etc/systemd/system/agentsview.service; then
         sudo install -m 0644 /tmp/agentsview.service /etc/systemd/system/agentsview.service; restart=1
     fi
@@ -33,9 +39,19 @@ printf 'HC_URL=%s\n' "$HC" | ssh -o ConnectTimeout=30 -o BatchMode=yes "$VM" '
     if grep -qE "^[[:space:]]*require_auth[[:space:]]*=" ~/.agentsview/config.toml; then
         sed -i -E "/^[[:space:]]*require_auth[[:space:]]*=/d" ~/.agentsview/config.toml; restart=1
     fi
-    rm -f /tmp/agentsview-coverage /tmp/agentsview-reconcile /tmp/agentsview.service /tmp/agentsview-coverage.service /tmp/agentsview-coverage.timer
+    if ! command -v nginx >/dev/null 2>&1; then
+        sudo apt-get update -qq
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nginx-light
+    fi
+    sudo install -m 0644 /tmp/agentsview-mcp.nginx /etc/nginx/sites-available/agentsview-mcp
+    sudo ln -sfn /etc/nginx/sites-available/agentsview-mcp /etc/nginx/sites-enabled/agentsview-mcp
+    rm -f /tmp/agentsview-coverage /tmp/agentsview-reconcile /tmp/agentsview.service /tmp/agentsview-mcp.service /tmp/agentsview-mcp.nginx /tmp/agentsview-coverage.service /tmp/agentsview-coverage.timer
+    sudo nginx -t
+    sudo systemctl enable --now nginx
+    sudo systemctl reload nginx
     sudo systemctl daemon-reload
-    sudo systemctl enable --now agentsview-coverage.timer
+    sudo systemctl enable --now agentsview-coverage.timer agentsview-mcp.service
     [[ $restart -eq 0 ]] || { sudo systemctl restart agentsview; sleep 3; }
-    echo "collector: $(systemctl is-active agentsview)  timer: $(systemctl is-active agentsview-coverage.timer)"
+    [[ $mcp_restart -eq 0 ]] || { sudo systemctl restart agentsview-mcp; sleep 1; }
+    echo "collector: $(systemctl is-active agentsview)  mcp: $(systemctl is-active agentsview-mcp)  timer: $(systemctl is-active agentsview-coverage.timer)"
 '

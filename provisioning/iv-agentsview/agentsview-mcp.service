@@ -1,0 +1,19 @@
+[Unit]
+Description=Read-only AgentsView MCP server
+After=network-online.target agentsview.service
+Wants=network-online.target
+Requires=agentsview.service
+
+[Service]
+Type=simple
+User=exedev
+Environment=AGENTSVIEW_DATA_DIR=/home/exedev/.agentsview
+ExecStart=/usr/local/bin/agentsview mcp --http 127.0.0.1:8086 --server http://127.0.0.1:8000
+Restart=on-failure
+RestartSec=10
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

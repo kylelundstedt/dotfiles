@@ -106,6 +106,37 @@ sync --host` right after re-creating an integration can 401/502 for a
 - **Cleanup done**: mini Keychain `agentsview:auth-token` deleted (retired
   collector token, no reader); `provisioning/keys.manifest` row updated.
 
+## Global query path (2026-09-13)
+
+The collector also exposes AgentsView's **read-only MCP** surface to
+`iv-provision` only:
+
+```text
+Claude/Codex/Shelley skill on iv-provision
+        │ mcp-agentsview peer integration
+        ▼
+nginx 127.0.0.1:8085 on iv-agentsview
+        │ requires attested X-Exedev-Source-Vm: iv-provision
+        ▼
+agentsview mcp 127.0.0.1:8086
+        │ local daemon API
+        ▼
+global AgentsView archive
+```
+
+The nginx hop exists because AgentsView MCP validates the HTTP `Host` header;
+the exe.dev alternate-port proxy presents the VM's external host, while the MCP
+listener accepts its loopback host. nginx both rewrites `Host` and enforces the
+attested caller identity as defense in depth. The exe.dev integration itself is
+attached only to `vm:iv-provision`; no fleet tag or `auto:all` attachment is
+allowed.
+
+This does not make `iv-provision` the collector or archive owner. It remains the
+fleet authoring/control VM, with an additional read-only observability
+capability. Because that capability can reveal prompts, responses and tool
+results from the whole fleet, adding another caller requires an explicit review
+and a separately named attachment.
+
 ### Open
 
 - **1Password**: the 12 per-host source tokens and the collector UI token in
