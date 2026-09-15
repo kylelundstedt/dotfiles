@@ -1,0 +1,11 @@
+[Unit]
+Description=Entire checkpoint durability check (runs on the control-plane VM)
+Documentation=https://github.com/kylelundstedt/dotfiles/blob/master/agent_docs/monitoring.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=exedev
+EnvironmentFile=-/home/exedev/.config/entire-push-check/env
+ExecStart=/home/exedev/.local/bin/entire-push-check-job
