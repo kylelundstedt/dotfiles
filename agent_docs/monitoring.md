@@ -191,6 +191,30 @@ prints each as `unreachable — not inspected`, so the narrowing is visible rath
 than silent, which is the standard this check is held to. If either quack VM ever
 holds real work, it needs a tailnet identity or an explicit exclusion.
 
+### LM Studio fleet door (`lmstudio-door`, live 2026-09-15)
+
+Asserts that LM Studio on the mini is reachable by the fleet, from where the
+fleet reaches it: `iv-provision`, every 15 minutes (`lmstudio-door.timer`,
+pushed by `provisioning/iv-provision/deploy.sh`; period 900 s, grace 1800 s,
+email channel — the same shape as `personal-mcp: embeddings`, which covers LM
+Studio from the mini's side). Two assertions, both required:
+
+1. **Relay chain** — `https://lmstudio-probe.int.exe.xyz/mini/v1/models`, an
+   exe.dev http-proxy integration attached only to `iv-provision` that injects
+   the relay's `X-LLM-Relay-Key` at the edge (no secret on the VM). Traverses
+   edge → `iv-llm-relay` nginx → tailnet → the mini's `/lmstudio` serve door →
+   LM Studio. Sees a dead relay or a stopped server on the next run.
+2. **Integration view** — `https://lmstudio.int.exe.xyz/v1/models`, what
+   Shelley actually consumes. exe.dev re-discovers custom providers only about
+   every 30 minutes (measured from the relay's access log), so this lags (1)
+   by up to that; it exists because it also catches an integration or
+   Models-filter mistake that (1) cannot see.
+
+Both must list at least one `qwen/` chat model, and the success line reports
+both counts (the fan-out rule above). A models list is deliberately the probe,
+not an inference: a completion would JIT-load a 27–38 GB model every 15
+minutes and defeat LM Studio's idle unload. Design: [llm-relay.md](llm-relay.md).
+
 ## Scope: this registry covers the klundstedt-mini project only
 
 The manifest + drift check govern the checks in the **klundstedt-mini**

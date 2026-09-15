@@ -96,8 +96,9 @@ the provider id, so both hosts' models are distinguishable in the picker.
 
 **Rotate the key.** `openssl rand -hex 32`; update the 1Password item; run
 `provisioning/iv-llm-relay/deploy.sh` (renders the new key into nginx);
-`integrations edit lmstudio --header=X-LLM-Relay-Key:<new>` (replaces all
-headers). Order does not matter beyond a few seconds of 403s.
+`integrations edit lmstudio --header=X-LLM-Relay-Key:<new>` and
+`integrations edit lmstudio-probe --header=X-LLM-Relay-Key:<new>` (each
+replaces all headers). Order does not matter beyond a few seconds of 403s.
 
 **Check the chain from the mini.**
 
@@ -121,6 +122,18 @@ nginx-light if missing, renders the key from 1Password), `share port … 8000`
 - `share set-public`, add `tag:relay` in the admin console. Tailscale SSH does
   not serve SFTP, so the deploy script uses the `.exe.xyz` endpoint; over the
   tailnet copy files with `ssh … 'cat > /tmp/x' < x`, not `scp`.
+
+## Monitoring
+
+`lmstudio-door` (healthchecks.io, period 900 s / grace 1800 s, email) is pinged
+by `lmstudio-door.timer` on `iv-provision` — see
+[monitoring.md](monitoring.md) → "LM Studio fleet door". It asserts the relay
+chain directly (via the `lmstudio-probe` http-proxy integration, which carries
+the header key at the exe.dev edge) **and** the `lmstudio` integration's model
+list. The ping URL lives in the mini Keychain as `lmstudio-door:healthcheck-url`
+and is pushed to `~/.config/lmstudio-door/env` on the VM by
+`provisioning/iv-provision/deploy.sh`. Rotating the relay key therefore has a
+third step: `integrations edit lmstudio-probe --header=X-LLM-Relay-Key:<new>`.
 
 ## Threat model, briefly
 

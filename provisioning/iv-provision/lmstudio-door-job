@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# lmstudio-door: is LM Studio on klundstedt-mini reachable by the fleet?
+# Runs ON iv-provision (placement rule, agent_docs/service-placement.md: a probe
+# runs where its inputs already are — both inputs are exe.dev integration
+# endpoints that exist only on a VM; the dead-man's switch stays off-box on
+# healthchecks.io).
+#
+# Two assertions, both required — they fail independently:
+#   1. The relay chain itself: exe.dev edge -> iv-llm-relay nginx (header gate)
+#      -> tailnet -> the mini's /lmstudio serve door -> LM Studio. Reached via
+#      the `lmstudio-probe` http-proxy integration, which injects the relay's
+#      X-LLM-Relay-Key at the edge, so no secret lives here. This is the fast
+#      signal: it sees a dead relay or a stopped LM Studio on the next run.
+#   2. What Shelley actually gets: the `lmstudio` llm integration's model list.
+#      exe.dev re-discovers custom providers only every ~30 min (measured
+#      2026-09-15), so this lags (1) — but it is the thing the fleet consumes,
+#      and it also catches an integration misconfiguration (1) cannot see.
+# Both list the qwen chat models by name, and the success line reports counts
+# (the "fan-out count" rule in agent_docs/monitoring.md), so a filter that
+# quietly hides every model reads as a failure, not an OK.
+#
+# A models list is deliberately the probe, not an inference: a completion would
+# JIT-load a 27-38 GB model every 15 minutes and defeat LM Studio's idle
+# unload. The embeddings dead-man's switch on the mini already exercises
+# inference locally.
+#
+# Inputs: HC_URL from ~/.config/lmstudio-door/env (mode 0600). Pass --dry-run
+# to report without pinging.
+set -uo pipefail
+umask 077
+
+DRY_RUN=0
+[[ "${1:-}" == "--dry-run" ]] && DRY_RUN=1
+
+hc() { [[ -n "${HC_URL:-}" && $DRY_RUN -eq 0 ]] && curl -fsS -m 10 --retry 3 "${HC_URL}${1:-}" "${@:2}" >/dev/null 2>&1 || true; }
+
+fail() {
+    echo "FAIL: $1"
+    hc /fail --data-raw "lmstudio-door $(hostname) $(date '+%F %T') $1"
+    exit 1
+}
+
+RELAY=https://lmstudio-probe.int.exe.xyz/mini/v1/models
+INTEG=https://lmstudio.int.exe.xyz/v1/models
+PATTERN=${LMSTUDIO_DOOR_PATTERN:-^(lmstudio/)?qwen/}
+
+hc /start
+
+# 1. Relay chain.
+body=$(curl -sS --max-time 30 -w '\n%{http_code}' "$RELAY" 2>&1) || fail "relay chain: curl error: $(printf '%s' "$body" | tail -c 200)"
+code=${body##*$'\n'}; body=${body%$'\n'*}
+[[ "$code" == "200" ]] || fail "relay chain: HTTP $code from lmstudio-probe (403=key/gate, 5xx=relay->mini hop, 404=integration detached)"
+relay_n=$(printf '%s' "$body" | jq -r --arg p "$PATTERN" '[.data[]?.id | select(test($p))] | length' 2>/dev/null) || fail "relay chain: non-JSON body"
+(( relay_n > 0 )) || fail "relay chain: 0 chat models matched $PATTERN (LM Studio up but no qwen models?)"
+
+# 2. Integration view.
+body=$(curl -sS --max-time 30 -w '\n%{http_code}' "$INTEG" 2>&1) || fail "llm integration: curl error"
+code=${body##*$'\n'}; body=${body%$'\n'*}
+[[ "$code" == "200" ]] || fail "llm integration: HTTP $code from lmstudio.int.exe.xyz"
+integ_n=$(printf '%s' "$body" | jq -r --arg p "$PATTERN" '[.data[]?.id | select(test($p))] | length' 2>/dev/null) || fail "llm integration: non-JSON body"
+(( integ_n > 0 )) || fail "llm integration: 0 models match $PATTERN — exe.dev discovery empty (relay was down at its last ~30-min poll, or the Models filter hides everything)"
+
+msg="OK: relay chain $relay_n chat model(s); llm integration $integ_n model(s)"
+echo "$msg"
+hc "" --data-raw "lmstudio-door $(hostname) $(date '+%F %T') $msg"

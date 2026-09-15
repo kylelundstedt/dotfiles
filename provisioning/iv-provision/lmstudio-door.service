@@ -1,0 +1,11 @@
+[Unit]
+Description=LM Studio fleet door check (relay chain + llm integration)
+Documentation=https://github.com/kylelundstedt/dotfiles/blob/master/agent_docs/llm-relay.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=exedev
+EnvironmentFile=-/home/exedev/.config/lmstudio-door/env
+ExecStart=/home/exedev/.local/bin/lmstudio-door-job
