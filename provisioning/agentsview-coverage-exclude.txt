@@ -57,3 +57,10 @@ quack-server
 # 2026-09-02 topology change). Same category as rss-feed. If an agent is ever
 # provisioned onto it, enroll it instead of leaving this entry in place.
 iv-personal-mcp-relay
+
+# exe.dev relay for LM Studio (2026-09-15), same shape as iv-personal-mcp-relay:
+# bare exeslim + nginx, no Shelley, no agent harness, one header key and no
+# state. Bridges the `lmstudio` llm integration to LM Studio on the mini (and
+# the Studio Ultra later) — agent_docs/llm-relay.md. If an agent is ever
+# provisioned onto it, enroll it instead of leaving this entry in place.
+iv-llm-relay

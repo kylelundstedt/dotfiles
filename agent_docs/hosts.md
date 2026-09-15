@@ -56,9 +56,9 @@ fleet runs here.
   - `https://klundstedt-mini.dojo-sun.ts.net/lmstudio/v1` — a path mount on
     the :443 listener (serve strips the `/lmstudio` prefix). This is the door
     the fleet uses: tailnet policy already lets `tag:relay` reach the mini on
-    `tcp:443`, so the `iv-personal-mcp-relay` nginx forwards it unchanged and
-    exe.dev peer proxies can reach it at
-    `https://iv-personal-mcp-relay.exe.xyz/lmstudio/v1` with no policy change.
+    `tcp:443`, so the dedicated `iv-llm-relay` VM forwards it to exe.dev's
+    `lmstudio` llm integration with no policy change — see
+    [llm-relay.md](llm-relay.md).
   - `https://klundstedt-mini.dojo-sun.ts.net:8443/v1` — a dedicated port for
     Kyle's own devices; fleet VMs cannot reach `:8443` (policy allows only
     `tcp:22`, `tcp:8080`, and `tcp:443` for `tag:relay`).
@@ -125,6 +125,12 @@ project VMs consume both read-only. Account control-plane changes
 
 Lifecycle (create, join tailnet, upgrade) lives in the `exe-dev` /
 `join-tailnet` / `upgrade-vm` skills, not here.
+
+Two VMs are bare **relays**, not dev boxes (exeslim + nginx, no agent harness,
+no secrets beyond a header key): `iv-personal-mcp-relay` bridges hub-mcp on the
+mini to exe.dev over a private peer proxy; `iv-llm-relay` bridges LM Studio on
+the mini (and later the Studio Ultra) to the `lmstudio` llm integration over a
+public, header-gated port — [llm-relay.md](llm-relay.md).
 
 ### Platform notes
 
