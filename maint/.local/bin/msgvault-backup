@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# Nightly `msgvault backup create` into the local append-only repository, which
+# tigris-backup then ships off-site.
+#
+# WHY THIS EXISTS (2026-09-10). rclone syncs whole objects: any byte change
+# re-PUTs the entire file. msgvault.db is 26G and gains ~255 messages a night, so
+# the nightly home phase was uploading ~27G to capture ~20-50M of genuine change
+# -- a ~600-1400x amplification. It went unnoticed for months because it fit in
+# the 2h run budget at 13.9 MB/s; when Tigris throughput halved to 5.4 MB/s over
+# the week to 2026-09-10 the run overran, skipped the archive phases, and
+# collided with the weekly reconcile's lock.
+#
+# `msgvault backup` (v0.17.0+) captures the DB at 4K page granularity, storing
+# only pages whose content hash changed, plus content-addressed deduplicated
+# attachments. The repository is append-only write-once files, which the vendor
+# documents as safe to push with rclone. So the fix is: snapshot locally here,
+# and let tigris-backup sync the repo -- it then uploads only the packs this
+# snapshot added.
+#
+# Ordering: msgvault-sync 03:00 -> THIS 03:45 -> tigris-backup 04:30.
+#
+# Pass --dry-run to report without pinging or snapshotting.
+set -uo pipefail
+umask 077
+
+DRY_RUN=0
+[[ "${1:-}" == "--dry-run" ]] && DRY_RUN=1
+
+source "$HOME/dotfiles/backup/_lib.sh"
+job_require_mini msgvault-backup
+[[ $DRY_RUN -eq 1 ]] || { job_hc_init "msgvault-backup:healthcheck-url"; job_log "$HOME/Library/Logs/msgvault-backup"; }
+
+REPO=${MSGVAULT_BACKUP_REPO:-/Volumes/OWC8TB/msgvault-backup}
+MSGVAULT=${MSGVAULT_BIN:-$HOME/.local/bin/msgvault}
+
+fail() {
+    local reason=$1
+    echo "FAIL: $reason"
+    [[ $DRY_RUN -eq 1 ]] || job_hc /fail --data-raw "msgvault-backup $(date '+%F %T') $reason"
+    exit 1
+}
+
+[[ -x "$MSGVAULT" ]] || fail "msgvault not executable at $MSGVAULT"
+
+# Fail closed on a missing repository rather than silently re-initializing one.
+# An auto-created empty repo would take a full snapshot, look successful, and
+# quietly discard every prior snapshot's history -- and on an unmounted external
+# drive it would also write 34G to the root filesystem.
+[[ -d "$REPO" ]]             || fail "backup repo missing at $REPO (external drive unmounted?)"
+[[ -f "$REPO/config.toml" ]] || fail "$REPO exists but is not a msgvault backup repo (no config.toml)"
+
+[[ $DRY_RUN -eq 1 ]] && { echo "dry run: would snapshot into $REPO"; "$MSGVAULT" backup list --repo "$REPO" 2>&1 | tail -3; exit 0; }
+
+job_hc /start
+
+out=$("$MSGVAULT" backup create --repo "$REPO" --tag "nightly" 2>&1)
+rc=$?
+# Progress lines are \r-delimited; keep only the summary so the log stays useful.
+printf '%s\n' "$out" | tr '\r' '\n' | grep -E "Created snapshot|Packs added|Bytes added|Duration|Error|error" | sed 's/^/  /'
+
+if (( rc != 0 )); then
+    fail "backup create rc=$rc: $(printf '%s' "$out" | tr '\r' '\n' | tail -2 | tr '\n' ' ')"
+fi
+
+# Report what this snapshot actually added, so unbounded growth is visible: a
+# failed create leaves orphaned packs that nothing reclaims (msgvault documents
+# encryption and retention/prune as not yet implemented), and the repo lives on
+# the external drive where a slow leak would go unnoticed until it filled.
+#
+# Take the numbers from msgvault's own summary rather than `du`: under launchd
+# this job's shell has no TCC grant for removable volumes, so `du` on /Volumes
+# silently returns nothing and the arithmetic reported "0M total" for a 34G repo
+# (2026-09-10). msgvault itself is granted, which is why the snapshot succeeded
+# while the measurement of it did not.
+added=$(printf '%s' "$out" | tr '\r' '\n' | sed -n 's/^Bytes added: *//p' | tail -1)
+packs=$(printf '%s' "$out" | tr '\r' '\n' | sed -n 's/^Packs added: *//p' | tail -1)
+snaps=$("$MSGVAULT" backup list --repo "$REPO" 2>/dev/null | grep -c '^20' || true)
+echo "  added ${added:-?} in ${packs:-?} pack(s); ${snaps} snapshot(s) in repo"
+
+msg="msgvault-backup $(date '+%F %T') ok: added ${added:-?} in ${packs:-?} pack(s), ${snaps} snapshot(s)"
+echo "OK: $msg"
+# Empty first arg is the ping PATH (bare = success), not a typo: job_hc is
+# `job_hc [path] [curl-args...]`, so passing --data-raw as $1 appends it to the
+# URL and 404s silently -- the bug that left agentsview-retention never pinging.
+job_hc "" --data-raw "$msg"
+job_mark_done "/tmp/msgvault-backup.lastrun"

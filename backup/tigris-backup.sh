@@ -275,6 +275,21 @@ else
     FAILURES+=("agentsview-snapshot")
 fi
 sync_one home   "$HOME/"                          bkup:home --filter-from "$FILTER"
+# msgvault's incremental backup repository (2026-09-10). The live msgvault.db and
+# attachments/ are excluded from the home phase above; this repo is what actually
+# carries the email archive off-site now. Its files are append-only and
+# write-once, so rclone only ever uploads the packs a snapshot newly added —
+# tens of MB a night instead of the 27G the live DB cost.
+#
+# Synced FIRST after home so it lands even if a later phase exhausts the budget:
+# this is the archive of record. Goes to bkup: (not arch:/GLACIER_IR) because a
+# restore must be immediate, not a Glacier retrieval.
+#
+# msgvault backup create runs before this job (com.kylelundstedt.msgvault-backup,
+# 03:45 — after msgvault-sync 03:00, before this job 04:30). If it did not run,
+# this phase still syncs whatever the last snapshot left; staleness is caught by
+# that job's own healthcheck, not here.
+sync_one mvbackup "$EXT/msgvault-backup"          bkup:msgvault-backup
 if photos_originals_complete; then
     sync_one photos "$EXT/Photos Library.photoslibrary" bkup:photos --filter-from "$PHOTOS_FILTER"
 else

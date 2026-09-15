@@ -68,6 +68,39 @@
 # Excluded rather than kept because the recovery cost is one browser re-auth,
 # whereas replicating them puts live mailbox access in the bucket indefinitely.
 # 0600 on disk; msgvault regenerates them on re-authentication.
+# msgvault's own incremental backup replaces the nightly re-upload of the live
+# archive (2026-09-10). rclone syncs whole objects: any byte change re-PUTs the
+# entire file, so a 26G msgvault.db that gains ~255 messages a night was costing
+# ~27G of upload to capture ~20-50M of real change — a ~600-1400x amplification
+# that ran for months and finally broke the 2h run budget when Tigris throughput
+# halved (13.9 -> 5.4 MB/s over the week to 09-10).
+#
+# `msgvault backup` (v0.17.0+) captures the DB at 4K page granularity and stores
+# only pages whose content hash changed, plus content-addressed attachments; the
+# repository is append-only write-once files that the vendor documents as safe to
+# push with rclone. So the repo is synced instead (see PHOTOS/REPO phases in
+# tigris-backup.sh) and these live files are dropped here.
+#
+# Covered by the repo, therefore excluded: msgvault.db (+ WAL/SHM), attachments/,
+# deletions/. NOT covered by the repo and deliberately still synced below:
+# vectors.db (derived embeddings, but ~40h to rebuild), analytics/ (derived, 43M),
+# config.toml. Tokens and client secrets stay excluded as before.
+- /archives/email/msgvault.db
+- /archives/email/msgvault.db-wal
+- /archives/email/msgvault.db-shm
+- /archives/email/attachments/**
+- /archives/email/deletions/**
+# Daemon runtime state, new in v0.17.0's daemon-only model. These are hot files
+# rewritten continuously by the running daemon; syncing them churns every night
+# and copies a torn lock/log for no restore value.
+- /archives/email/serve.log
+- /archives/email/*.lock
+# The daemon runtime record is named for the daemon PID (daemon.<pid>.json), so a
+# new one appears on every restart and stale ones linger — pure churn, and it
+# describes a port/pid that is meaningless in a restore.
+- /archives/email/daemon.*.json
+- /archives/email/vectors.db-wal
+- /archives/email/vectors.db-shm
 - /archives/email/tokens/**
 # The matching OAuth client secrets. Individually the weaker half — Google
 # *installed-app* clients are not treated as confidential and are re-downloadable
