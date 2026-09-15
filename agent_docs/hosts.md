@@ -142,6 +142,30 @@ public, header-gated port — [llm-relay.md](llm-relay.md).
   avoid redundant downloads. On IV VMs, including Apple Container guests with
   `~/iv-provision.lock`, it runs as a thin personal overlay on top of
   iv-image's `provision-iv.sh` (see [repo-boundaries.md](repo-boundaries.md)).
+- **`iv-provision` is the control-plane host, and its name now undersells it**
+  (noted 2026-09-15). It creates VMs, lists them, and manages integrations — and
+  since 2026-09-15 it also runs the scheduled `entire-push-check`
+  (`provisioning/iv-provision/`), because the exe.dev inventory reaches it through
+  the http-proxy integration with no SSH key. The defining property of this host
+  is **control-plane access**, not provisioning specifically; reading the
+  inventory for a monitoring check is the same capability, so this is not scope
+  creep so much as a name that describes one use of the capability rather than
+  the capability.
+
+  The gap is real but it is a labelling gap: the VM is `iv-provision`, its emoji
+  is ⚙️, and `https://iv-provision.exe.xyz` serves nothing but the exe.dev auth
+  redirect, so nothing about the host announces the monitoring role. A rename
+  (`iv-control`?) was considered and **not** done: renames here are hazardous by
+  this repo's own record — deleting or renaming a VM does not free its tailnet
+  node, `tailscale set --hostname` does not rename a registered one, and a
+  2026-07-30 rename left `iv-foundry-stage2` off the tailnet when 1Password
+  locked mid-operation. It would also touch integrations, the collector config,
+  `checks.manifest`, `deploy.sh` defaults and every doc reference, while the
+  repo `iv-provision` keeps its name regardless. Cost exceeds the benefit of a
+  clearer noun. Recording the roles here is the cheap fix; a short landing page
+  on the VM's https URL would be the next-cheapest if the ambiguity keeps
+  costing anything.
+
 - **AgentsView canaries:** `iv-docs` (exe.dev) runs the pinned, tailnet-only
   authenticated source service. (`iv-sandbox`, the original second canary, was
   decommissioned 2026-07-22 with the LLM gateway — see

@@ -32,7 +32,7 @@ always-on rules live in `AGENTS.md`.
 | `apple-container-vms.md`      | Creating & using Apple Container VMs (exe.dev-equivalent, machine mode + Shelley)                                                                                       |
 | `llm-gateway.md`              | **DECOMMISSIONED 2026-07-22** — self-hosted Claude/Codex subscription gateway; record + why retired                                                                     |
 | `llm-gateway-migration.md`    | **ABANDONED 2026-07-22** — gateway host→VM migration; executed then torn down (record only)                                                                             |
-| `service-placement.md`        | Criterion: AC appliance VM vs. host for mini services (llm-gateway yes, personal-mcp no)                                                                                |
+| `service-placement.md`        | Two placement criteria: AC appliance VM vs. host for mini services; and which fleet host runs a scheduled probe (probe follows its inputs, alerting stays off-box)      |
 | `shelley-dual-provider.md`    | Verified: exe.dev OpenAI + personal-gateway Claude in one Shelley via a VM-local merge proxy                                                                            |
 | `monitoring.md`               | healthchecks.io registry — job↔check schedule pairs, grace rules, incidents                                                                                             |
 | `secrets.md`                  | Secret management — exe.dev integrations, 1Password patterns, MCP server auth                                                                                           |
