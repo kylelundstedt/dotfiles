@@ -30,4 +30,5 @@ personal-mcp: mcp-server | period:900 | - | 1800 | personal-mcp:com.kylelundsted
 personal-mcp: embeddings | period:900 | - | 1800 | personal-mcp:com.kylelundstedt.personal-mcp-healthcheck
 personal-mcp: calendar | cron:15 3 * * * | America/Los_Angeles | 3600 | personal-mcp:com.kylelundstedt.calendar-refresh
 entire-push-check | period:86400 | - | 3600 | iv-provision:entire-push-check.timer
+lmstudio-door | period:900 | - | 1800 | iv-provision:lmstudio-door.timer
 agentsview-retention | period:86400 | - | 3600 | dotfiles:com.kylelundstedt.agentsview-retention

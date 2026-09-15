@@ -4,6 +4,21 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-09-15 — `lmstudio-door` check, and three hygiene items
+
+The LM Studio fleet door had no monitoring: a stopped server or a dead relay
+would have emptied every Shelley picker silently. `lmstudio-door` now runs on
+`iv-provision` every 15 minutes (where the inputs are — both are `int.exe.xyz`
+endpoints) and asserts two things: the relay chain through a new
+`lmstudio-probe` http-proxy integration that carries the relay's header key at
+the exe.dev edge, and the `lmstudio` llm integration's own model list, which
+exe.dev refreshes only every ~30 min. Registered in `checks.manifest`, pushed
+by `provisioning/iv-provision/deploy.sh`, ping URL in the mini Keychain.
+Hygiene the same evening: the Tailscale OAuth client secret in 1Password was a
+plain text field and is now concealed; three unused 90-day `tag:prod` auth
+keys from 2026-09-11 deleted via the API; the mini's redundant `:8443` LM
+Studio serve door retired — `/lmstudio` on `:443` is the one door.
+
 ## 2026-09-15 — api-tailscale back to least authority: standing only on private dev VMs
 
 Closed the drift found the same day. The `tailnet` exe.dev tag had made the

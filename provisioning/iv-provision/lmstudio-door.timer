@@ -1,0 +1,13 @@
+[Unit]
+Description=LM Studio fleet door check, every 15 minutes
+
+[Timer]
+# Matches the check's healthchecks.io period of 900s with 1800s grace (same
+# shape as `personal-mcp: embeddings`, the mini-side LM Studio check).
+OnBootSec=2m
+OnUnitActiveSec=15m
+RandomizedDelaySec=2m
+Persistent=true
+
+[Install]
+WantedBy=timers.target
