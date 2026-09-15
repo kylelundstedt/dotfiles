@@ -189,6 +189,22 @@ is removed and must be re-joined by re-running the script.
 
 `--tag=iv` is no longer sufficient or required for tailnet joining.
 
+> **Regressed and re-closed 2026-09-15.** Between 2026-08-19 and 2026-09-15
+> the integration (renamed `api-tailscale`) was attached to the exe.dev tag
+> `tailnet`, carried by 19 of 21 VMs — including `rss-feed` and `telnyx-vm`,
+> the two boxes this finding was demonstrated on, plus the public `kgl-thoughts`
+> and the new public relay `iv-llm-relay`. It came in from iv-provision's
+> `tailnet.md` (tag-based attachment, 08-19) and exeslim's boot-time
+> `iv-tailnet-join` (08-23), neither of which touched this doc. The OAuth client
+> had meanwhile lost device/ACL reach (403 on both), so the exposure was
+> key-minting only, but it was standing authority on public boxes again. Fix:
+> the tag stays only on private dev VMs (the `create-vm` token cannot attach,
+> so a standing grant is the only shape that lane can use); public and
+> prod-lane VMs use `integrations attach api-tailscale vm:<vm> --for 30m`;
+> exeslim mints non-ephemeral prod nodes so they never need the API after first
+> boot; the four public VMs had the tag removed. Contract:
+> iv-provision `tailnet.md`; skill: `join-tailnet`.
+
 ### Finding 3: `github-mcp-*` were both `auto:all` (closed)
 
 The deciding fact: the fleet runs **two GitHub accounts** — `kylelundstedt`

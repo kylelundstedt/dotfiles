@@ -4,6 +4,22 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-09-15 — api-tailscale back to least authority: standing only on private dev VMs
+
+Closed the drift found the same day. The `tailnet` exe.dev tag had made the
+Tailscale key-minting integration a standing grant on 19 VMs, four of them
+internet-facing (`rss-feed`, `telnyx-vm`, `kgl-thoughts`, `iv-llm-relay`).
+Contract now (iv-provision `tailnet.md`, mirrored in the `join-tailnet` skill and
+remediation Finding 2): the tag stays **only on private dev VMs**, because the
+browser-driven `create-vm` token cannot attach or detach and a private VM's
+standing grant is the same exposure as the VM; **anything public and every
+prod-lane target** gets `integrations attach api-tailscale vm:<vm> --for 30m`,
+which lapses on its own; and exeslim's boot join now mints **non-ephemeral**
+nodes with 10-minute one-use keys, so an appliance never needs the API after
+first boot (retirement deletes the node). Applied: the tag removed from the
+four public VMs (`tag -d`); their existing nodes are unaffected. Left for the
+next rebuilds: today's four prod nodes are still ephemeral.
+
 ## 2026-09-15 — Why the LLM relay joined as `tag:prod` (and a doctrine drift)
 
 The new `iv-llm-relay` came up `tag:prod` although `join-tailnet` asked for

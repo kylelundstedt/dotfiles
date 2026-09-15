@@ -21,11 +21,24 @@ Then verify the VM appears in `tailscale status`. After it joins, use
 
 ## Why the script, and not the raw commands
 
-`tailscale-api` is **no longer attached to VMs by default** (changed
-2026-07-28). It used to be `auto:all`, which meant every VM — including the
-public-facing `rss-feed` and `telnyx-vm` — could mint tailnet auth keys, remove
-nodes, and edit ACLs at any time. Verified from `rss-feed`: a token exchange
-against the proxy returned HTTP 200.
+`api-tailscale` (formerly `tailscale-api`) is attached in **two lanes** (settled
+2026-09-15; the contract lives in iv-provision `tailnet.md`):
+
+- **Private dev VMs** carry a standing grant through the exe.dev tag `tailnet`,
+  because the browser-driven `create-vm` skill can only fix things at `new`
+  time (its token cannot attach or detach). A dev VM is private, so this is the
+  same exposure as the VM itself.
+- **Anything internet-facing, and every prod-lane deployment target**, gets a
+  time-boxed per-VM grant — `ssh exe.dev integrations attach api-tailscale
+vm:<vm> --for 30m` — never the tag. This is what the 2026-07-28 remediation
+  was about: `auto:all` had put key-minting on the public-facing `rss-feed`
+  and `telnyx-vm` (token exchange from `rss-feed` returned HTTP 200), and the
+  `tailnet` tag had quietly put it back on them between 2026-08-19 and
+  2026-09-15. Removed again 2026-09-15 (`tag -d <vm> tailnet` on the four
+  public VMs).
+
+This script is the third path — a **one-off join from the mini** for a VM that
+has neither: it attaches for the duration of the join and detaches after.
 
 The script now:
 
@@ -71,8 +84,11 @@ authority this change removed.
   as `tag:prod` seconds after boot, and this helper then exits early ("already
   on the tailnet"). To get `tag:dev` on such a VM: `sudo tailscale logout` on
   it, then run this helper. Seen on `iv-llm-relay` 2026-09-15.
-- **The "not attached by default" statement above is stale for `tag:tailnet`
-  VMs** — see the TODO item "Reconcile the tailnet-join doctrine".
+- Prod-lane nodes are minted **non-ephemeral** since exeslim 2026-09-15, so an
+  appliance never needs the API after its first boot; an older ephemeral prod
+  node that gets reaped after a long outage needs a 30-minute attach and
+  `systemctl start iv-tailnet-join` over the `.exe.xyz` edge (or this script,
+  which would make it `tag:dev`).
 
 ## SSH discipline
 
