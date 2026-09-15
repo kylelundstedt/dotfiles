@@ -2,13 +2,40 @@
 # Restore drill — prove the Tigris backup is actually recoverable, not just uploaded.
 # Read-only on Tigris: restores a small sample to a temp dir, verifies it decrypts
 # and matches the local source, exercises a GLACIER fetch, then cleans up.
-# Run periodically (e.g. quarterly). Uses the same Keychain creds as the nightly job.
+# SCHEDULED MONTHLY (com.kylelundstedt.restore-drill, 1st at 07:00) with its own
+# healthchecks.io check, since 2026-09-15. Before that it was scheduled by
+# nothing: the header said "run periodically (e.g. quarterly)", no launchd job
+# existed, no check existed, and there was no log directory -- so there was no
+# evidence it had EVER run. That matters more than the cadence, because
+# tigris-backup.sh justifies skipping rclone's post-copy checksum on the grounds
+# that "real integrity comes from the weekly reconcile (exact size+mtime) and
+# restore-drill (cryptcheck + decrypt-and-compare)". Half of that argument was
+# resting on a job with no mechanism behind it. Its first ever run, 2026-09-15,
+# passed 3/3 in 6.7s.
+#
+# Monthly rather than quarterly because the run costs seven seconds and one
+# small GLACIER_IR fetch: a quarterly drill leaves up to three months in which
+# the backup could have stopped being restorable without anyone finding out.
+#
+# Pass --dry-run for a manual run that reports without pinging or logging.
 set -uo pipefail
+
+DRY_RUN=0
+[[ "${1:-}" == "--dry-run" ]] && DRY_RUN=1
 
 # Creds + rclone remotes (tigris/bkup/arch) come from the shared library —
 # the same env the nightly writes with, so the drill proves the real path.
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
-tigris_rclone_env || exit 1
+if (( ! DRY_RUN )); then
+    job_require_mini restore-drill
+    job_hc_init "restore-drill:healthcheck-url"
+    job_log "$HOME/Library/Logs/restore-drill"
+fi
+tigris_rclone_env || {
+    [[ $DRY_RUN -eq 1 ]] || job_hc /fail --data-raw "restore-drill $(date '+%F %T') tigris creds unavailable"
+    exit 1
+}
+[[ $DRY_RUN -eq 1 ]] || job_hc /start
 
 DRILL=$(mktemp -d /tmp/tigris-restore-drill.XXXXXX)
 trap 'rm -rf "$DRILL"' EXIT
@@ -51,4 +78,13 @@ else
 fi
 
 echo "=== drill done: $pass passed, $fail failed ==="
+if (( ! DRY_RUN )); then
+    if (( fail == 0 )); then
+        # Empty first arg is the ping PATH (bare = success); passing --data-raw
+        # as $1 would append it to the URL and 404 silently.
+        job_hc "" --data-raw "restore-drill $(date '+%F %T') ok: $pass check(s) passed"
+    else
+        job_hc /fail --data-raw "restore-drill $(date '+%F %T') $fail of $((pass+fail)) check(s) FAILED -- backup may not be restorable"
+    fi
+fi
 [[ "$fail" -eq 0 ]]

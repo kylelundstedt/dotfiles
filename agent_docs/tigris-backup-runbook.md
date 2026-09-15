@@ -176,6 +176,41 @@ cryptcheck, and the GLACIER_IR archive fetch. The drill now FAILS (not INFO)
 if an archive object isn't directly retrievable, since post-re-tier that's a
 regression.
 
+## Verification — what actually proves the backup is good
+
+Two passes, and until 2026-09-15 only one of them existed in practice.
+
+- **Weekly reconcile** (`mode=reconcile`, Sunday 08:00) — exact size + source-mtime
+  comparison. Catches the daily mode's timestamp edge cases.
+- **Monthly restore drill** (`backup/restore-drill.sh`,
+  `com.kylelundstedt.restore-drill`, 1st at 07:00) — restores a sample, proves it
+  DECRYPTS, cryptchecks it against the live source, and fetches a GLACIER_IR
+  object to confirm no thaw is needed. Read-only on Tigris.
+
+**The drill was scheduled by nothing until 2026-09-15.** Its header said "run
+periodically (e.g. quarterly)", there was no launchd job, no healthchecks.io
+check, and no log directory — so there was no evidence it had ever run. That
+mattered because `tigris-backup.sh` justifies passing `--ignore-checksum` on the
+grounds that "real integrity comes from the weekly reconcile … and restore-drill
+(cryptcheck + decrypt-and-compare)": half of that argument rested on a job with no
+mechanism behind it. Its first ever run passed 3/3 in 6.7 seconds. Monthly rather
+than quarterly because the run is that cheap, and a quarterly cadence leaves up to
+three months in which the backup could stop being restorable unnoticed.
+
+- **DR credential check** (`backup/verify-dr-credentials.sh`) — manual. Confirms
+  the 1Password copies of the four Tigris credentials still match the Keychain
+  values the backup runs with, by SHA-256 comparison; it never prints a secret.
+  If the mini is lost, restoring depends entirely on those 1Password copies, and
+  a drifted copy is indistinguishable from a good one until it is the only one
+  left. For `crypt-password`/`crypt-salt` a drifted copy is unrecoverable — the
+  archive cannot be read without the exact original value.
+
+  Deliberately **not** scheduled: `op` needs an interactive sign-in, so an
+  unattended run would need a stored 1Password credential able to read the DR
+  secrets — issuing that purely to check them trades away the thing being
+  protected. Run it after any rotation, and once or twice a year otherwise:
+  `! op signin` then `./backup/verify-dr-credentials.sh`.
+
 ## Scheduled jobs
 
 - `backup/tigris-backup.sh` → launchd `com.kylelundstedt.tigris-backup`,
@@ -204,7 +239,7 @@ regression.
 - **`--ignore-checksum` is set** (both modes). `crypt` encrypts with a fresh
   random nonce, so a file's ciphertext md5 is non-deterministic; rclone's
   post-copy checksum verify can then false-positive `corrupted on transfer: md5
-  encrypted hashes differ` on re-uploads and block every changed file from
+encrypted hashes differ` on re-uploads and block every changed file from
   backing up (2026-07-28: 6337 spurious failures, stored data verified byte-exact
   correct). The check is meaningless for crypt anyway (`Hashes: null`); real
   integrity is the exact reconcile pass above plus the restore-drill's
