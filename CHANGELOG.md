@@ -4,6 +4,20 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-09-15 — Both relays rebuilt as persistent prod-lane nodes
+
+`iv-llm-relay` and `iv-personal-mcp-relay` recreated on
+`exeslim:2026-09-15.29.1`: no `tailnet` tag, `api-tailscale` attached
+`--for 30m` per VM, boot join as `tag:prod`, `tag:relay` re-added in the console,
+nginx pushed by each `provisioning/<vm>/deploy.sh`. Both now hold persistent
+nodes. Lesson for the runbook: ephemeral nodes are **not** reaped promptly —
+the old ones were still listed 15 minutes after the VMs were deleted and had to
+be removed in the console before the replacements could take their names.
+Verified after: `lmstudio-door` OK (relay chain 2, integration 2), hub-mcp
+reachable through the `personal-mcp` peer proxy (the peer key survived the
+same-name rebuild), check `up`. Fleet outage for LM Studio and hub-mcp was
+about 25 minutes, most of it waiting on the two console steps.
+
 ## 2026-09-15 — `lmstudio-door` check, and three hygiene items
 
 The LM Studio fleet door had no monitoring: a stopped server or a dead relay
