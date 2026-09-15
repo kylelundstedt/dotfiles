@@ -178,6 +178,19 @@ op run --env-file=.env -- your-command
 
 Machine-readable expiry dates live in `provisioning/keys.manifest`, checked monthly by `provisioning/check-key-expiry.sh` (launchd `com.kylelundstedt.check-key-expiry`, 1st of the month, 35-day warning window — wider than the monthly cadence so nothing slips between runs). Optional dead-man's-switch ping URL in the login Keychain under `key-expiry:healthcheck-url`. **Update the manifest's `expires` column on every rotation.**
 
+> **The `(account)` suffix in every reference below is load-bearing, not a
+> footnote.** Two 1Password accounts are signed in on the mini —
+> `lundstedts.1password.com` and `industryvault.1password.com` — and **both have a
+> vault named `Personal`**. `op item get --vault Personal` without `--account`
+> resolves against the wrong account and reports the item as _unreadable_, which
+> is indistinguishable from it having been moved or deleted. That cost a false
+> "DR credentials have drifted" result on 2026-09-15. Always pass
+> `--account <suffix>`, and during an actual restore read the suffix first.
+>
+> Verify the Tigris rows against the live Keychain with
+> `backup/verify-dr-credentials.sh` (SHA-256 comparison, never prints a secret).
+> First run, 2026-09-15: all four matched.
+
 | Credential                           | 1Password item (account)                                        | Expires | Fan-out (rotation must touch all)                                                                                            |
 | ------------------------------------ | --------------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | Tailscale OAuth client               | `op://Employee/Tailscale OAuth` (industryvault)                 | none    | exe.dev `tailscale-api` integration (Basic header), install.sh (mini + VM joins), test-install.sh, skills                    |

@@ -35,19 +35,28 @@ if ! op whoami >/dev/null 2>&1; then
     exit 1
 fi
 
-# keychain-service | 1Password item reference (from agent_docs/secrets.md)
+# keychain-service | 1P account | vault | item name  (from agent_docs/secrets.md)
+#
+# The ACCOUNT is not optional and was the bug in the first version of this
+# script. There are two 1Password accounts signed in here -- lundstedts.1password
+# .com and industryvault.1password.com -- and BOTH have a vault called "Personal".
+# secrets.md annotates these items "(industryvault)" for exactly that reason. An
+# `op item get --vault Personal` with no --account resolves against the wrong
+# account and reports the item as unreadable, which looks identical to the item
+# having been moved or deleted.
 PAIRS=(
-    "tigris-backup:s3-key-id|op://Personal/Tigris mini-backup rclone key"
-    "tigris-backup:s3-secret|op://Personal/Tigris mini-backup rclone key"
-    "tigris-backup:crypt-password|op://Personal/Tigris mini-backup rclone crypt"
-    "tigris-backup:crypt-salt|op://Personal/Tigris mini-backup rclone crypt"
+    "tigris-backup:s3-key-id|industryvault|Personal|Tigris mini-backup rclone key"
+    "tigris-backup:s3-secret|industryvault|Personal|Tigris mini-backup rclone key"
+    "tigris-backup:crypt-password|industryvault|Personal|Tigris mini-backup rclone crypt"
+    "tigris-backup:crypt-salt|industryvault|Personal|Tigris mini-backup rclone crypt"
 )
 
 sha() { printf '%s' "$1" | shasum -a 256 | cut -c1-16; }
 
 pass=0; fail=0
 for pair in "${PAIRS[@]}"; do
-    svc="${pair%%|*}"; ref="${pair#*|}"
+    IFS='|' read -r svc acct vault item <<<"$pair"
+    ref="op://$vault/$item ($acct)"
     kc=$(job_kc "$svc")
     if [[ -z "$kc" ]]; then
         echo "  FAIL $svc — not in the login Keychain (the backup itself would fail)"
@@ -57,16 +66,23 @@ for pair in "${PAIRS[@]}"; do
     # Hash every field value in the item and look for the Keychain value among
     # them. Avoids guessing field names, and reports a rename as "found under a
     # different field" rather than as a mismatch.
-    item=$(op item get "${ref#op://*/}" --vault "$(printf '%s' "$ref" | cut -d/ -f3)" --format json 2>/dev/null)
-    if [[ -z "$item" ]]; then
+    # Keep op's stderr. Discarding it (2>/dev/null) is what made the first
+    # version of this script report "item not readable" for all four values when
+    # the real cause was a missing --account -- the same mute-failure mistake
+    # entire-push-check had, reproduced here within the hour.
+    operr=$(mktemp -t dr-op-err) || operr=/dev/null
+    itemjson=$(op item get "$item" --vault "$vault" --account "$acct" --format json 2>"$operr")
+    if [[ -z "$itemjson" ]]; then
         echo "  FAIL $svc — 1Password item not readable: $ref"
-        fail=$((fail+1)); continue
+        echo "       op: $(tr '\n' ' ' < "$operr" | sed 's/  */ /g;s/ *$//')"
+        rm -f "$operr"; fail=$((fail+1)); continue
     fi
+    rm -f "$operr"
     match=""
     while IFS= read -r v; do
         [[ -z "$v" ]] && continue
         [[ "$(sha "$v")" == "$want" ]] && { match=yes; break; }
-    done < <(printf '%s' "$item" | jq -r '.fields[]?|select(.value!=null)|.value')
+    done < <(printf '%s' "$itemjson" | jq -r '.fields[]?|select(.value!=null)|.value')
     if [[ -n "$match" ]]; then
         echo "  PASS $svc — 1Password copy matches Keychain (sha ${want})"
         pass=$((pass+1))
