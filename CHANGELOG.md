@@ -4,6 +4,25 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-09-15 — Fleet AgentsView archive finally has a backup; rss-feed rebuilt
+
+Asked to rebuild `iv-agentsview` like the relays, the first look showed why
+not yet: the collector VM held the **only copy** of every fleet session since
+the 2026-09-02 demotion — the mini's staged AgentsView snapshot is the mini's
+own source database, not the fleet's — on an ephemeral-node exe.dev VM.
+`backup/agentsview-collector-snapshot.sh` now stages a consistent copy of the
+collector's archive and `config.toml` over the tailnet every night from
+`tigris-backup.sh` (sqlite3 installed on the VM for the online-backup API;
+verified on both ends; rollback-journal mode so later opens leave no side
+files); first run 62 s, 833 sessions, restore-check OK. Also found: the
+collector's `mirror.duckdb` is a dead 2026-07-22 push (zero sessions), the
+quack VMs are an unrelated DuckDB-protocol experiment, the collector runs
+0.38.1 against a 0.42.0 mini with 0.43.0 released 2026-09-14, and `tag:prod`
+cannot reach the mini's `:8080` — so the collector must stay `tag:dev` and its
+rebuild is a restore, sequenced after the version bump (TODO). Separately,
+`rss-feed` was rebuilt on the new exeslim as a persistent `tag:prod` node from
+its repo's `deploy.sh` (feeds verified, public proxy re-set).
+
 ## 2026-09-15 — Both relays rebuilt as persistent prod-lane nodes
 
 `iv-llm-relay` and `iv-personal-mcp-relay` recreated on

@@ -274,6 +274,15 @@ else
     echo "WARN AgentsView snapshot failed; retaining prior known-good snapshot"
     FAILURES+=("agentsview-snapshot")
 fi
+# The FLEET archive lives on the iv-agentsview collector (since 2026-09-02),
+# which has no backup of its own: stage a consistent copy of it too, pulled
+# over the tailnet. Same failure semantics -- keep the prior copy, mark the run.
+if bash "$HOME/dotfiles/backup/agentsview-collector-snapshot.sh"; then
+    echo "agentsview collector snapshot staged"
+else
+    echo "WARN AgentsView collector snapshot failed; retaining prior known-good snapshot"
+    FAILURES+=("agentsview-collector-snapshot")
+fi
 sync_one home   "$HOME/"                          bkup:home --filter-from "$FILTER"
 # msgvault's incremental backup repository (2026-09-10). The live msgvault.db and
 # attachments/ are excluded from the home phase above; this repo is what actually
