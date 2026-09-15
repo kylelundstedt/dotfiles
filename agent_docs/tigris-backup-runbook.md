@@ -263,6 +263,28 @@ encrypted hashes differ` on re-uploads and block every changed file from
   launchd logs are only the latest and are wiped on reboot). Rclone emits
   one-line progress stats every five minutes at NOTICE level.
 
+**Two archives, two staged copies (since 2026-09-15).** The pair above is the
+**mini's own source** database. The **fleet** archive — everything the
+`iv-agentsview` collector has pulled from the 16 sources since the 2026-09-02
+demotion — is staged separately by `backup/agentsview-collector-snapshot.sh`,
+which runs from `tigris-backup.sh` right after the mini snapshot: sqlite3's
+online backup on the VM (installed there for this), verified there, streamed
+over the tailnet, verified again, staged atomically as
+
+```text
+~/archives/agentsview/collector/sessions.db     rollback-journal mode, ~436 MB
+~/archives/agentsview/collector/config.toml     [[remote_hosts]], cursor_secret, the mini's source token (0600)
+~/archives/agentsview/collector/manifest.json   sha256, size, session count, config sha, agentsview version
+```
+
+Validate with `backup/agentsview-restore-check.sh ~/archives/agentsview/collector`
+(the mini's own `agentsview` opens it in isolation; passed on the first run,
+833 sessions). Until this existed the collector VM — an exe.dev VM with an
+ephemeral tailnet node — held the only copy of the fleet archive. A failure
+keeps the prior staged copy and marks the nightly run failed, same as the mini
+snapshot. Rebuilding the collector VM is therefore a restore of this directory,
+not a migration off the old VM.
+
 ### One-time Photos permission after install
 
 After `install.sh` first provisions or replaces the stable osxphotos tool, run

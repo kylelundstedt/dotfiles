@@ -139,6 +139,20 @@ and a separately named attachment.
 
 ### Open
 
+- **Collector backup — DONE 2026-09-15.** The collector had no backup at all
+  (the mini's staged snapshot is the mini's own source DB, frozen for fleet
+  purposes at the 09-02 demotion). `backup/agentsview-collector-snapshot.sh`
+  now stages the fleet archive + `config.toml` nightly; restore-check passes.
+- **Collector rebuild (pending, in this order).** (1) ~~backup~~ done; (2)
+  bump AgentsView fleet-wide to **0.43.0** — collector runs 0.38.1, the mini
+  0.42.0, the iv-provision pin is 0.38.1, and 0.43.0's notes say to upgrade
+  both HTTP sync peers together; (3) recreate `iv-agentsview` on the current
+  exeslim as a **`tag:dev` persistent** node (measured 2026-09-15: `tag:prod`
+  cannot reach the mini's `:8080`, so the prod-lane boot join would silently
+  drop the mini source — join with the dotfiles helper, extended to mint a
+  persistent key), restore `collector/` onto it, install 0.43.0 from the vendor
+  release, drop the stale `mirror.duckdb` (a 2026-07-22 push, zero sessions,
+  unused) and the mirrors of retired hosts, then `provisioning/iv-agentsview/deploy.sh`.
 - **1Password**: the 12 per-host source tokens and the collector UI token in
   "AgentsView" are dead; only the mini's source token is live.
   Delete them (Kyle).

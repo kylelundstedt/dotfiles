@@ -65,10 +65,14 @@ off` / `tailscale serve --https=443 --set-path=/lmstudio off`.
 - **`~/archives/`:** msgvault email, calendar DuckDB, the search hub, and
   external-volume archives. The data contract between dotfiles (backup) and
   personal-mcp (serve).
-- **AgentsView collector (pilot):** launchd serves the authenticated central
-  archive on the mini's Tailscale address (`:8080`) and syncs source daemons at
-  five-minute intervals. The consistent backup authority is staged under
-  `~/archives/agentsview`; see [agentsview-pilot.md](agentsview-pilot.md).
+- **AgentsView:** since 2026-09-02 the mini is a plain **source** (launchd
+  daemon on its tailnet address `:8080`, pulled by the collector); the fleet
+  archive lives on the `iv-agentsview` VM. Two staged backup copies under
+  `~/archives/agentsview/`: the mini's own database (`agentsview-snapshot.sh`)
+  and, since 2026-09-15, the collector's fleet archive plus its config
+  (`collector/`, `agentsview-collector-snapshot.sh`), both pulled into the
+  nightly Tigris run — [tigris-backup-runbook.md](tigris-backup-runbook.md),
+  [agentsview-peer-path.md](agentsview-peer-path.md).
 - **Monitoring:** the healthchecks.io registry ([monitoring.md](monitoring.md))
   covers this host's scheduled jobs.
 - **External disk:** `OWC8TB` (encrypted; unlocked by `backup/owc8tb-unlock.sh`).
