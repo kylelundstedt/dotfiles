@@ -52,6 +52,31 @@ plain text field and is now concealed; three unused 90-day `tag:prod` auth
 keys from 2026-09-11 deleted via the API; the mini's redundant `:8443` LM
 Studio serve door retired — `/lmstudio` on `:443` is the one door.
 
+## 2026-09-15 — Homebrew: drop three untrusted taps; ChatGPT cask now means the new app
+
+Homebrew 7.0 requires explicit trust for third-party taps and silently ignores
+untrusted ones, so their packages stop appearing in `brew list`, `brew upgrade`
+and `brew bundle`. On the mini three taps had fallen into that state —
+`dopplerhq/doppler`, `nikitabobko/tap` (AeroSpace) and `quarylabs/quary`
+(sqruff) — each with a package installed but none in the Brewfile (AeroSpace
+was a commented-out line). All three packages uninstalled and the taps removed;
+the AeroSpace comment dropped from the Brewfile. Doppler's only remaining
+mention is the closed `servicemac_acdc` item in `snowflake-keys.md` (dormant
+since 2025-04). The trust store is per machine (`~/.homebrew/trust.json`); the
+mbp will need the same untap if it carries them.
+
+Gotcha found on the way: the `chatgpt` cask now ships OpenAI's new
+Codex-based desktop app (`com.openai.codex`), and the old app moved to a new
+`chatgpt-classic` cask. A machine that installed `chatgpt` before the switch
+has the old app, which OpenAI's updater renamed in place to `ChatGPT
+Classic.app`, leaving the Caskroom symlink dangling. Fix is
+`brew uninstall --cask --force chatgpt && brew install --cask chatgpt`, then
+trash `ChatGPT Classic.app` by hand. The Brewfile entry is already correct.
+
+The remaining deprecation warnings on every `brew` cask command come from the
+`columnar-tech/tap` (`dbc`) and `xykong/tap` (`flux-markdown`) cask files, not
+from this repo; they will break when Homebrew disables those stanzas.
+
 ## 2026-09-15 — api-tailscale back to least authority: standing only on private dev VMs
 
 Closed the drift found the same day. The `tailnet` exe.dev tag had made the
