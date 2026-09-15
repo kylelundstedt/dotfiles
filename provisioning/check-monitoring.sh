@@ -134,7 +134,36 @@ if (( OPERATIONAL )); then
         since=$(grep -F "$cname"$'\t' "$STATE" 2>/dev/null | head -1 | cut -f2)
         # Tolerate a corrupt/non-numeric state entry by restarting its clock
         # rather than aborting the whole pass.
-        case "$since" in ''|*[!0-9]*) since=$NOW ;; esac
+        case "$since" in ''|*[!0-9]*) since="" ;; esac
+        if [[ -z "$since" ]]; then
+            # No tracked start: this check went down before we began tracking, or
+            # the state file is new. Seeding with $NOW would under-report exactly
+            # the number that matters -- a check down for weeks would read as
+            # "down 0h" on the first run and never trip the STUCK threshold until
+            # 3 more days had passed. So recover the real start from the API: the
+            # last ping that was neither a failure nor a /start is the last time
+            # this check was actually healthy. Costs one request, and only for
+            # checks that are already down with no state.
+            cuuid=$(jq -r --arg n "$cname" '.checks[]|select(.name==$n)|.uuid // ""' <<<"$API_JSON")
+            if [[ -n "$cuuid" ]]; then
+                lastok=$(curl -fsS -m 15 -H "X-Api-Key: $KEY" \
+                    "https://healthchecks.io/api/v3/checks/$cuuid/pings/" 2>/dev/null \
+                    | jq -r '[.pings[]?|select(.type!="fail" and .type!="start")][0].date // ""' 2>/dev/null)
+                # A check broken longer than the retained ping window has no
+                # success to find at all (tigris-backup-reconcile: last success
+                # 2026-08-23, every retained ping a fail). Fall back to the
+                # OLDEST retained ping, which makes the duration a lower bound
+                # instead of resetting it to zero -- "down at least 2d" is true
+                # and trips the threshold; "down 0h" is neither.
+                [[ -z "$lastok" ]] && lastok=$(curl -fsS -m 15 -H "X-Api-Key: $KEY" \
+                    "https://healthchecks.io/api/v3/checks/$cuuid/pings/" 2>/dev/null \
+                    | jq -r '[.pings[]?]|last|.date // ""' 2>/dev/null)
+                if [[ -n "$lastok" ]]; then
+                    since=$(date -j -u -f "%Y-%m-%dT%H:%M:%S" "${lastok:0:19}" +%s 2>/dev/null || echo "")
+                fi
+            fi
+            [[ -z "$since" ]] && since=$NOW
+        fi
         down_for=$(( NOW - since ))
         [[ -n "$NEW_STATE" ]] && printf '%s\t%s\n' "$cname" "$since" >> "$NEW_STATE"
         if (( down_for >= STUCK_AFTER )); then
