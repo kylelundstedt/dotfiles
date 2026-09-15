@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# Scheduling wrapper for provisioning/check-monitoring.sh --operational: a
+# dead-man's switch on the monitoring system itself.
+#
+# WHY THIS EXISTS (2026-09-15). check-monitoring.sh was only ever run by hand,
+# inside `test-install.sh provisioning`. It asserted that every check's schedule,
+# grace and channel matched the manifest — and passed every time through two
+# incidents it was perfectly placed to catch:
+#
+#   - agentsview-retention sat at n_pings=0 from 2026-07-28 to 08-26. Config
+#     correct, ping call malformed, 404 swallowed. Configuration was asserted;
+#     arrival never was.
+#   - tigris-backup was red for 41 days (07-27..09-06). healthchecks.io alerts on
+#     the TRANSITION into DOWN, so when the failure got much worse on 08-27 (the
+#     backup stopped completing at all, four archive phases skipped nightly, the
+#     weekly verify blocked) it produced exactly the same silence as the day
+#     before. Eleven days passed before anyone looked.
+#
+# An assertion nobody runs is not a guard. So this runs it daily and pings its
+# own check: if the monitoring self-audit stops running, healthchecks.io says so.
+#
+# LIMIT, stated plainly: this is one level of meta, not a solution to
+# repeat-notification. If THIS check goes red and stays red it goes quiet too.
+# What it buys is a fresh UP->DOWN transition when some other check has been
+# stuck for days — one more alert than before, at the point where the old model
+# had gone permanently silent. A real fix is a periodic digest that reports state
+# rather than transitions.
+#
+# Pass --dry-run to audit without pinging.
+set -uo pipefail
+umask 077
+
+DRY_RUN=0
+[[ "${1:-}" == "--dry-run" ]] && DRY_RUN=1
+
+source "$HOME/dotfiles/backup/_lib.sh"
+job_require_mini monitoring-meta
+[[ $DRY_RUN -eq 1 ]] || { job_hc_init "monitoring-meta:healthcheck-url"; job_log "$HOME/Library/Logs/monitoring-meta"; }
+
+CHECKER="$HOME/dotfiles/provisioning/check-monitoring.sh"
+
+fail() {
+    local reason=$1
+    echo "FAIL: $reason"
+    [[ $DRY_RUN -eq 1 ]] || job_hc /fail --data-raw "monitoring-meta $(date '+%F %T') $reason"
+    exit 1
+}
+
+# Fail loudly if the auditor is missing rather than reporting green. A wrapper
+# that silently no-ops when its target moved is precisely the shape of bug this
+# pair exists to catch — same lesson as entire-push-check's wrapper.
+[[ -x "$CHECKER" ]] || fail "check-monitoring.sh not executable at $CHECKER"
+
+# Ping /start BEFORE auditing, because this job audits itself. Without it the
+# first run reads its own n_pings=0, reports "configured but not wired", and
+# fails itself — a real bootstrap paradox observed on 2026-09-15. /start also
+# matches what every other job here does.
+[[ $DRY_RUN -eq 1 ]] || job_hc /start
+
+out=$("$CHECKER" --operational 2>&1)
+rc=$?
+printf '%s\n' "$out" | sed 's/^/  /'
+
+# The auditor exits 0 when it cannot reach the API or has no Keychain key, so it
+# never blocks an install. Here that would be a silent pass on no information, so
+# treat a skip as a failure of THIS job.
+if printf '%s' "$out" | grep -q '\[skip\]'; then
+    fail "auditor could not run: $(printf '%s' "$out" | grep '\[skip\]' | head -1 | sed 's/^ *//')"
+fi
+
+if (( rc != 0 )); then
+    summary=$(printf '%s' "$out" | grep -E '^\s*\[(DRIFT|SILENT|STUCK)\]' | sed 's/^ *//' | head -4 | tr '\n' ';')
+    fail "monitoring problems: ${summary:-see log}"
+fi
+
+counts=$(printf '%s' "$out" | grep -cE '^\s*\[ok\]' || true)
+downs=$(printf '%s' "$out" | grep -cE '^\s*\[down\]' || true)
+msg="monitoring-meta $(date '+%F %T') ok: ${counts} assertion(s) passed, ${downs} check(s) down but alerting normally"
+echo "OK: $msg"
+# Empty first arg is the ping PATH (bare = success). Passing --data-raw as $1
+# would append it to the URL and 404 silently — the exact bug that left
+# agentsview-retention never pinging for a month.
+job_hc "" --data-raw "$msg"
