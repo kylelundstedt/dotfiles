@@ -6,8 +6,40 @@
 #
 # Needs the read-write API key in the login Keychain (healthchecks:api-key,
 # mini-only); exits 0 with a skip message elsewhere. Exit 1 on drift.
+#
+# --operational additionally asserts that monitoring is still WORKING, not just
+# configured. Two blind spots cost real incidents:
+#
+#   1. A check can be perfectly configured and never receive a ping. This script
+#      vouched for `agentsview-retention` every run from 2026-07-28 to 08-26
+#      while it sat at n_pings=0 — schedule, grace, channel and manifest row all
+#      correct, but the ping call was malformed and 404'd silently. Configuration
+#      was asserted; ARRIVAL never was.
+#   2. healthchecks.io alerts on the TRANSITION into DOWN, so a check that is
+#      already red never alerts again. `tigris-backup` was red for 41 days
+#      (2026-07-27..09-06); when its failure got much worse on 08-27 — backup
+#      never completing, four archive phases skipped nightly, the weekly verify
+#      blocked — that produced exactly the same silence as the day before. A
+#      stuck check is indistinguishable from a healthy one from the inbox.
+#
+# The STUCK assertion re-raises those: when a check has been down longer than the
+# threshold, THIS check fails, so its own UP->DOWN transition fires a fresh alert
+# about a stale problem. That is one new alert, not repeating ones — if the
+# underlying check stays broken this one stays red and also goes quiet. It turns
+# "never told again" into "told once more, days in", which is the gap that
+# mattered. A genuine fix for repeat notification needs a digest, not a check.
 set -uo pipefail
 source "$(cd "$(dirname "$0")/.." && pwd)/backup/_lib.sh"
+
+OPERATIONAL=0
+[[ "${1:-}" == "--operational" ]] && OPERATIONAL=1
+# How long a check may sit DOWN before we treat it as no longer alerting.
+STUCK_AFTER=${MONITORING_STUCK_AFTER:-$((3 * 24 * 3600))}
+# First-seen-down timestamps. The API exposes status and last_ping but not a
+# down-since: a job pinging /fail hourly has a fresh last_ping while being red
+# for weeks, so duration has to be tracked here.
+STATE_DIR="$HOME/Library/Application Support/check-monitoring"
+STATE="$STATE_DIR/down-since.tsv"
 
 MANIFEST="$(cd "$(dirname "$0")" && pwd)/checks.manifest"
 KEY=$(job_kc "healthchecks:api-key")
@@ -22,8 +54,10 @@ API_JSON=$(curl -fsS -m 15 -H "X-Api-Key: $KEY" https://healthchecks.io/api/v3/c
 }
 
 FAIL=0
-ok()    { echo "  [ok]   $*"; }
-drift() { echo "  [DRIFT] $*"; FAIL=1; }
+ok()     { echo "  [ok]   $*"; }
+drift()  { echo "  [DRIFT] $*"; FAIL=1; }
+silent() { echo "  [SILENT] $*"; FAIL=1; }
+stuck()  { echo "  [STUCK] $*"; FAIL=1; }
 
 seen_names=()
 while IFS='|' read -r name sched tz grace job; do
@@ -58,6 +92,18 @@ while IFS='|' read -r name sched tz grace job; do
     # check routes somewhere.
     got_ch=$(jq -r '.channels // ""' <<<"$row")
     [[ -n "$got_ch" ]] && ok "$name has a notification channel" || drift "$name has NO notification channel (alerts go nowhere)"
+    # ARRIVAL, not just configuration. A manifest check at n_pings=0 has never
+    # been exercised: either the job has never run or its ping is malformed.
+    # Right config with nothing arriving is worse than no check, because
+    # everything above this line reports it as covered.
+    #
+    # NOTE this fails for a check legitimately created minutes ago whose job has
+    # not run yet. That is the intended trade: a newly added check is expected to
+    # be exercised once before it counts as wired, and the noise is bounded to
+    # one run. Kickstart the job rather than waiting it out.
+    got_pings=$(jq -r '.n_pings // 0' <<<"$row")
+    if [[ "$got_pings" -gt 0 ]]; then ok "$name has been pinged (${got_pings})"
+    else silent "$name has NEVER been pinged (n_pings=0) — configured but not wired"; fi
 done < <(grep -vE '^[[:space:]]*#|^[[:space:]]*$' "$MANIFEST")
 
 # Reverse: every live check must be in the manifest (unmonitored-by-registry)
@@ -67,6 +113,44 @@ while IFS= read -r live; do
     $found || drift "live check '$live' not in checks.manifest"
 done < <(jq -r '.checks[].name' <<<"$API_JSON")
 
+if (( OPERATIONAL )); then
+    echo ""
+    NOW=$(date +%s)
+    mkdir -p "$STATE_DIR" 2>/dev/null || true
+    [[ -f "$STATE" ]] || : > "$STATE"
+    NEW_STATE=$(mktemp -t check-monitoring-state) || NEW_STATE=""
+    while IFS=$'\t' read -r cname cstatus; do
+        [[ -z "$cname" ]] && continue
+        # A paused check is not monitoring anything and never will until resumed.
+        # It reads as "not down", which is the same trap as a stuck check.
+        if [[ "$cstatus" == "paused" ]]; then
+            silent "$cname is PAUSED — not monitoring"
+            continue
+        fi
+        if [[ "$cstatus" != "down" ]]; then
+            ok "$cname is $cstatus"
+            continue
+        fi
+        since=$(grep -F "$cname"$'\t' "$STATE" 2>/dev/null | head -1 | cut -f2)
+        # Tolerate a corrupt/non-numeric state entry by restarting its clock
+        # rather than aborting the whole pass.
+        case "$since" in ''|*[!0-9]*) since=$NOW ;; esac
+        down_for=$(( NOW - since ))
+        [[ -n "$NEW_STATE" ]] && printf '%s\t%s\n' "$cname" "$since" >> "$NEW_STATE"
+        if (( down_for >= STUCK_AFTER )); then
+            stuck "$cname has been DOWN $(( down_for / 86400 ))d $(( (down_for % 86400) / 3600 ))h — past $(( STUCK_AFTER / 86400 ))d, so healthchecks.io has stopped alerting on it"
+        else
+            echo "  [down]  $cname is down $(( down_for / 3600 ))h (alerting normally; flagged at $(( STUCK_AFTER / 86400 ))d)"
+        fi
+    done < <(jq -r '.checks[] | [.name, .status] | @tsv' <<<"$API_JSON")
+    # Replace state wholesale so recovered checks drop out and their clock resets.
+    [[ -n "$NEW_STATE" ]] && mv "$NEW_STATE" "$STATE" 2>/dev/null || true
+fi
+
 echo ""
-if [[ $FAIL -eq 0 ]]; then echo "check-monitoring: no drift"; else echo "check-monitoring: DRIFT FOUND"; fi
+if [[ $FAIL -eq 0 ]]; then
+    echo "check-monitoring: no drift$( (( OPERATIONAL )) && echo ", nothing silent or stuck")"
+else
+    echo "check-monitoring: PROBLEMS FOUND"
+fi
 exit $FAIL
