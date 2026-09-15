@@ -178,6 +178,41 @@ op run --env-file=.env -- your-command
 
 Machine-readable expiry dates live in `provisioning/keys.manifest`, checked monthly by `provisioning/check-key-expiry.sh` (launchd `com.kylelundstedt.check-key-expiry`, 1st of the month, 35-day warning window — wider than the monthly cadence so nothing slips between runs). Optional dead-man's-switch ping URL in the login Keychain under `key-expiry:healthcheck-url`. **Update the manifest's `expires` column on every rotation.**
 
+## What belongs in 1Password, and what does not
+
+> Swept 2026-09-15: all 60 generic-password services in the mini's login Keychain
+> were cross-referenced against this table and `provisioning/keys.manifest`.
+
+The test is not "is it a secret" — most of that Keychain is secrets. It is:
+
+**Can this be re-derived or re-issued without the mini? If no, it must be mirrored
+to 1Password and listed here.**
+
+Three categories, and only the first needs an entry:
+
+1. **Irreplaceable.** Lose the mini and lose the data. The Tigris crypt
+   password/salt, the OWC8TB passphrase, and — found missing by this sweep — the
+   iPhone backup password, without which 165.7 GiB of `arch:iphone-backup` is
+   undecryptable ciphertext. All four are now mirrored and verified by
+   `backup/verify-dr-credentials.sh`.
+2. **Derivable from something in category 1.** The seventeen
+   `*:healthcheck-url` items are all re-fetchable from the healthchecks.io API
+   given `healthchecks:api-key`, which is inventoried — verified 2026-09-15, 17
+   ping URLs returned for 17 Keychain entries. Mirroring each would be seventeen
+   rows that add nothing and drift silently. **Do not inventory these**; inventory
+   the root credential they come from.
+3. **Re-issued by authenticating again.** `gh:github.com`, `boxcli`,
+   `Claude Code-credentials`, `Codex MCP Credentials`, every `* Safe Storage`
+   item, the `com.apple.*` set, 1Password's own device keys, and the JumpCloud
+   MDM entries. Recovery is a login, not a restore.
+
+**The failure mode this guards against** is not a missing backup — it is a
+credential that looks routine sitting beside one that is load-bearing, with
+nothing distinguishing them. The iPhone backup password had lived in the Keychain
+since 2026-06-27 and was in neither registry, so the largest archive in the
+backup was one dead Mac away from unreadable and nothing would have said so.
+A category-1 secret that is not in this table is invisible by construction.
+
 > **The `(account)` suffix in every reference below is load-bearing, not a
 > footnote.** Two 1Password accounts are signed in on the mini —
 > `lundstedts.1password.com` and `industryvault.1password.com` — and **both have a
