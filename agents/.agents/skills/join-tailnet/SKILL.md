@@ -63,6 +63,16 @@ authority this change removed.
   removed from the tailnet and must be re-joined by re-running this script.
 - `--tag=iv` at VM creation is **no longer sufficient or required** for tailnet
   joining. It still governs other `tag:iv` integrations.
+- **Prod-lane images self-join at boot (since exeslim 2026-08-23).** The
+  `exeslim` (not `exeslim-dev`) image ships `iv-tailnet-join.service`: at first
+  boot it probes the `api-tailscale` proxy and, if attached, mints a
+  **`tag:prod`** key and joins. `api-tailscale` is attached to the exe.dev tag
+  `tailnet`, so `new --tag=tailnet` on an exeslim VM means it is on the tailnet
+  as `tag:prod` seconds after boot, and this helper then exits early ("already
+  on the tailnet"). To get `tag:dev` on such a VM: `sudo tailscale logout` on
+  it, then run this helper. Seen on `iv-llm-relay` 2026-09-15.
+- **The "not attached by default" statement above is stale for `tag:tailnet`
+  VMs** — see the TODO item "Reconcile the tailnet-join doctrine".
 
 ## SSH discipline
 

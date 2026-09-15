@@ -150,14 +150,28 @@ no other credential and no state.
 models` (the CLI) always runs discovery fresh, so it is not a proof that the
   running server sees the model — check `/api/models` over the socket.
 
-- **`tag:prod` on the relay node.** The join helper requested `tag:dev`
-  (`join-tailnet.sh` line ~149, `"tags":["tag:dev"]`) and the node came up
-  `tag:prod`; `rss-feed` is the only other `tag:prod` node. The 1Password
-  "Tailscale OAuth" client is documented `tag:dev`-only, so the credential
-  exe.dev's `api-tailscale` integration injects is probably a different client,
-  or that client's tag list changed. Check admin console → Settings → OAuth
-  clients before the next join. Harmless for the relay: `tag:relay` carries the
-  mini grant and SSH from the mini works.
+- **`tag:prod` on the relay node — explained 2026-09-15, and correct.** The
+  exeslim prod-lane image ships `iv-tailnet-join.service` (exeslim `main`,
+  PRs #3–#5, 2026-08-23; built into `exeslim:2026-08-28.24.1`). At first boot
+  it exchanges a token through the `api-tailscale` proxy and, if that answers,
+  mints a **`tag:prod`** key and runs `tailscale up` — "tag:prod, never
+  tag:dev. Prod VMs are internet-facing." The gate is the integration
+  attachment, and `api-tailscale` is attached to the exe.dev tag `tailnet`, so
+  `new --tag=tailnet` is consent to self-join. The relay's journal shows the
+  login at 20:56:02, two seconds after boot and before anything else ran; the
+  dotfiles `join-tailnet` helper, run later, found the node already up under
+  the right hostname and correctly did nothing. The dev image (`exeslim-dev`)
+  does **not** carry the unit; dev VMs join via `provision-iv.sh` as
+  `tag:dev`. So for a prod-lane VM `tag:prod` + `tag:relay` is the designed
+  posture: no dev-mesh access it does not need, `tcp:22` inbound from
+  `tag:mini`/`tag:dev` for verification, and the mini grant via `tag:relay`.
+  `iv-personal-mcp-relay` is `tag:dev` + `tag:relay` only because it was
+  re-registered by hand on 2026-09-02 18:08 (a `tag:dev` key of that second is
+  in the key list); its port is private, so it is tolerable, but the two relays
+  differ for no design reason. To force `tag:dev` on a prod-lane box:
+  `sudo tailscale logout`, then the `join-tailnet` helper (which mints
+  `tag:dev`) — the unit's `IV_TAILSCALE_TAG` override needs a systemd drop-in,
+  since nothing sets it at boot.
 - The personal-mcp relay's nginx config is now versioned too
   (`provisioning/iv-personal-mcp-relay/`), same template + `deploy.sh` shape,
   no secret to render.

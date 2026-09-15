@@ -4,6 +4,22 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-09-15 — Why the LLM relay joined as `tag:prod` (and a doctrine drift)
+
+The new `iv-llm-relay` came up `tag:prod` although `join-tailnet` asked for
+`tag:dev`. Not the helper and not the OAuth client: the exeslim prod-lane image
+carries `iv-tailnet-join.service` (exeslim PRs #3–#5, 2026-08-23), which at
+first boot mints a `tag:prod` key through the `api-tailscale` proxy whenever
+that integration is attached — and it is attached to the exe.dev tag `tailnet`.
+The journal shows the self-join two seconds after boot; the helper later found
+the node up and did nothing. Kept `tag:prod` + `tag:relay` as the intended
+posture for an internet-facing appliance. The dev image has no such unit.
+Side finding: `api-tailscale` is a standing attachment on 19 VMs including
+`rss-feed` and `telnyx-vm`, which the 2026-07-28 remediation had removed it
+from; the skill and remediation doc still describe attach-then-detach. Logged
+as a decision in TODO; `secrets.md`'s OAuth-client line corrected (tags include
+`tag:prod`; the client currently gets 403 on devices/ACL reads).
+
 ## 2026-09-15 — LM Studio on the mini served to the fleet via an llm integration
 
 LM Studio (`127.0.0.1:1234`, JIT loading already on) got two tailnet-only
