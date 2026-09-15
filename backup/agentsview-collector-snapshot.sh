@@ -64,19 +64,21 @@ run_bounded 1200 "${SSH[@]}" "cat $REMOTE_TMP && rm -f $REMOTE_TMP" > "$DB_TMP" 
 version_json=$("${SSH[@]}" 'agentsview version --format json 2>/dev/null' || printf '{"version":"unknown"}')
 [[ -n "$version_json" ]] || version_json='{"version":"unknown"}'
 
-# 3. Verify here: what landed is what was hashed there, and it opens clean.
-size=$(wc -c < "$DB_TMP" | tr -d '[:space:]')
-sha=$(shasum -a 256 "$DB_TMP" | awk '{print $1}')
-[[ "$sha" == "$remote_sha" && "$size" == "$remote_size" ]] || {
-    echo "FATAL: transfer mismatch (remote $remote_sha/$remote_size, local $sha/$size)" >&2; exit 1; }
-[[ "$(sqlite3 "$DB_TMP" 'PRAGMA integrity_check;')" == "ok" ]] || {
-    echo "FATAL: local integrity_check failed" >&2; exit 1; }
-# The staged copy is a backup artifact, not a live database: switch it to the
-# rollback journal so every later open (integrity checks, restore-check) leaves
-# no -wal/-shm side files beside the backup authority. A restore re-enables WAL
-# the moment the daemon opens it.
+# 3. Verify the transfer against the VM-side hash, then switch the staged copy
+# to the rollback journal — a backup artifact, not a live database — so later
+# opens (integrity checks, restore-check) leave no -wal/-shm beside it. That
+# rewrite changes the file, so the manifest hash is taken AFTER it (the first
+# version hashed before, and restore-check rejected its own fresh snapshot).
+xfer_size=$(wc -c < "$DB_TMP" | tr -d '[:space:]')
+xfer_sha=$(shasum -a 256 "$DB_TMP" | awk '{print $1}')
+[[ "$xfer_sha" == "$remote_sha" && "$xfer_size" == "$remote_size" ]] || {
+    echo "FATAL: transfer mismatch (remote $remote_sha/$remote_size, local $xfer_sha/$xfer_size)" >&2; exit 1; }
 [[ "$(sqlite3 "$DB_TMP" 'PRAGMA journal_mode=DELETE;')" == "delete" ]] || { echo "FATAL: could not set journal_mode" >&2; exit 1; }
 rm -f "$DB_TMP-shm" "$DB_TMP-wal"
+[[ "$(sqlite3 "$DB_TMP" 'PRAGMA integrity_check;')" == "ok" ]] || {
+    echo "FATAL: local integrity_check failed" >&2; exit 1; }
+size=$(wc -c < "$DB_TMP" | tr -d '[:space:]')
+sha=$(shasum -a 256 "$DB_TMP" | awk '{print $1}')
 cfg_sha=$(shasum -a 256 "$CFG_TMP" | awk '{print $1}')
 [[ -s "$CFG_TMP" ]] || { echo "FATAL: config.toml empty" >&2; exit 1; }
 created=$(date -u +%FT%TZ)
