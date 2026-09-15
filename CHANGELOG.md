@@ -19,9 +19,11 @@ deliberately not reused because its port would have to go public. Findings
 worth keeping: exe.dev only lists models it discovers itself (the Models field
 is a filter, not a list); `--peer` on an llm provider is silently ignored;
 Tailscale SSH has no SFTP so `scp` fails; `proxy_pass` with a variable drops
-the URI (use `rewrite … break`). Design and runbooks:
-[agent_docs/llm-relay.md](agent_docs/llm-relay.md). Left open: `tag:relay` on
-the relay node (admin console), then fleet attach. The July closure of the
+the URI (use `rewrite … break`). The relay's nginx config is versioned as
+`provisioning/iv-llm-relay/relay.nginx` and pushed by its `deploy.sh` (key
+rendered from 1Password at deploy time), mirroring `provisioning/iv-agentsview/`.
+Verified end to end on `iv-cli` and attached `auto:all`. Design and runbooks:
+[agent_docs/llm-relay.md](agent_docs/llm-relay.md). The July closure of the
 subscription-gateway design is untouched — local models carry none of that
 policy weight.
 

@@ -1,9 +1,9 @@
 # LM Studio for the fleet — the `iv-llm-relay` bridge
 
-> Status: **BUILT 2026-09-15, awaiting one admin-console step** (add
-> `tag:relay` to the `iv-llm-relay` node; see "Open"). Until then exe.dev's
-> model discovery fails at the tailnet hop and Shelley shows no LM Studio
-> models.
+> Status: **WORKING 2026-09-15.** Verified end to end on `iv-cli`: exe.dev
+> discovers the model, Shelley lists `qwen/qwen3.6-35b-a3b@lmstudio`, and a
+> chat completed through relay → mini → LM Studio (6.4k-token Shelley system
+> prompt, ~29 s on the 35B-A3B model). Attached `auto:all`.
 
 ## What it is
 
@@ -85,17 +85,19 @@ append the request URI — the `rewrite … break` is what carries the path.
 
 **Add the Studio Ultra.** On the Ultra: `tailscale serve --bg
 --set-path=/lmstudio http://127.0.0.1:1234` and make sure the policy lets
-`tag:relay` reach it on `tcp:443`. On the relay: copy the `/mini/` location to
-`/ultra/` with the Ultra's tailnet name; `nginx -t && systemctl reload nginx`.
+`tag:relay` reach it on `tcp:443`. In the repo: copy the `/mini/` location in
+`provisioning/iv-llm-relay/relay.nginx` to `/ultra/` with the Ultra's tailnet
+name, then `provisioning/iv-llm-relay/deploy.sh` (idempotent; reloads nginx
+only on change and checks the 403 gate).
 On exe.dev: `integrations edit lmstudio --custom-provider=lmstudio-ultra=https://iv-llm-relay.exe.xyz/ultra/v1 --custom-provider-api=openai_responses --header=X-LLM-Relay-Key:<key>`
 (check whether `edit` keeps the first provider; if not, re-add both), then set
 that provider's Models filter in the UI. With two providers the models carry
 the provider id, so both hosts' models are distinguishable in the picker.
 
-**Rotate the key.** `openssl rand -hex 32`; update the 1Password item; edit the
-key in `/etc/nginx/sites-enabled/relay` and reload nginx; `integrations edit
-lmstudio --header=X-LLM-Relay-Key:<new>` (replaces all headers). Order does
-not matter beyond a few seconds of 403s.
+**Rotate the key.** `openssl rand -hex 32`; update the 1Password item; run
+`provisioning/iv-llm-relay/deploy.sh` (renders the new key into nginx);
+`integrations edit lmstudio --header=X-LLM-Relay-Key:<new>` (replaces all
+headers). Order does not matter beyond a few seconds of 403s.
 
 **Check the chain from the mini.**
 
@@ -108,10 +110,12 @@ ssh iv-cli 'shelley models | grep -i lmstudio'                                  
 ```
 
 **Rebuild the relay.** `ssh exe.dev new --name=iv-llm-relay --image=ghcr.io/kylelundstedt/exeslim:2026-08-28.24.1 --tag=tailnet`,
-`apt-get install nginx-light`, `join-tailnet.sh iv-llm-relay`, install the
-nginx file (key from 1Password), `share port … 8000` + `share set-public`,
-add `tag:relay` in the admin console. Tailscale SSH does not serve SFTP, so
-copy files with `ssh … 'cat > /tmp/x' < x`, not `scp`.
+`join-tailnet.sh iv-llm-relay`, `provisioning/iv-llm-relay/deploy.sh` (installs
+nginx-light if missing, renders the key from 1Password), `share port … 8000`
+
+- `share set-public`, add `tag:relay` in the admin console. Tailscale SSH does
+  not serve SFTP, so the deploy script uses the `.exe.xyz` endpoint; over the
+  tailnet copy files with `ssh … 'cat > /tmp/x' < x`, not `scp`.
 
 ## Threat model, briefly
 
@@ -124,13 +128,19 @@ no other credential and no state.
 
 ## Open
 
-- **`tag:relay` on `iv-llm-relay`** — admin console → Machines → iv-llm-relay
-  → Edit ACL tags. The node also came up as `tag:prod` rather than the
-  `tag:dev` the join helper requests (unexplained; the OAuth client is
-  documented as `tag:dev`-only) — fix in the same edit. Until this is done the
-  relay's upstream hop times out and discovery stays empty.
-- Fleet rollout after verification on `iv-cli`: `integrations attach lmstudio auto:all`
-  (matches the default `llm` integration's scope).
-- Models filter for the mini provider: `qwen/*` or an explicit list, not `*`.
+- **Models filter** for the mini provider is currently the single ID
+  `qwen/qwen3.6-35b-a3b` (set in the UI during bring-up; the CLI has no flag for
+  it). Widen to `qwen/*` or an explicit list — not `*`, which drags every loaded
+  embedding instance into the picker.
+- **Running Shelley servers do not re-discover integrations on their own.** A
+  server started before the attach says "unsupported model" until the picker's
+  `Add / Remove Models… → Refresh` or a `systemctl restart shelley`. `shelley
+models` (the CLI) always runs discovery fresh, so it is not a proof that the
+  server sees the model.
+- The relay node carries `tag:prod` + `tag:relay`; `tag:dev` was expected from
+  the join helper and is what the other relay has. Unexplained; harmless so far
+  (SSH from the mini works via the tag:prod `tcp:22` rule).
+- Tailnet policy is still admin-console-only (the OAuth client in 1Password is
+  `auth_keys`-scoped), so `tag:relay` on a rebuilt relay is a manual step.
 - Coverage: `iv-llm-relay` is a bare appliance and is listed in
   `provisioning/agentsview-coverage-exclude.txt`.
