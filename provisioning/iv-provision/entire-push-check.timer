@@ -1,0 +1,15 @@
+[Unit]
+Description=Daily Entire checkpoint durability check
+
+[Timer]
+# Daily, matching the check's healthchecks.io period of 86400s with 3600s grace.
+# Unpushed checkpoints are a slow-moving condition, and the per-host pass SSHes
+# to every fleet host, so hourly would be both pointless and rude to exe.dev.
+OnCalendar=daily
+# Spread away from midnight so it does not pile onto the nightly cascade, and
+# randomise so a fleet-wide restart does not synchronise every VM's probe.
+RandomizedDelaySec=30m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

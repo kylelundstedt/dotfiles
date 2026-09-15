@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# Scheduling + heartbeat wrapper for iv-provision's entire-push-check, running
+# ON the iv-provision VM.
+#
+# WHY IT MOVED HERE (2026-09-15). This ran on klundstedt-mini and failed every
+# scheduled run from 2026-09-13. The mini authenticates to the exe.dev control
+# plane with an SSH key served by the 1Password agent, and 1Password auto-locks
+# after 60 minutes (security.autolock.minutes). A headless always-on host is
+# therefore locked at almost any scheduled moment; with BatchMode=yes there is no
+# fallback, and the off-VM integration URL (api-exe-new.int.exe.xyz) is
+# unroutable from the mini. Both inventory paths failed and the check failed
+# closed. Every success in its history was an interactive run, which is what
+# made it look intermittent.
+#
+# iv-provision is the control-plane host: it creates VMs, lists them, and manages
+# integrations, so it reaches exe.dev through the http-proxy integration and
+# needs no SSH key at all. Verified here 2026-09-15: the integration returns 21
+# VMs, and 24 tailnet peers are visible for the per-host git inspection. The
+# dependency is eliminated rather than worked around, and control-plane access
+# stays concentrated on the one host that is supposed to have it.
+#
+# What deliberately did NOT move: the healthchecks.io check itself. A dead-man's
+# switch must not share fate with the host it watches, so alerting stays off-box.
+# Only the probe moves to where its inputs already are.
+#
+# Inputs: HC_URL from ~/.config/entire-push-check/env (mode 0600, loaded by the
+# unit). That is the one value living on this VM and it can only spoof a
+# heartbeat -- same reasoning as agentsview-coverage on iv-agentsview.
+# Pass --dry-run to report without pinging.
+set -uo pipefail
+umask 077
+
+DRY_RUN=0
+[[ "${1:-}" == "--dry-run" ]] && DRY_RUN=1
+
+hc() { [[ -n "${HC_URL:-}" && $DRY_RUN -eq 0 ]] && curl -fsS -m 10 --retry 3 "${HC_URL}${1:-}" "${@:2}" >/dev/null 2>&1 || true; }
+
+fail() {
+    echo "FAIL: $1"
+    hc /fail --data-raw "entire-push-check $(hostname) $(date '+%F %T') $1"
+    exit 1
+}
+
+# Resolve the check by naming candidates and failing LOUDLY when none is found.
+# A wrapper that silently no-ops after its checkout moved would report green
+# forever, which is the exact failure mode this check exists to prevent.
+CHECK=""
+for c in "$HOME/iv-provision/bin/entire-push-check" \
+         "$HOME/github/kylelundstedt/iv-provision/bin/entire-push-check"; do
+    [[ -x "$c" ]] && { CHECK="$c"; break; }
+done
+[[ -n "$CHECK" ]] || fail "iv-provision checkout not found; cannot run entire-push-check"
+
+hc /start
+out=$("$CHECK" 2>&1); rc=$?
+printf '%s\n' "$out"
+
+if (( rc != 0 )); then
+    fail "$(printf '%s' "$out" | tail -3 | tr '\n' ' ')"
+fi
+
+# Bare path on success. Passing --data-raw as the first argument would append it
+# to the URL and 404 silently -- the bug that left a sibling check never pinging
+# for a month.
+hc "" --data-raw "entire-push-check $(hostname) $(date '+%F %T') $(printf '%s' "$out" | tail -1)"

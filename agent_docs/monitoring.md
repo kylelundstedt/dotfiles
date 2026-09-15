@@ -148,25 +148,48 @@ durable **only once pushed** — an unpushed checkpoint dies with the host and
 nothing else notices. Found for real on 2026-07-28 (`iv-foundry-stage2` held 5
 on `fannie-sflpd`).
 
-**The check itself lives in `iv-provision` (`bin/entire-push-check`) since
-2026-08-24 (#22).** What stays here is the personal scheduling concern: the
-launchd job, the Keychain ping URL and the log. `maint/.local/bin/entire-push-check`
-is a thin wrapper that resolves the real check by naming candidate checkout
-paths and **fails loudly** (pinging `/fail`) if none is found — a wrapper that
-silently no-opped after a checkout moved would report green forever.
+**The check lives in `iv-provision` (`bin/entire-push-check`) since 2026-08-24
+(#22), and since 2026-09-15 it also RUNS there**, on the iv-provision VM, via
+`entire-push-check.timer` (daily, `RandomizedDelaySec=30m`). Scheduling and the
+heartbeat are deployed from `provisioning/iv-provision/` with `deploy.sh`; the
+check itself is not copied, because that checkout is already on the VM and
+updates by git pull — one copy, one source of truth. `HC_URL` lives on the VM in
+`~/.config/entire-push-check/env` (0600, loaded by the unit); it can only spoof a
+heartbeat, and the read-write API key stays in the mini Keychain. Exclusions
+travel with the check in `iv-provision/provisioning/entire-push-exclude.txt`
+(one entry: `iv-foundry-stage2:worktrees/entire-agent-shelley-m4`, excused
+2026-08-26 — a bootstrap ref that cannot be pushed because that VM's integration
+for the repo is read-only).
 
-`com.kylelundstedt.entire-push-check` runs it **daily**, not hourly: it SSHes
-to every fleet host and reaches exe.dev-only hosts over the rate-limited
-`*.exe.xyz` path, and an unpushed checkpoint is a slow-moving condition.
-Keychain `entire-push-check:healthcheck-url`; exclusions moved with the check to
-**`iv-provision/provisioning/entire-push-exclude.txt`** and are resolved relative
-to the script there (one entry: `iv-foundry-stage2:worktrees/entire-agent-shelley-m4`,
-excused 2026-08-26 — a bootstrap ref that cannot be pushed because that VM's
-integration for the repo is read-only). `--dry-run` reports without pinging.
+**Why it moved off the mini — a job must not depend on an interactive app's
+state.** On the mini it failed every scheduled run from 2026-09-13. Host
+discovery needs the exe.dev inventory; off-VM that means
+`ssh exe.dev ls --json`, and the mini's exe.dev key is served by the 1Password
+agent, which auto-locks after 60 minutes (`security.autolock.minutes`). A
+headless always-on host is locked at nearly any scheduled moment, `BatchMode=yes`
+leaves no fallback, and the integration URL (`api-exe-new.int.exe.xyz`) is
+unroutable from the mini — so both inventory paths failed and the check failed
+closed. It looked intermittent only because **every success in its history was
+an interactive run.** The check also discarded ssh's stderr, so three weeks of
+failures all read "integration and ssh both failed" (fixed in iv-provision #53,
+which now names the likely cause).
+On iv-provision — the control-plane host that already creates VMs, lists them
+and manages integrations — the inventory comes from the http-proxy integration
+and **no SSH key is needed at all**. The dependency is eliminated, not worked
+around, and control-plane access stays concentrated on the host meant to have it.
 
-Host discovery comes from `ssh exe.dev ls --json`, the same authoritative
-inventory `agentsview-coverage` now uses — **not** the tailnet, which cannot
-see a VM that never joined.
+**What deliberately did NOT move: the healthchecks.io check.** A dead-man's
+switch must not share fate with the host it watches. The rule is: a probe runs
+where its inputs are; alerting stays off-box. `agentsview-coverage` set this
+precedent on iv-agentsview.
+
+**Known scope cost, reported not hidden.** The VM has no exe.dev SSH key, so
+hosts that never joined the tailnet are unreachable from it: the mini inspected
+20 hosts (2 unreachable), iv-provision inspects 19 (3 unreachable —
+`quack-client` and `quack-server` move from inspected to unreachable). The check
+prints each as `unreachable — not inspected`, so the narrowing is visible rather
+than silent, which is the standard this check is held to. If either quack VM ever
+holds real work, it needs a tailnet identity or an explicit exclusion.
 
 ## Scope: this registry covers the klundstedt-mini project only
 
