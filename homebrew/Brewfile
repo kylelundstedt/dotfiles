@@ -5,7 +5,6 @@ brew "mas"  # needed by brew bundle for mas entries
 brew "mosh"  # mosh server for phone access (Moshi on iOS → mini); see agent_docs/herdr-pilot.md
 cask "1password"
 cask "1password-cli"
-# cask "nikitabobko/tap/aerospace"
 # cask "alfred", args: { appdir: "/Applications" }
 # cask "bartender", args: { appdir: "/Applications" }
 # cask "box-drive"
