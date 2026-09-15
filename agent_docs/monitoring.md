@@ -72,6 +72,18 @@ Grace sizing rules (each learned the hard way):
 - **Report the fan-out count in the success line.** Printing "8 source(s)
   reachable" immediately exposed a config parser that silently covered only 6
   of 8 — a check that quietly skips half its targets still reports OK.
+- **A fixed schedule offset is a guess; a bounded wait is a guarantee.** The
+  weekly reconcile started 90 minutes after the daily, which held until the
+  daily's duration drifted: it now varies 43–100 min, and on 2026-09-13 it ran to
+  06:10 and killed the 06:00 reconcile instantly on "rclone already running".
+  Same on 08-30. The pass the backup's own integrity argument depends on had then
+  not completed since 2026-08-23, destroyed by a scheduling race rather than any
+  fault of its own. Moving it to 08:00 widened the margin but is still an offset
+  guessed against a drifting job. It now WAITS up to 90 min for the lock instead,
+  which is nearly free inside an 18h budget and a 20h grace — and still fails if
+  the lock never clears, so a genuinely wedged rclone is reported exactly as
+  before. The daily keeps failing fast: it has a 2h budget, and waiting would
+  consume the thing it is protecting.
 - **A subprocess's own deadline flag is not a wall-clock guarantee.** rclone's
   `--max-duration` bounds its transfer phase, not a wedge in the post-transfer
   finalize phase — on 2026-07-25 rclone hit 100% then hung there for 8h,

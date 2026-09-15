@@ -67,7 +67,38 @@ preflight_fail() {
 }
 # Don't collide with another backup or an unrelated rclone transfer. A lock
 # collision is a failed scheduled run, not a successful skip.
-if pgrep -f "rclone (copy|sync)" >/dev/null 2>&1; then preflight_fail "rclone already running"; fi
+#
+# The WEEKLY reconcile waits instead of failing instantly (2026-09-15). It died
+# on "rclone already running" on 2026-08-30 and 2026-09-13 because the daily
+# overran its 06:00 start -- the daily varies 43-100 min from 04:30, and on
+# 09-13 it ran to 06:10. Moving the reconcile to 08:00 widened that margin but
+# an offset is still a guess against a job whose duration drifts, and the
+# reconcile had then not completed since 2026-08-23: the pass the backup's own
+# integrity argument depends on was being killed by a scheduling race.
+#
+# Waiting is nearly free here and fail-closed is preserved. The reconcile has an
+# 18h budget inside a 20h grace, so a wait measured in minutes cannot threaten
+# either, and if the lock NEVER clears it still fails -- a genuinely wedged
+# rclone is reported exactly as before rather than being waited out in silence.
+# The daily keeps failing fast: it has a 2h budget, and waiting would consume the
+# thing it is trying to protect.
+RECONCILE_LOCK_WAIT=${RECONCILE_LOCK_WAIT:-5400}   # 90 min
+if pgrep -f "rclone (copy|sync)" >/dev/null 2>&1; then
+    if [[ "$MODE" == "reconcile" ]]; then
+        echo "rclone already running; waiting up to $((RECONCILE_LOCK_WAIT / 60))m for it to finish"
+        waited=0
+        while pgrep -f "rclone (copy|sync)" >/dev/null 2>&1; do
+            if (( waited >= RECONCILE_LOCK_WAIT )); then
+                preflight_fail "rclone still running after $((waited / 60))m; giving up"
+            fi
+            sleep 60; waited=$((waited + 60))
+            (( waited % 600 == 0 )) && echo "  still waiting ($((waited / 60))m)"
+        done
+        echo "  lock cleared after $((waited / 60))m; proceeding"
+    else
+        preflight_fail "rclone already running"
+    fi
+fi
 # Single instance.
 job_lock "$LOCKDIR" || preflight_fail "another tigris-backup mode is running"
 
