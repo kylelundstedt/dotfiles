@@ -109,8 +109,13 @@ ssh iv-cli 'curl -s https://lmstudio.int.exe.xyz/models.json | jq ".models"'    
 ssh iv-cli 'shelley models | grep -i lmstudio'                                                     # Shelley sees it
 ```
 
-**Rebuild the relay.** `ssh exe.dev new --name=iv-llm-relay --image=ghcr.io/kylelundstedt/exeslim:2026-08-28.24.1 --tag=tailnet`,
-`join-tailnet.sh iv-llm-relay`, `provisioning/iv-llm-relay/deploy.sh` (installs
+**Rebuild the relay.** `ssh exe.dev new --name=iv-llm-relay --image=ghcr.io/kylelundstedt/exeslim:<tag>`
+(no `--tag=tailnet`: the relay is public), then within ~2 minutes
+`ssh exe.dev integrations attach api-tailscale vm:iv-llm-relay --for 30m` — the
+image's boot unit joins as `tag:prod`, non-ephemeral since exeslim 2026-09-15
+(the current relay predates that and is still an ephemeral node; if it is ever
+reaped after a long outage, attach for 30m and `systemctl start iv-tailnet-join`
+over the edge). Then `provisioning/iv-llm-relay/deploy.sh` (installs
 nginx-light if missing, renders the key from 1Password), `share port … 8000`
 
 - `share set-public`, add `tag:relay` in the admin console. Tailscale SSH does
