@@ -22,12 +22,16 @@
 # interrupt, not just on success — if it ever does leak, `integrations list`
 # will show a stray `vm:` attachment.
 #
-# Env overrides: IV_TAILSCALE_TAG (default tag:dev),
+# Env overrides: IV_TAILSCALE_TAG (default tag:dev), IV_TAILSCALE_EPHEMERAL
+# (default true; set false for a long-lived appliance whose node must survive
+# outages — then retirement must delete the node in the admin console),
 #                IV_TAILSCALE_API_URL (default https://api-tailscale.int.exe.xyz)
 set -euo pipefail
 
 VM=${1:?usage: join-tailnet.sh <vm-name>}
 TAG=${IV_TAILSCALE_TAG:-tag:dev}
+EPHEMERAL=${IV_TAILSCALE_EPHEMERAL:-true}
+case "$EPHEMERAL" in true|false) ;; *) echo "join-tailnet: IV_TAILSCALE_EPHEMERAL must be true or false" >&2; exit 2 ;; esac
 PROXY=${IV_TAILSCALE_API_URL:-https://api-tailscale.int.exe.xyz}
 
 # Was it already attached before we got here? If so, leave it exactly as found
@@ -59,9 +63,9 @@ detach() {
 trap detach EXIT INT TERM
 
 ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new "${VM}.exe.xyz" \
-  TAG="$TAG" PROXY="$PROXY" 'bash -s' <<'REMOTE'
+  TAG="$TAG" PROXY="$PROXY" EPHEMERAL="$EPHEMERAL" 'bash -s' <<'REMOTE'
 set -euo pipefail
-: "${TAG:?}" "${PROXY:?}"
+: "${TAG:?}" "${PROXY:?}" "${EPHEMERAL:?}"
 
 want_host=$(hostname)
 
@@ -146,7 +150,7 @@ key=$(curl -fsSL --connect-timeout 5 --max-time 15 \
   -H "Authorization: Bearer $token" \
   -H "Content-Type: application/json" \
   -X POST "https://api.tailscale.com/api/v2/tailnet/-/keys" \
-  -d "{\"capabilities\":{\"devices\":{\"create\":{\"reusable\":false,\"ephemeral\":true,\"preauthorized\":true,\"tags\":[\"${TAG}\"]}}},\"expirySeconds\":600}" \
+  -d "{\"capabilities\":{\"devices\":{\"create\":{\"reusable\":false,\"ephemeral\":${EPHEMERAL},\"preauthorized\":true,\"tags\":[\"${TAG}\"]}}},\"expirySeconds\":600}" \
   | jq -r '.key // empty' || true)
 
 case "$key" in

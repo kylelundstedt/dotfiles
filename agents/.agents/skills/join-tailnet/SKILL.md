@@ -74,6 +74,10 @@ authority this change removed.
 
 - Keys are minted `ephemeral:true`, so a node that goes offline long enough is
   removed from the tailnet and must be re-joined by re-running this script.
+  For a long-lived appliance that must survive outages, run with
+  `IV_TAILSCALE_EPHEMERAL=false` (added 2026-09-15 for the AgentsView
+  collector rebuild): the node then persists, and retiring the VM must delete
+  the node in the admin console (iv-provision `retiring.md` §5).
 - `--tag=iv` at VM creation is **no longer sufficient or required** for tailnet
   joining. It still governs other `tag:iv` integrations.
 - **Prod-lane images self-join at boot (since exeslim 2026-08-23).** The
