@@ -1,0 +1,24 @@
+# iv-personal-mcp-relay: exe.dev peer http-proxy `personal-mcp` -> hub-mcp on
+# klundstedt-mini over the tailnet (tailnet policy: tag:relay -> tag:mini tcp:443).
+# Deployed by provisioning/iv-personal-mcp-relay/deploy.sh (dotfiles). No
+# secrets: the port stays PRIVATE on exe.dev and auth is the peer integration's
+# platform-injected key, consumed by the VM's exe.dev auth proxy before nginx.
+server {
+    listen 8000 default_server;
+    # exe.dev proxy path only; tailnet + anything else denied (#1 lockdown)
+    allow 127.0.0.1;
+    allow 10.42.0.0/16;
+    deny all;
+    location / {
+        resolver 100.100.100.100 valid=60s;
+        set $upstream https://klundstedt-mini.dojo-sun.ts.net;
+        proxy_pass $upstream;
+        proxy_ssl_server_name on;
+        proxy_ssl_name klundstedt-mini.dojo-sun.ts.net;
+        proxy_set_header Host klundstedt-mini.dojo-sun.ts.net;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_read_timeout 300s;
+        proxy_buffering off;
+    }
+}

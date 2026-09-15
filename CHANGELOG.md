@@ -21,8 +21,11 @@ is a filter, not a list); `--peer` on an llm provider is silently ignored;
 Tailscale SSH has no SFTP so `scp` fails; `proxy_pass` with a variable drops
 the URI (use `rewrite … break`). The relay's nginx config is versioned as
 `provisioning/iv-llm-relay/relay.nginx` and pushed by its `deploy.sh` (key
-rendered from 1Password at deploy time), mirroring `provisioning/iv-agentsview/`.
-Verified end to end on `iv-cli` and attached `auto:all`. Design and runbooks:
+rendered from 1Password at deploy time), mirroring `provisioning/iv-agentsview/`;
+the personal-mcp relay's config got the same treatment
+(`provisioning/iv-personal-mcp-relay/`). Verified end to end on `iv-cli`,
+attached `auto:all`, and every running Shelley refreshed via
+`POST /api/models/refresh` over its socket (no restarts). Design and runbooks:
 [agent_docs/llm-relay.md](agent_docs/llm-relay.md). The July closure of the
 subscription-gateway design is untouched — local models carry none of that
 policy weight.

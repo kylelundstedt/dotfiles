@@ -132,14 +132,35 @@ no other credential and no state.
   `qwen/qwen3.6-35b-a3b` (set in the UI during bring-up; the CLI has no flag for
   it). Widen to `qwen/*` or an explicit list — not `*`, which drags every loaded
   embedding instance into the picker.
-- **Running Shelley servers do not re-discover integrations on their own.** A
-  server started before the attach says "unsupported model" until the picker's
-  `Add / Remove Models… → Refresh` or a `systemctl restart shelley`. `shelley
+- **Running Shelley servers do not re-discover integrations on their own.**
+  A server started before the attach says "unsupported model" until the
+  catalog is refreshed. Non-disruptive fleet refresh (run from `iv-provision`
+  or the mini; tailnet SSH, one VM at a time):
+
+  ```bash
+  for vm in $(tailscale status --json | jq -r '.Peer[] | select(.OS=="linux" and .Online) | .HostName'); do
+    printf '%-26s ' "$vm"
+    ssh -o ConnectTimeout=10 -o BatchMode=yes "exedev@$vm" \
+      'test -S ~/.config/shelley/shelley.sock && curl -s -m 20 -X POST --unix-socket ~/.config/shelley/shelley.sock http://shelley/api/models/refresh >/dev/null && echo refreshed || echo "no shelley"'
+  done
+  ```
+
+  Done 2026-09-15 after the `auto:all` attach: 15 VMs refreshed, 4 correctly
+  reported no Shelley (the three relays/appliances and `rss-feed`). `shelley
 models` (the CLI) always runs discovery fresh, so it is not a proof that the
-  server sees the model.
-- The relay node carries `tag:prod` + `tag:relay`; `tag:dev` was expected from
-  the join helper and is what the other relay has. Unexplained; harmless so far
-  (SSH from the mini works via the tag:prod `tcp:22` rule).
+  running server sees the model — check `/api/models` over the socket.
+
+- **`tag:prod` on the relay node.** The join helper requested `tag:dev`
+  (`join-tailnet.sh` line ~149, `"tags":["tag:dev"]`) and the node came up
+  `tag:prod`; `rss-feed` is the only other `tag:prod` node. The 1Password
+  "Tailscale OAuth" client is documented `tag:dev`-only, so the credential
+  exe.dev's `api-tailscale` integration injects is probably a different client,
+  or that client's tag list changed. Check admin console → Settings → OAuth
+  clients before the next join. Harmless for the relay: `tag:relay` carries the
+  mini grant and SSH from the mini works.
+- The personal-mcp relay's nginx config is now versioned too
+  (`provisioning/iv-personal-mcp-relay/`), same template + `deploy.sh` shape,
+  no secret to render.
 - Tailnet policy is still admin-console-only (the OAuth client in 1Password is
   `auth_keys`-scoped), so `tag:relay` on a rebuilt relay is a manual step.
 - Coverage: `iv-llm-relay` is a bare appliance and is listed in
