@@ -50,6 +50,14 @@ fleet runs here.
   `~/github/kylelundstedt/personal-mcp`; its `bootstrap.sh` loads the server +
   ingest LaunchAgents). Binds `127.0.0.1:8765`, exposed tailnet-only via
   `tailscale serve` at `https://klundstedt-mini.dojo-sun.ts.net/mcp`.
+- **LM Studio API:** the LM Studio server binds `127.0.0.1:1234` (loopback
+  only; the app's "serve on local network" toggle stays off). Exposed
+  tailnet-only via `tailscale serve --https=8443` (added 2026-09-15) —
+  OpenAI-compatible base URL `https://klundstedt-mini.dojo-sun.ts.net:8443/v1`.
+  Port 443 is hub-mcp, so LM Studio gets its own port. No app-layer auth;
+  tailnet ACLs are the only gate. Serve config lives in tailscaled state, not
+  in this repo — `tailscale serve status` is the source of truth. Disable with
+  `tailscale serve --https=8443 off`.
 - **`~/archives/`:** msgvault email, calendar DuckDB, the search hub, and
   external-volume archives. The data contract between dotfiles (backup) and
   personal-mcp (serve).
