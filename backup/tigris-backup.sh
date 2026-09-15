@@ -43,6 +43,10 @@ FILTER="$HOME/dotfiles/backup/tigris-backup-filter.txt"
 # and the only thing to drop from a Photos library is derived cache. See that
 # file's header for why it exists (macOS 26.6.2 cache rewrite, 2026-08-26).
 PHOTOS_FILTER="$HOME/dotfiles/backup/tigris-photos-filter.txt"
+# Shared by the four archive phases (arch:, GLACIER_IR). They previously ran with
+# no filter, putting macOS metadata into archive-tier storage where a Finder visit
+# re-PUTs an object billed for a minimum duration. See that file's header.
+ARCHIVE_FILTER="$HOME/dotfiles/backup/tigris-archive-filter.txt"
 EXT=/Volumes/OWC8TB
 # Max personal Photos originals allowed missing-from-disk before we refuse to
 # sync the library (see photos_originals_complete). 0 = strict; bump a little if
@@ -339,10 +343,10 @@ else
 fi
 # Archive bucket: GLACIER_IR (Archive Instant Retrieval) — same $/GB as GLACIER
 # but directly retrievable (plain GLACIER objects are frozen and need a thaw).
-sync_one awss3  "$EXT/aws_s3_backup"              arch:aws-s3         --s3-storage-class GLACIER_IR
-sync_one box    "$EXT/Box_Download_2025-01-12"    arch:box            --s3-storage-class GLACIER_IR
-sync_one iphone "$EXT/iPhoneBackup"               arch:iphone-backup  --s3-storage-class GLACIER_IR
-sync_one msgatt "$EXT/messages-store"             arch:messages-store --s3-storage-class GLACIER_IR
+sync_one awss3  "$EXT/aws_s3_backup"              arch:aws-s3         --filter-from "$ARCHIVE_FILTER" --s3-storage-class GLACIER_IR
+sync_one box    "$EXT/Box_Download_2025-01-12"    arch:box            --filter-from "$ARCHIVE_FILTER" --s3-storage-class GLACIER_IR
+sync_one iphone "$EXT/iPhoneBackup"               arch:iphone-backup  --filter-from "$ARCHIVE_FILTER" --s3-storage-class GLACIER_IR
+sync_one msgatt "$EXT/messages-store"             arch:messages-store --filter-from "$ARCHIVE_FILTER" --s3-storage-class GLACIER_IR
 
 # Versioning/recovery is handled by bucket soft-delete (30-day retention) on both
 # buckets — bounded and auto-expiring, so deleted/overwritten objects are

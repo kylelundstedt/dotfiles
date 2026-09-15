@@ -176,6 +176,35 @@ cryptcheck, and the GLACIER_IR archive fetch. The drill now FAILS (not INFO)
 if an archive object isn't directly retrievable, since post-re-tier that's a
 regression.
 
+## Gotchas found while restoring or pruning
+
+- **A restored tree resists `rm -rf`.** `msgvault backup restore` materialises
+  files "at their original relative paths with their recorded file modes", which
+  means directories can come back without write permission — deleting a discarded
+  restore fails with `Directory not empty` until `chmod -R u+w` is run first.
+  Harmless, but irritating to discover mid-restore under pressure.
+- **`--max-delete 5000` counts FILES, not bytes.** The 2026-09-15 prune of
+  re-downloadable public reference data removed 1,228 objects totalling ~537 GB
+  and sailed well under the guard. It protects against mass small-file loss; it
+  would not stop a handful of enormous deletions propagating. Local deletion is
+  the mechanism that actually reclaims Tigris storage, and it reaches the bucket
+  on the next run of that phase — the only net after that is the bucket's 30-day
+  soft delete.
+- **Deleting locally and excluding by filter are not interchangeable.** A filter
+  exclusion stops future syncing but leaves already-uploaded objects orphaned in
+  the bucket, reclaiming nothing (see every `NOTE ON CLEANUP` in the filter
+  files). Delete locally to reclaim; filter to stop churn.
+- **Emptying the Trash is part of deleting on an external volume.** Finder moves
+  to `/Volumes/<vol>/.Trashes/<uid>/`, so space is not reclaimed until the Trash
+  is emptied — at 537 GB that is the difference between doing it and appearing to.
+- **The archive phases now carry a junk filter**
+  (`backup/tigris-archive-filter.txt`). They previously ran with none, so macOS
+  metadata reached GLACIER_IR: eleven `.DS_Store` objects were found in
+  `arch:aws-s3`, created by browsing the folder in Finder. Archive tiers bill a
+  minimum duration per object, so a file that changes when somebody opens a
+  window is the wrong thing to put there. The eleven already uploaded are still
+  in the bucket — orphaned, per the point above.
+
 ## Verification — what actually proves the backup is good
 
 Two passes, and until 2026-09-15 only one of them existed in practice.
