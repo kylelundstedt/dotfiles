@@ -51,13 +51,21 @@ fleet runs here.
   ingest LaunchAgents). Binds `127.0.0.1:8765`, exposed tailnet-only via
   `tailscale serve` at `https://klundstedt-mini.dojo-sun.ts.net/mcp`.
 - **LM Studio API:** the LM Studio server binds `127.0.0.1:1234` (loopback
-  only; the app's "serve on local network" toggle stays off). Exposed
-  tailnet-only via `tailscale serve --https=8443` (added 2026-09-15) —
-  OpenAI-compatible base URL `https://klundstedt-mini.dojo-sun.ts.net:8443/v1`.
-  Port 443 is hub-mcp, so LM Studio gets its own port. No app-layer auth;
-  tailnet ACLs are the only gate. Serve config lives in tailscaled state, not
-  in this repo — `tailscale serve status` is the source of truth. Disable with
-  `tailscale serve --https=8443 off`.
+  only; the app's "serve on local network" toggle stays off). Two tailnet-only
+  `tailscale serve` doors (added 2026-09-15), both OpenAI-compatible:
+  - `https://klundstedt-mini.dojo-sun.ts.net/lmstudio/v1` — a path mount on
+    the :443 listener (serve strips the `/lmstudio` prefix). This is the door
+    the fleet uses: tailnet policy already lets `tag:relay` reach the mini on
+    `tcp:443`, so the dedicated `iv-llm-relay` VM forwards it to exe.dev's
+    `lmstudio` llm integration with no policy change — see
+    [llm-relay.md](llm-relay.md).
+  - `https://klundstedt-mini.dojo-sun.ts.net:8443/v1` — a dedicated port for
+    Kyle's own devices; fleet VMs cannot reach `:8443` (policy allows only
+    `tcp:22`, `tcp:8080`, and `tcp:443` for `tag:relay`).
+    No app-layer auth; tailnet policy and the exe.dev edge are the only gates.
+    Serve config lives in tailscaled state, not in this repo — `tailscale serve
+status` is the source of truth. Remove with `tailscale serve --https=8443
+off` / `tailscale serve --https=443 --set-path=/lmstudio off`.
 - **`~/archives/`:** msgvault email, calendar DuckDB, the search hub, and
   external-volume archives. The data contract between dotfiles (backup) and
   personal-mcp (serve).
@@ -117,6 +125,12 @@ project VMs consume both read-only. Account control-plane changes
 
 Lifecycle (create, join tailnet, upgrade) lives in the `exe-dev` /
 `join-tailnet` / `upgrade-vm` skills, not here.
+
+Two VMs are bare **relays**, not dev boxes (exeslim + nginx, no agent harness,
+no secrets beyond a header key): `iv-personal-mcp-relay` bridges hub-mcp on the
+mini to exe.dev over a private peer proxy; `iv-llm-relay` bridges LM Studio on
+the mini (and later the Studio Ultra) to the `lmstudio` llm integration over a
+public, header-gated port — [llm-relay.md](llm-relay.md).
 
 ### Platform notes
 

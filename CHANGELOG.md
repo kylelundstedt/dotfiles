@@ -4,6 +4,32 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-09-15 — LM Studio on the mini served to the fleet via an llm integration
+
+LM Studio (`127.0.0.1:1234`, JIT loading already on) got two tailnet-only
+`tailscale serve` doors on the mini — `:8443` and a `/lmstudio` path mount on
+the existing `:443` listener (serve strips the prefix; `:443` is the one port
+the policy opens to `tag:relay`). For the fleet, the Shelley route is exe.dev's
+**llm integration** with a custom provider, not per-VM custom models: it is
+auto-discovered on every attached VM with nothing on the VM. exe.dev's edge
+cannot target `.ts.net` or IPs and its custom providers have no peer mode, so
+a **dedicated public relay** `iv-llm-relay` (exeslim + nginx, header-gated,
+routes `/mini/` → the mini's serve door) fronts it; the personal-mcp relay was
+deliberately not reused because its port would have to go public. Findings
+worth keeping: exe.dev only lists models it discovers itself (the Models field
+is a filter, not a list); `--peer` on an llm provider is silently ignored;
+Tailscale SSH has no SFTP so `scp` fails; `proxy_pass` with a variable drops
+the URI (use `rewrite … break`). The relay's nginx config is versioned as
+`provisioning/iv-llm-relay/relay.nginx` and pushed by its `deploy.sh` (key
+rendered from 1Password at deploy time), mirroring `provisioning/iv-agentsview/`;
+the personal-mcp relay's config got the same treatment
+(`provisioning/iv-personal-mcp-relay/`). Verified end to end on `iv-cli`,
+attached `auto:all`, and every running Shelley refreshed via
+`POST /api/models/refresh` over its socket (no restarts). Design and runbooks:
+[agent_docs/llm-relay.md](agent_docs/llm-relay.md). The July closure of the
+subscription-gateway design is untouched — local models carry none of that
+policy weight.
+
 ## 2026-09-10 — Mini regained outbound tailnet reach (tag:mini as source)
 
 `ssh <vm>` from the mini had been dead since the 2026-09-02 retag from

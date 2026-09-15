@@ -26,6 +26,7 @@ always-on rules live in `AGENTS.md`.
 | `git-https-migration.md`      | HTTPS-only Git transport migration, canary, fleet rollout, and rollback                                                                                                 |
 | `agents-recommendations.md`   | Operating patterns, dual-agent workflows, task routing, maintenance checklists                                                                                          |
 | `model-routing-economics.md`  | Subscription strategy, model routing, and Shelley cost-evaluation method                                                                                                |
+| `llm-relay.md`                | LM Studio models in every VM's Shelley picker via the `lmstudio` llm integration + the `iv-llm-relay` bridge — design, runbooks, open items                             |
 | `repo-boundaries.md`          | Decision: what belongs in dotfiles, split criteria, multi-tenant trigger                                                                                                |
 | `tigris-backup-runbook.md`    | klundstedt-mini → Tigris encrypted backup runbook                                                                                                                       |
 | `apple-container-vms.md`      | Creating & using Apple Container VMs (exe.dev-equivalent, machine mode + Shelley)                                                                                       |

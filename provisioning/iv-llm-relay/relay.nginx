@@ -1,0 +1,47 @@
+# iv-llm-relay: exe.dev llm integration -> LM Studio hosts over the tailnet.
+# Deployed by provisioning/iv-llm-relay/deploy.sh (dotfiles), which substitutes
+# __KEY__ from 1Password ("LLM relay header key (iv-llm-relay)").
+#
+# The exe.dev edge reaches this VM's public port 8000 as an anonymous client
+# (the llm integration's custom provider has no peer mode), so every upstream
+# path is gated by the X-LLM-Relay-Key header the integration injects. One
+# location block per LM Studio host; the provider base URL is
+# https://iv-llm-relay.exe.xyz/<host>/v1. Design: agent_docs/llm-relay.md.
+server {
+    listen 8000 default_server;
+    server_name _;
+
+    # Only the exe.dev proxy path reaches us (public port), plus loopback for checks.
+    allow 127.0.0.1;
+    allow 10.42.0.0/16;
+    deny all;
+
+    resolver 100.100.100.100 valid=60s;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_read_timeout 600s;
+    proxy_send_timeout 600s;
+    proxy_buffering off;
+
+    # klundstedt-mini: tailscale serve mounts LM Studio at /lmstudio on :443
+    # (tailnet policy: tag:relay -> tag:mini tcp:443).
+    location /mini/ {
+        # `set` is a rewrite-phase directive and must precede `rewrite ... break`,
+        # which ends rewrite-phase processing (a `set` after it never runs and
+        # proxy_pass sees an empty upstream: "invalid URL prefix").
+        set $mini https://klundstedt-mini.dojo-sun.ts.net;
+        if ($http_x_llm_relay_key != "__KEY__") { return 403; }
+        rewrite ^/mini/(.*)$ /lmstudio/$1 break;
+        proxy_pass $mini;
+        proxy_ssl_server_name on;
+        proxy_ssl_name klundstedt-mini.dojo-sun.ts.net;
+        proxy_set_header Host klundstedt-mini.dojo-sun.ts.net;
+        proxy_set_header X-LLM-Relay-Key "";
+    }
+
+    # Studio Ultra (expected ~2026-10): copy the block above as /ultra/ with the
+    # Ultra's tailnet name, then add a second custom provider on the `lmstudio`
+    # integration with base URL https://iv-llm-relay.exe.xyz/ultra/v1.
+
+    location / { return 404; }
+}
