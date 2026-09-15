@@ -43,6 +43,10 @@ FILTER="$HOME/dotfiles/backup/tigris-backup-filter.txt"
 # and the only thing to drop from a Photos library is derived cache. See that
 # file's header for why it exists (macOS 26.6.2 cache rewrite, 2026-08-26).
 PHOTOS_FILTER="$HOME/dotfiles/backup/tigris-photos-filter.txt"
+# Shared by the four archive phases (arch:, GLACIER_IR). They previously ran with
+# no filter, putting macOS metadata into archive-tier storage where a Finder visit
+# re-PUTs an object billed for a minimum duration. See that file's header.
+ARCHIVE_FILTER="$HOME/dotfiles/backup/tigris-archive-filter.txt"
 EXT=/Volumes/OWC8TB
 # Max personal Photos originals allowed missing-from-disk before we refuse to
 # sync the library (see photos_originals_complete). 0 = strict; bump a little if
@@ -67,7 +71,38 @@ preflight_fail() {
 }
 # Don't collide with another backup or an unrelated rclone transfer. A lock
 # collision is a failed scheduled run, not a successful skip.
-if pgrep -f "rclone (copy|sync)" >/dev/null 2>&1; then preflight_fail "rclone already running"; fi
+#
+# The WEEKLY reconcile waits instead of failing instantly (2026-09-15). It died
+# on "rclone already running" on 2026-08-30 and 2026-09-13 because the daily
+# overran its 06:00 start -- the daily varies 43-100 min from 04:30, and on
+# 09-13 it ran to 06:10. Moving the reconcile to 08:00 widened that margin but
+# an offset is still a guess against a job whose duration drifts, and the
+# reconcile had then not completed since 2026-08-23: the pass the backup's own
+# integrity argument depends on was being killed by a scheduling race.
+#
+# Waiting is nearly free here and fail-closed is preserved. The reconcile has an
+# 18h budget inside a 20h grace, so a wait measured in minutes cannot threaten
+# either, and if the lock NEVER clears it still fails -- a genuinely wedged
+# rclone is reported exactly as before rather than being waited out in silence.
+# The daily keeps failing fast: it has a 2h budget, and waiting would consume the
+# thing it is trying to protect.
+RECONCILE_LOCK_WAIT=${RECONCILE_LOCK_WAIT:-5400}   # 90 min
+if pgrep -f "rclone (copy|sync)" >/dev/null 2>&1; then
+    if [[ "$MODE" == "reconcile" ]]; then
+        echo "rclone already running; waiting up to $((RECONCILE_LOCK_WAIT / 60))m for it to finish"
+        waited=0
+        while pgrep -f "rclone (copy|sync)" >/dev/null 2>&1; do
+            if (( waited >= RECONCILE_LOCK_WAIT )); then
+                preflight_fail "rclone still running after $((waited / 60))m; giving up"
+            fi
+            sleep 60; waited=$((waited + 60))
+            (( waited % 600 == 0 )) && echo "  still waiting ($((waited / 60))m)"
+        done
+        echo "  lock cleared after $((waited / 60))m; proceeding"
+    else
+        preflight_fail "rclone already running"
+    fi
+fi
 # Single instance.
 job_lock "$LOCKDIR" || preflight_fail "another tigris-backup mode is running"
 
@@ -308,10 +343,10 @@ else
 fi
 # Archive bucket: GLACIER_IR (Archive Instant Retrieval) — same $/GB as GLACIER
 # but directly retrievable (plain GLACIER objects are frozen and need a thaw).
-sync_one awss3  "$EXT/aws_s3_backup"              arch:aws-s3         --s3-storage-class GLACIER_IR
-sync_one box    "$EXT/Box_Download_2025-01-12"    arch:box            --s3-storage-class GLACIER_IR
-sync_one iphone "$EXT/iPhoneBackup"               arch:iphone-backup  --s3-storage-class GLACIER_IR
-sync_one msgatt "$EXT/messages-store"             arch:messages-store --s3-storage-class GLACIER_IR
+sync_one awss3  "$EXT/aws_s3_backup"              arch:aws-s3         --filter-from "$ARCHIVE_FILTER" --s3-storage-class GLACIER_IR
+sync_one box    "$EXT/Box_Download_2025-01-12"    arch:box            --filter-from "$ARCHIVE_FILTER" --s3-storage-class GLACIER_IR
+sync_one iphone "$EXT/iPhoneBackup"               arch:iphone-backup  --filter-from "$ARCHIVE_FILTER" --s3-storage-class GLACIER_IR
+sync_one msgatt "$EXT/messages-store"             arch:messages-store --filter-from "$ARCHIVE_FILTER" --s3-storage-class GLACIER_IR
 
 # Versioning/recovery is handled by bucket soft-delete (30-day retention) on both
 # buckets — bounded and auto-expiring, so deleted/overwritten objects are

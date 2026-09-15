@@ -178,6 +178,41 @@ op run --env-file=.env -- your-command
 
 Machine-readable expiry dates live in `provisioning/keys.manifest`, checked monthly by `provisioning/check-key-expiry.sh` (launchd `com.kylelundstedt.check-key-expiry`, 1st of the month, 35-day warning window — wider than the monthly cadence so nothing slips between runs). Optional dead-man's-switch ping URL in the login Keychain under `key-expiry:healthcheck-url`. **Update the manifest's `expires` column on every rotation.**
 
+## What belongs in 1Password, and what does not
+
+> Swept 2026-09-15: all 60 generic-password services in the mini's login Keychain
+> were cross-referenced against this table and `provisioning/keys.manifest`.
+
+The test is not "is it a secret" — most of that Keychain is secrets. It is:
+
+**Can this be re-derived or re-issued without the mini? If no, it must be mirrored
+to 1Password and listed here.**
+
+Three categories, and only the first needs an entry:
+
+1. **Irreplaceable.** Lose the mini and lose the data. The Tigris crypt
+   password/salt, the OWC8TB passphrase, and — found missing by this sweep — the
+   iPhone backup password, without which 165.7 GiB of `arch:iphone-backup` is
+   undecryptable ciphertext. All four are now mirrored and verified by
+   `backup/verify-dr-credentials.sh`.
+2. **Derivable from something in category 1.** The seventeen
+   `*:healthcheck-url` items are all re-fetchable from the healthchecks.io API
+   given `healthchecks:api-key`, which is inventoried — verified 2026-09-15, 17
+   ping URLs returned for 17 Keychain entries. Mirroring each would be seventeen
+   rows that add nothing and drift silently. **Do not inventory these**; inventory
+   the root credential they come from.
+3. **Re-issued by authenticating again.** `gh:github.com`, `boxcli`,
+   `Claude Code-credentials`, `Codex MCP Credentials`, every `* Safe Storage`
+   item, the `com.apple.*` set, 1Password's own device keys, and the JumpCloud
+   MDM entries. Recovery is a login, not a restore.
+
+**The failure mode this guards against** is not a missing backup — it is a
+credential that looks routine sitting beside one that is load-bearing, with
+nothing distinguishing them. The iPhone backup password had lived in the Keychain
+since 2026-06-27 and was in neither registry, so the largest archive in the
+backup was one dead Mac away from unreadable and nothing would have said so.
+A category-1 secret that is not in this table is invisible by construction.
+
 > **The `(account)` suffix in every reference below is load-bearing, not a
 > footnote.** Two 1Password accounts are signed in on the mini —
 > `lundstedts.1password.com` and `industryvault.1password.com` — and **both have a
@@ -191,17 +226,18 @@ Machine-readable expiry dates live in `provisioning/keys.manifest`, checked mont
 > `backup/verify-dr-credentials.sh` (SHA-256 comparison, never prints a secret).
 > First run, 2026-09-15: all four matched.
 
-| Credential                           | 1Password item (account)                                        | Expires | Fan-out (rotation must touch all)                                                                                            |
-| ------------------------------------ | --------------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Tailscale OAuth client               | `op://Employee/Tailscale OAuth` (industryvault)                 | none    | exe.dev `tailscale-api` integration (Basic header), install.sh (mini + VM joins), test-install.sh, skills                    |
-| GitHub PAT Home                      | `op://Private/GitHub PAT Home/token` (lundstedts)               | unknown | `claude mcp` github-home (macOS), gh auth headless fallback, exe.dev `github-mcp-home` integration                           |
-| GitHub PAT IV                        | `op://Employee/GitHub PAT IV/token` (industryvault)             | unknown | `claude mcp` github-work (macOS), Keychain `sync-repos:IndustryVault`, exe.dev `github-mcp-work` integration                 |
-| GitHub PAT IV-CMG                    | `op://Employee/GitHub PAT IV-CMG/token` (industryvault)         | unknown | Keychain `sync-repos:iv-cmg`                                                                                                 |
-| Tigris backup rclone key             | `op://Personal/Tigris mini-backup rclone key` (industryvault)   | none    | Keychain rclone key + daily/reconcile Healthchecks URLs (mini; see backup runbook)                                           |
-| Tigris backup crypt password+salt    | `op://Personal/Tigris mini-backup rclone crypt` (industryvault) | none    | Keychain `tigris-backup:crypt-password` / `crypt-salt` (mini) — **DR-critical: never rotate without a plan**                 |
-| OWC8TB disk passphrase               | `op://Personal/OWC8TB disk encryption/password` (industryvault) | none    | Keychain `owc8tb-encryption` (mini)                                                                                          |
-| AgentsView fleet bearer tokens       | `op://Employee/AgentsView` (industryvault)                      | none    | mini `~/.agentsview/config.toml`; Keychain `agentsview:auth-token` (collector); per-source `~/.config/agentsview/source.env` |
-| healthchecks.io API key (read-write) | not in 1P — Keychain only                                       | none    | Keychain `healthchecks:api-key` (mini) — manages check configs (see `monitoring.md`)                                         |
+| Credential                           | 1Password item (account)                                                                     | Expires | Fan-out (rotation must touch all)                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------ | -------------------------------------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tailscale OAuth client               | `op://Employee/Tailscale OAuth` (industryvault)                                              | none    | exe.dev `tailscale-api` integration (Basic header), install.sh (mini + VM joins), test-install.sh, skills                                                                                                                                                                                                                                                 |
+| GitHub PAT Home                      | `op://Private/GitHub PAT Home/token` (lundstedts)                                            | unknown | `claude mcp` github-home (macOS), gh auth headless fallback, exe.dev `github-mcp-home` integration                                                                                                                                                                                                                                                        |
+| GitHub PAT IV                        | `op://Employee/GitHub PAT IV/token` (industryvault)                                          | unknown | `claude mcp` github-work (macOS), Keychain `sync-repos:IndustryVault`, exe.dev `github-mcp-work` integration                                                                                                                                                                                                                                              |
+| GitHub PAT IV-CMG                    | `op://Employee/GitHub PAT IV-CMG/token` (industryvault)                                      | unknown | Keychain `sync-repos:iv-cmg`                                                                                                                                                                                                                                                                                                                              |
+| Tigris backup rclone key             | `op://Personal/Tigris mini-backup rclone key` → `access_key_id` + `password` (industryvault) | none    | Keychain rclone key + daily/reconcile Healthchecks URLs (mini; see backup runbook)                                                                                                                                                                                                                                                                        |
+| Tigris backup crypt password+salt    | `op://Personal/Tigris mini-backup rclone crypt` → `password` + `salt` (industryvault)        | none    | Keychain `tigris-backup:crypt-password` / `crypt-salt` (mini) — **DR-critical: never rotate without a plan**                                                                                                                                                                                                                                              |
+| iPhone backup encryption password    | `op://Employee/iPhone Backup Encryption/password` (industryvault)                            | none    | Keychain `iOS Backup`, account = device UDID `00008130-000E215124C1401C` (mini) — **DR-critical: the 165.7 GiB in `arch:iphone-backup` is undecryptable ciphertext without it. Added 2026-09-15; it had existed only in the login Keychain, in neither this table nor keys.manifest.** Note this one is in **Employee**, not Personal like the two above. |
+| OWC8TB disk passphrase               | `op://Personal/OWC8TB disk encryption/password` (industryvault)                              | none    | Keychain `owc8tb-encryption` (mini)                                                                                                                                                                                                                                                                                                                       |
+| AgentsView fleet bearer tokens       | `op://Employee/AgentsView` (industryvault)                                                   | none    | mini `~/.agentsview/config.toml`; Keychain `agentsview:auth-token` (collector); per-source `~/.config/agentsview/source.env`                                                                                                                                                                                                                              |
+| healthchecks.io API key (read-write) | not in 1P — Keychain only                                                                    | none    | Keychain `healthchecks:api-key` (mini) — manages check configs (see `monitoring.md`)                                                                                                                                                                                                                                                                      |
 
 ### Rotation procedures
 
