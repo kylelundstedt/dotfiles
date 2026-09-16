@@ -17,6 +17,7 @@ cask "claude"
 # cask "cursor"
 # cask "dash", args: { appdir: "/Applications" }
 cask "datagrip", args: { appdir: "/Applications" }
+cask "davit"  # native GUI for Apple's container CLI
 cask "columnar-tech/tap/dbc"
 cask "discord", args: { appdir: "/Applications" }
 # cask "dropbox", args: { appdir: "/Applications" }
