@@ -67,7 +67,10 @@ off` / `tailscale serve --https=443 --set-path=/lmstudio off`.
   personal-mcp (serve).
 - **AgentsView:** since 2026-09-02 the mini is a plain **source** (launchd
   daemon on its tailnet address `:8080`, pulled by the collector); the fleet
-  archive lives on the `iv-agentsview` VM. Two staged backup copies under
+  archive lives on the `iv-agentsview` VM. The mini runs the vendor app
+  bundle (`/opt/homebrew/bin/agentsview` → `AgentsView.app`), updated with
+  `agentsview update --yes` then `launchctl kickstart -k` on the daemon;
+  0.43.0 since 2026-09-19 (the bundle's `Info.plist` lags the binary). Two staged backup copies under
   `~/archives/agentsview/`: the mini's own database (`agentsview-snapshot.sh`)
   and, since 2026-09-15, the collector's fleet archive plus its config
   (`collector/`, `agentsview-collector-snapshot.sh`), both pulled into the

@@ -143,16 +143,31 @@ and a separately named attachment.
   (the mini's staged snapshot is the mini's own source DB, frozen for fleet
   purposes at the 09-02 demotion). `backup/agentsview-collector-snapshot.sh`
   now stages the fleet archive + `config.toml` nightly; restore-check passes.
-- **Collector rebuild (pending, in this order).** (1) ~~backup~~ done; (2)
-  bump AgentsView fleet-wide to **0.43.0** — collector runs 0.38.1, the mini
-  0.42.0, the iv-provision pin is 0.38.1, and 0.43.0's notes say to upgrade
-  both HTTP sync peers together; (3) recreate `iv-agentsview` on the current
-  exeslim as a **`tag:dev` persistent** node (measured 2026-09-15: `tag:prod`
-  cannot reach the mini's `:8080`, so the prod-lane boot join would silently
-  drop the mini source — join with the dotfiles helper, extended to mint a
-  persistent key), restore `collector/` onto it, install 0.43.0 from the vendor
-  release, drop the stale `mirror.duckdb` (a 2026-07-22 push, zero sessions,
-  unused) and the mirrors of retired hosts, then `provisioning/iv-agentsview/deploy.sh`.
+- **Collector rebuilt — DONE 2026-09-19** (started 09-15, paused four days
+  when 1Password locked between the delete and the join). New `iv-agentsview`
+  on `exeslim:2026-09-15.29.1`, joined as a **persistent `tag:dev`** node via
+  `join-tailnet` with `IV_TAILSCALE_EPHEMERAL=false` (attach-then-detach; no
+  standing grant), archive + `config.toml` restored from the nightly
+  `collector/` snapshot (833 sessions, sha verified on the VM), AgentsView
+  **0.43.0** from the vendor tarball (checked against the signed `SHA256SUMS`),
+  `provisioning/iv-agentsview/deploy.sh` for units, nginx and the ping URL.
+  Verified: `/api/v1/version` 0.43.0 via the `agentsview` peer proxy, MCP via
+  `mcp-agentsview` (200), coverage `17 covered, 0 uncovered`, and the daemon's
+  own 15-minute pull advanced the archive (833 → 834) with every source at
+  0.43.0. Findings: (a) **`vm:` attachments do not survive a same-name
+  `rm`+`new`** — all 19 (`av-src-*`, `api-exe-ls`) came back `(none)` and were
+  re-attached from a pre-delete snapshot of `integrations list`; the peer
+  proxies _targeting_ the VM were untouched; (b) the 0.43.0 collector
+  **refuses 0.38.1 sources** (`incompatible remote-sync protocol versions`), so
+  the fleet bump was forced into the same window — all 16 sources upgraded in
+  place from the same tarball, the mini via `agentsview update --yes`
+  (its app-bundle `Info.plist` still reads 0.42.0; the binary and daemon are
+  0.43.0), iv-provision **3.0.27** pins it; (c) `agentsview sync` run by hand
+  beside a running daemon ends in `unified local and HTTP rebuild aborted` —
+  the daemon's scheduled pull is the one that counts; (d) `sudo tailscale
+logout` frees an ephemeral node's name at once (reaping never happened in
+  15 min on 09-15); (e) the stale `mirror.duckdb` and retired-host mirrors were
+  not carried over.
 - **1Password**: the 12 per-host source tokens and the collector UI token in
   "AgentsView" are dead; only the mini's source token is live.
   Delete them (Kyle).
