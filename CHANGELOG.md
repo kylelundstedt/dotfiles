@@ -14,8 +14,9 @@ do **not** survive a same-name delete + recreate — recorded in iv-provision
 `retiring.md`). The new collector refuses 0.38.1 sources, so the fleet bump
 happened in the same window: 16 sources upgraded in place, the mini via the
 vendor updater, iv-provision **3.0.27** pins 0.43.0 — and every source's
-`~/iv-provision` checkout is now _below_ the version that matches its
-binary, which is the TODO. The rebuild spanned four days because 1Password
+`~/iv-provision` checkout (3.0.26 on all 17 hosts, a tag that still pins
+0.38.1) is now _below_ the version that matches its binary, which is the
+TODO — a checkout tag is not evidence of what a host runs. The rebuild spanned four days because 1Password
 locked between the delete and the join; the fleet went uncollected for that
 span with nothing lost (sources hold their own history). Verified end to end:
 reader proxies, MCP, coverage 17/0, and the daemon's scheduled pull advancing
