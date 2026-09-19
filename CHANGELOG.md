@@ -4,6 +4,23 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-09-19 — AgentsView collector rebuilt; fleet on 0.43.0; iv-provision 3.0.27
+
+`iv-agentsview` recreated on the current exeslim as a **persistent `tag:dev`**
+node (new `IV_TAILSCALE_EPHEMERAL=false` in `join-tailnet`, #63), the fleet
+archive restored from the nightly `collector/` snapshot, AgentsView 0.43.0
+from the vendor's signed release, all 19 `vm:` attachments re-attached (they
+do **not** survive a same-name delete + recreate — recorded in iv-provision
+`retiring.md`). The new collector refuses 0.38.1 sources, so the fleet bump
+happened in the same window: 16 sources upgraded in place, the mini via the
+vendor updater, iv-provision **3.0.27** pins 0.43.0 — and every source's
+`~/iv-provision` checkout is now _below_ the version that matches its
+binary, which is the TODO. The rebuild spanned four days because 1Password
+locked between the delete and the join; the fleet went uncollected for that
+span with nothing lost (sources hold their own history). Verified end to end:
+reader proxies, MCP, coverage 17/0, and the daemon's scheduled pull advancing
+the archive. Details: `agent_docs/agentsview-peer-path.md` → Open.
+
 ## 2026-09-15 — Fleet AgentsView archive finally has a backup; rss-feed rebuilt
 
 Asked to rebuild `iv-agentsview` like the relays, the first look showed why
