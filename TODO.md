@@ -92,6 +92,8 @@ Open work only, grouped by when it can happen. Completed work →
 
 ## Waiting on a trigger
 
+- [ ] **klundstedt-mbp: untap the three untrusted Homebrew taps** (blocked on physical access, noted 2026-09-19). Homebrew 7.0 requires explicit tap trust and _silently_ ignores untrusted taps, so their packages vanish from `brew list`, `brew upgrade` and `brew bundle`. The mini was cleaned in #60; the trust store is **per machine** (`~/.homebrew/trust.json`), so the mbp needs the same treatment if it carries them. Check `brew tap` for `dopplerhq/doppler`, `nikitabobko/tap` and `quarylabs/quary`; for each, `brew uninstall <pkg>` (doppler / aerospace / sqruff) then `brew untap <tap>`. Also check for the `chatgpt` → `chatgpt-classic` cask rename: if `ChatGPT Classic.app` exists with a dangling Caskroom symlink, `brew uninstall --cask --force chatgpt && brew install --cask chatgpt`, then trash the old app by hand. Background: CHANGELOG 2026-09-15.
+
 - [ ] Decide whether to retire `iv-home` — explicitly deferred 2026-07-19. It currently serves the closed-door corporate repo read-only on the tailnet only; do not change or delete it until this decision is revisited.
 
 - [ ] Mobile access to hub-mcp: pointing a phone MCP client at the tailnet URL **cannot work** — claude.ai/mobile connectors originate from the vendor's cloud, not the device (see personal-mcp README "iPhone / iPad"). Real options: SSH-to-mini pattern (covered by the herdr pilot) now; OAuth on the server + Tailscale Funnel later (tracked in personal-mcp TODO.md). Reconnect the iPhone's Tailscale app regardless (offline since ~2025-11)
