@@ -142,6 +142,21 @@ public, header-gated port — [llm-relay.md](llm-relay.md).
   avoid redundant downloads. On IV VMs, including Apple Container guests with
   `~/iv-provision.lock`, it runs as a thin personal overlay on top of
   iv-image's `provision-iv.sh` (see [repo-boundaries.md](repo-boundaries.md)).
+- **Provisioning floor: `iv-provision` >= 3.0.27, else AgentsView collection
+  breaks** (recorded 2026-09-19). Every reachable fleet host is checked out at
+  **3.0.26**, which pins `AGENTSVIEW_VERSION=0.38.1`, while all of them _run_
+  **0.43.0** — installed out-of-band during the collector rebuild. `3.0.25` pins
+  0.38.1 as well; only **3.0.27** pins 0.43.0. Running `provision-iv.sh` at a
+  host's own checked-out tag therefore **downgrades** AgentsView, and the rebuilt
+  collector refuses a 0.38.1 source.
+
+  This is latent rather than live: nothing is broken until somebody
+  re-provisions — which is the routine repair action (`upgrade-vm` Path A, ~23
+  seconds), so the trap is armed on the most ordinary operation there is. When
+  reasoning about fleet version state, "on 3.0.2x" is not the useful predicate;
+  **>= 3.0.27** is. And a host's checkout tag is not evidence of what it is
+  running: on 2026-09-19 the two disagreed on all 17 reachable hosts. Check both.
+
 - **`iv-provision` is the control-plane host, and its name now undersells it**
   (noted 2026-09-15). It creates VMs, lists them, and manages integrations — and
   since 2026-09-15 it also runs the scheduled `entire-push-check`
