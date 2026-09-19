@@ -6,7 +6,6 @@ brew "mosh"  # mosh server for phone access (Moshi on iOS → mini); see agent_d
 brew "tailcat"  # encrypted point-to-point tunnels over Tailscale's data plane
 cask "1password"
 cask "1password-cli"
-# cask "nikitabobko/tap/aerospace"
 # cask "alfred", args: { appdir: "/Applications" }
 # cask "bartender", args: { appdir: "/Applications" }
 # cask "box-drive"
@@ -18,6 +17,7 @@ cask "claude"
 # cask "cursor"
 # cask "dash", args: { appdir: "/Applications" }
 cask "datagrip", args: { appdir: "/Applications" }
+cask "davit"  # native GUI for Apple's container CLI
 cask "columnar-tech/tap/dbc"
 cask "discord", args: { appdir: "/Applications" }
 # cask "dropbox", args: { appdir: "/Applications" }
