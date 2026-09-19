@@ -49,6 +49,15 @@ PAIRS=(
     "tigris-backup:s3-secret|industryvault|Personal|Tigris mini-backup rclone key"
     "tigris-backup:crypt-password|industryvault|Personal|Tigris mini-backup rclone crypt"
     "tigris-backup:crypt-salt|industryvault|Personal|Tigris mini-backup rclone crypt"
+    # The iPhone backup password, added 2026-09-15. The backup is
+    # IsEncrypted:True, so the 121,166 objects / 165.7 GiB in arch:iphone-backup
+    # are undecryptable ciphertext without it -- and until today it existed ONLY
+    # in the mini's login Keychain, entered in neither secrets.md nor
+    # keys.manifest. The largest single archive in the backup was protected by a
+    # 15-character secret living on the one machine the backup exists to survive.
+    # Note the Keychain service name has a space and its account is the device
+    # UDID (00008130-000E215124C1401C, klundstedt-iphone, iOS 26.6).
+    "iOS Backup|industryvault|Employee|iPhone Backup Encryption"
 )
 
 sha() { printf '%s' "$1" | shasum -a 256 | cut -c1-16; }
@@ -79,12 +88,12 @@ for pair in "${PAIRS[@]}"; do
     fi
     rm -f "$operr"
     match=""
-    while IFS= read -r v; do
+    while IFS=$'\t' read -r fname v; do
         [[ -z "$v" ]] && continue
-        [[ "$(sha "$v")" == "$want" ]] && { match=yes; break; }
-    done < <(printf '%s' "$itemjson" | jq -r '.fields[]?|select(.value!=null)|.value')
+        [[ "$(sha "$v")" == "$want" ]] && { match="${fname:-?}"; break; }
+    done < <(printf '%s' "$itemjson" | jq -r '.fields[]?|select(.value!=null)|[(.label // .id // "?"), .value]|@tsv')
     if [[ -n "$match" ]]; then
-        echo "  PASS $svc — 1Password copy matches Keychain (sha ${want})"
+        echo "  PASS $svc — matches 1Password field \"$match\" (sha ${want})"
         pass=$((pass+1))
     else
         echo "  FAIL $svc — NO field in '$ref' matches the Keychain value."

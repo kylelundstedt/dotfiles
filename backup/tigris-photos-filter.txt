@@ -31,6 +31,29 @@
 # subtree macOS 26.6.2 rewrote and the sole reason the phase stopped converging.
 - /resources/caches/**
 
+# Rendered derivatives (thumbnails, .ithmb strips). EXCLUDED 2026-09-15 after
+# pricing the decision rather than guessing at it.
+#
+# Originally kept: 8.0G of thumbnails, only 8% of the phase's errors, and a
+# restore would have to regenerate them. What changed is the measurement. The
+# backup bucket holds 3.2 TB against 468 GiB live, and an S3 list-object-versions
+# sample localised nearly all of that ~2.7 TB of non-current versions to the
+# photos prefix: 2,000 keys returned 4 current against 517 non-current holding
+# 39.5 GB, while the same sample of home returned 1,999 current and ONE
+# non-current of 166 bytes. Photos was carrying roughly a 21x version multiplier.
+#
+# Derivatives are why the remainder churns. Individual .ithmb strips are 24-96 MB
+# and are rewritten whenever Photos regenerates a thumbnail, so each rewrite
+# stores another 24-96 MB version for the 30-day soft-delete window. At
+# Infrequent Access rates that is real money for files whose only cost of loss is
+# that Photos rebuilds them — the same trade already made for
+# /.lmstudio/models/** and resources/caches.
+#
+# Restore consequence, stated rather than buried: a restored library shows
+# placeholder thumbnails until Photos regenerates them. The originals, the
+# database and the derivative-free library structure all still restore intact.
+- /resources/derivatives/**
+
 # Vision/analysis caches: scene classification, face graph, location and
 # knowledge-graph sqlite stores. Rebuilt by photoanalysisd/mediaanalysisd from
 # the originals, and they hold hot WALs that churn during every run. Only 666K

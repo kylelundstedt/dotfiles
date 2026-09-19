@@ -1,0 +1,41 @@
+# rclone filter shared by the four ARCHIVE phases (awss3, box, iphone, msgatt),
+# which sync to arch: with --s3-storage-class GLACIER_IR.
+#
+# WHY (2026-09-15). These phases ran with no filter at all, so macOS metadata
+# went into GLACIER-class storage. Eleven .DS_Store files were found in
+# aws_s3_backup, created that day by browsing the folder in Finder. The bytes are
+# trivial; the problem is churn against a storage class billed with a minimum
+# duration per object: Finder rewrites .DS_Store on visits, and each rewrite is a
+# fresh PUT of an object that will be charged for its minimum term whether or not
+# it survives. Archive tiers are the wrong place for files that change because
+# somebody opened a window.
+#
+# Deliberately conservative: only regenerable OS metadata. Anything that might be
+# data stays. These are archives of record — for aws_s3_backup the bar is higher
+# still, since after the 2026-09-15 prune the remaining buckets are the licensed
+# and proprietary ones (blackbox-nonagency, equifax-cas, the iv-<client> set).
+#
+# Bare names (no leading /) match at every level, including the root.
+- .DS_Store
+# AppleDouble sidecars: resource forks and extended attributes that macOS writes
+# when copying onto a filesystem that cannot hold them natively. Regenerated on
+# demand and meaningless on restore to a different volume.
+- ._*
+# Volume-level metadata that appears if a sync root ever sits at a mount point.
+- .Spotlight-V100/**
+- .fseventsd/**
+- .TemporaryItems/**
+- .Trashes/**
+- .DocumentRevisions-V100/**
+- .apdisk
+# Windows equivalent, present in folders that have visited a PC or NAS share.
+- Thumbs.db
+- desktop.ini
+#
+# NOTE ON CLEANUP: rclone applies filters to BOTH source and destination, so
+# these rules stop future syncing but leave anything already uploaded ORPHANED in
+# the bucket rather than deleting it. The eleven .DS_Store objects already in
+# arch:aws-s3 are still there. Enumerate with
+# `rclone lsf arch:aws-s3 -R --include "**/.DS_Store"` and purge deliberately
+# with --dry-run first; the bucket's 30-day soft-delete then applies to the
+# removal. Same trap as the home filter's own cleanup note.
