@@ -19,7 +19,7 @@
 # is not a tailnet peer. Listed pre-emptively so that joining it to the tailnet
 # later cannot trip the coverage check. Its 10 collected sessions stay in the
 # archive. See agent_docs/vm-disk-weight.md.
-rss-feed
+kgl-rss-feed
 
 # Tailscale Aperture node (AI gateway), part of a pilot — a service appliance
 # that runs no agent harness, so it has no agent history to collect. Same
@@ -32,7 +32,7 @@ rss-feed
 # and it does not accept SSH from the mini — which is why entire-push-check also
 # logs it as "unreachable — not inspected".
 #
-# HONEST CAVEAT: unlike rss-feed, this excuse rests on identification, not
+# HONEST CAVEAT: unlike kgl-rss-feed, this excuse rests on identification, not
 # inspection. The SSH timeout means the absence of an agent harness could not be
 # confirmed on the host itself. If Aperture ever grows a shell that runs agents,
 # this entry silently stops covering it — re-check rather than assume.
@@ -43,7 +43,7 @@ ai
 # pass. Zero Claude and zero Codex sessions as of 2026-08-26; quack-client holds
 # ~/quack-experiment, quack-server an empty home.
 #
-# NOTE this is a weaker excuse than rss-feed's: the stock image ships .claude and
+# NOTE this is a weaker excuse than kgl-rss-feed's: the stock image ships .claude and
 # .codex, so unlike a service appliance these CAN accumulate agent history, and
 # it would go uncollected. Excused as short-lived experiment boxes on the
 # understanding that they are deleted when the experiment ends — if either starts
@@ -54,7 +54,7 @@ quack-server
 # exe.dev relay for personal-mcp, created 2026-09-02 bare on exeslim (not
 # exeslim-dev): no Shelley, no provisioning, no agent harness — a dumb proxy
 # that holds zero secrets and zero state by design (agent_docs/agentsview-pilot.md,
-# 2026-09-02 topology change). Same category as rss-feed. If an agent is ever
+# 2026-09-02 topology change). Same category as kgl-rss-feed. If an agent is ever
 # provisioned onto it, enroll it instead of leaving this entry in place.
 iv-personal-mcp-relay
 
