@@ -4,6 +4,26 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-10-10 — tigris CLI: install via the vendor installer
+
+`./install.sh --upgrade` on the mini failed with `tigris: download failed`
+(curl 404). `tigrisdata/storage` is a monorepo, and `releases/latest` is
+whichever package shipped last — on 2026-10-08 that was the `tigris@3.16.0`
+npm wrapper, which carries no binaries — so the
+`/releases/latest/download/tigris-darwin-arm64.tar.gz` redirect we relied on
+stopped resolving. The CLI archives live on the `@tigrisdata/cli@<version>`
+releases and in the vendor's artifact bucket.
+
+`install.sh` now runs the vendor installer
+(`curl -fsSL https://get.t3.storage.dev/install.sh | sh`) with
+`TIGRIS_INSTALL_DIR=~/.local/bin` and `TIGRIS_SKIP_PATH=1`. It resolves the
+version from the bucket's `cli/latest.json` (one small GET, no GitHub API
+quota, so it also sidesteps the anonymous rate limit that blocks other tool
+upgrades over SSH), verifies `SHA256SUMS`, and falls back to the tagged GitHub
+release. It also adds a `t3` symlink beside `tigris`. The mini went 3.3.0 →
+3.16.0 with no shell rc files touched. iv-provision is unaffected: it pins
+`TIGRIS_VERSION` and downloads from the tagged release URL directly.
+
 ## 2026-10-10 — Mac cask cleanup: both Macs now match the Brewfile
 
 Commenting a cask out of `homebrew/Brewfile` only stops `--apps` from installing
