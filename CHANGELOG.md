@@ -4,6 +4,17 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-10-10 — join-tailnet: two skills, not one stale copy
+
+The TODO said dotfiles' `join-tailnet` had "drifted" from iv-provision's and
+should be synced. Reading both, they are different skills with the same name:
+dotfiles' is the control-plane variant (run from the mini; `join-tailnet.sh`
+attaches `api-tailscale`, joins, detaches), iv-provision's is the VM-side
+variant (expects the `tailnet` tag; preflight, vendored-skill caveat). Each
+holds material the other lacks, so neither overwrites the other. Fixed the
+stale `tailscale-api` name in this skill's prose (the script already used
+`api-tailscale`) and cross-referenced the VM-side skill.
+
 ## 2026-10-10 — install.sh runs headless; kc_set actually writes
 
 **`kc_set` never wrote to the Keychain.** Since `d214a14` (2026-09-10) its write

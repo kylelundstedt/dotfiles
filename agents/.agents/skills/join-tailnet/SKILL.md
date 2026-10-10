@@ -1,6 +1,6 @@
 ---
 name: join-tailnet
-description: Join an exe.dev VM to the Tailscale tailnet on demand. Attaches the tailscale-api integration for the duration of the join, mints a one-use ephemeral key through the proxy, runs tailscale up, and detaches again.
+description: Join an exe.dev VM to the Tailscale tailnet on demand. Attaches the api-tailscale integration for the duration of the join, mints a one-use ephemeral key through the proxy, runs tailscale up, and detaches again.
 ---
 
 # Join Tailnet
@@ -40,15 +40,23 @@ vm:<vm> --for 30m` — never the tag. This is what the 2026-07-28 remediation
 This script is the third path — a **one-off join from the mini** for a VM that
 has neither: it attaches for the duration of the join and detaches after.
 
+This is the **control-plane** variant: it needs exe.dev access to attach and
+detach, which a VM does not have. The VM-side variant — for a VM that already
+carries `api-tailscale` through the `tailnet` tag — is iv-provision's
+`skills-local/join-tailnet`, which also covers the preflight check and why the
+vendored `tailscale` skill's join advice does not apply on this fleet. Same
+name, different callers; keep them separate rather than syncing one over the
+other.
+
 The script now:
 
-1. Checks whether `tailscale-api` is already attached to the VM. If so, it
+1. Checks whether `api-tailscale` is already attached to the VM. If so, it
    leaves the attachment exactly as found and skips step 4.
-2. Attaches `tailscale-api` to `vm:<name>`.
+2. Attaches `api-tailscale` to `vm:<name>`.
 3. SSHes in over `*.exe.xyz`, ensures `tailscaled` is running, exchanges an
    OAuth token through the proxy, mints a one-use ephemeral preauthorized key
    against the public API, and runs `tailscale up`.
-4. Detaches `tailscale-api` on exit — via a trap that fires on error and
+4. Detaches `api-tailscale` on exit — via a trap that fires on error and
    interrupt, not only on success.
 
 So the authority exists only while it is being used. If a detach ever fails the
@@ -57,7 +65,7 @@ script warns loudly; `ssh exe.dev integrations list` will show the stray
 
 **Do not hand-run the old inline `curl` commands.** Without an attachment the
 token exchange returns no `access_token`, and the natural next move — attaching
-`tailscale-api` by hand and forgetting to detach — is exactly the standing
+`api-tailscale` by hand and forgetting to detach — is exactly the standing
 authority this change removed.
 
 ## Prerequisites

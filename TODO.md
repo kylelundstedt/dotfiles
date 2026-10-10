@@ -6,7 +6,6 @@ Open work only, grouped by when it can happen. Completed work →
 
 ## Actionable now
 
-- [ ] **`join-tailnet` skill has drifted from iv-provision's copy** (~200 diff lines; `skills-local/join-tailnet` there is canonical). `upgrade-vm` had the same problem — still on `~/iv-image` paths — and was synced 2026-10-10. Sync `join-tailnet` the same way, and decide whether dotfiles should keep copies at all or install both skills from iv-provision.
 - [ ] Fix `monitoring-meta` self-latching: on 2026-09-21 its only failure was its own `[STUCK]` status (down since 09-16), while all 17 other checks were up; exclude its own prior status from the stuck audit without dropping configuration/arrival checks.
 - [ ] Audit backup error suppression before treating green as verified: 2026-09-20 reconcile suppressed 7,255 home and 530 Photos copy-error lines; 09-21 daily suppressed 7,245 and 510. Both modes accept `corrupted on transfer` as benign, so reconcile does not independently resolve the daily exceptions (`backup/tigris-backup.sh:232`). Counts include retries, not unique files.
 - [ ] Fix monitoring digest self-counting: the 2026-09-21 digest reported two checks not up because it counted itself in GRACE before its success ping; the actual outstanding failure was `monitoring-meta`.
