@@ -91,6 +91,26 @@ accepting the risk above. If it is cut off, the fallbacks are a metered key
 The OpenAI side has no equivalent problem: exe.dev's integration and the fork's
 `shelley login openai` both use OpenAI's device-code flow for ChatGPT accounts.
 
+## If Aperture is down
+
+Claude Code and Codex reach Aperture on their own subscription logins, and
+Aperture only forwards them. So the fallback is the same client and login going
+straight to the provider for one run. Nothing changes on disk:
+
+```bash
+# Claude Code, direct to Anthropic
+claude --settings '{"env":{"ANTHROPIC_BASE_URL":"https://api.anthropic.com"}}'
+
+# Codex, direct to OpenAI (its built-in provider)
+codex -c model_provider=openai
+```
+
+Both verified on klundstedt-mbp 2026-10-10. Bypassed calls do not appear in
+Aperture's logs, and the commands work on any Mac or VM where the CLI is logged
+in. Local LM Studio models are not this fallback: they help only when the
+providers are unreachable, which usually means the network is too. They reach
+the fleet only through Shelley, via the `iv-llm-relay` bridge (`llm-relay.md`).
+
 ## Pricing assumptions
 
 Current list rates, $ per million tokens (input / 5-minute cache write / cache
