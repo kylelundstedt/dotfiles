@@ -544,12 +544,18 @@ install_cli_tools() {
         (install_github_binary "schollz/croc" "croc_v.*_${croc_asset}\\.tar\\.gz" "croc") &
         pids+=($!)
     else echo "  [=] croc"; fi
-    local tigris_arch; case "$arch" in arm64|aarch64) tigris_arch="arm64" ;; x86_64) tigris_arch="x64" ;; esac
     # Tigris CLI moved tigrisdata/cli → tigrisdata/storage. The old repo's releases
     # froze (~3.1–3.4) and predate TIGRIS_FORCE_PATH_STYLE, which exe.dev Object
-    # Storage integrations require (path-style proxy). Same tarball layout + asset names.
+    # Storage integrations require (path-style proxy). tigrisdata/storage is a
+    # monorepo: `releases/latest` is whichever package shipped last (the `tigris@x`
+    # npm wrapper on 2026-10-08, with no assets), so the /latest/download/ redirect
+    # we used until 2026-10-10 404s. The vendor installer resolves the version from
+    # its artifact bucket (one small GET, no GitHub API quota), verifies SHA256SUMS,
+    # and falls back to the `@tigrisdata/cli@<version>` GitHub release. It also
+    # drops a `t3` symlink beside the binary. TIGRIS_SKIP_PATH keeps it out of
+    # shell rc files; ~/.local/bin is already on PATH via zsh/.
     if want tigris; then
-        (install_release_asset "tigrisdata/storage" "tigris-${direnv_os}-${tigris_arch}.tar.gz" "tigris" "tigris-${direnv_os}-${tigris_arch}") &
+        (curl -fsSL https://get.t3.storage.dev/install.sh | env TIGRIS_INSTALL_DIR="$LOCAL_BIN" TIGRIS_SKIP_PATH=1 sh >/dev/null 2>&1 && echo "  [+] tigris" || echo "  [!] tigris failed") &
         pids+=($!)
     else echo "  [=] tigris"; fi
     # archil: CLI on Linux, macOS app installed separately (interactive prompt)
