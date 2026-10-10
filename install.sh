@@ -1200,6 +1200,69 @@ run_stow() {
     fi
 }
 
+# --- configure_aperture ---
+# macOS only: route Claude Code and Codex CLI through the Aperture LLM gateway
+# by default. Each client keeps its own subscription login (passthrough), so no
+# credential is configured here. IV VMs and containers get the same config from
+# iv-provision. Adds settings only when ABSENT: a hand-set value (e.g. a
+# different provider while Aperture is down) is left alone, not reverted.
+# Decision + economics: agent_docs/llm-subscription-vs-metered.md.
+APERTURE_URL="http://aperture.dojo-sun.ts.net"
+configure_aperture() {
+    [[ "$OS" == "macos" && "$IS_IV_VM" != true ]] || return 0
+    echo ""
+    echo "=== Aperture gateway ==="
+
+    # Claude Code: the live settings.json in the repo (gitignored; ~/.claude's
+    # copy is a stow symlink to it, so write the target, not the link).
+    local cs="$DOTFILES_DIR/agents/.claude/settings.json"
+    if [[ -f "$cs" ]] && command -v jq >/dev/null 2>&1; then
+        local cur
+        cur=$(jq -r '.env.ANTHROPIC_BASE_URL // empty' "$cs")
+        if [[ -z "$cur" ]]; then
+            if [[ "$DRY_RUN" == true ]]; then
+                echo "  [dry-run] would set Claude ANTHROPIC_BASE_URL=$APERTURE_URL"
+            else
+                jq --arg u "$APERTURE_URL" '.env.ANTHROPIC_BASE_URL = $u' "$cs" > "$cs.tmp" \
+                    && mv "$cs.tmp" "$cs" && echo "  [+] Claude: ANTHROPIC_BASE_URL=$APERTURE_URL"
+            fi
+        elif [[ "$cur" == "$APERTURE_URL" ]]; then
+            echo "  [=] Claude: already on Aperture"
+        else
+            echo "  [!] Claude: ANTHROPIC_BASE_URL is $cur (left as is)"
+        fi
+    fi
+
+    # Codex: config.toml is not stowed (Codex rewrites it: project trust,
+    # notify path), so add the two pieces in place. Top-level keys must come
+    # before the first [table], so model_provider is prepended.
+    local cx="$HOME/.codex/config.toml"
+    local cur_provider
+    cur_provider=$( [[ -f "$cx" ]] && awk -F'"' '/^[[:space:]]*\[/ {exit} /^[[:space:]]*model_provider[[:space:]]*=/ {print $2; exit}' "$cx" )
+    local has_block=false
+    [[ -f "$cx" ]] && grep -q '^\[model_providers\.aperture\]' "$cx" && has_block=true
+    if [[ "$DRY_RUN" == true ]]; then
+        [[ -z "$cur_provider" ]] && echo "  [dry-run] would set Codex model_provider = \"aperture\""
+        [[ "$has_block" != true ]] && echo "  [dry-run] would add [model_providers.aperture] to $cx"
+        return 0
+    fi
+    mkdir -p "$HOME/.codex"
+    [[ -f "$cx" ]] || install -m 600 /dev/null "$cx"
+    if [[ "$has_block" != true ]]; then
+        printf '\n[model_providers.aperture]\nname = "Aperture"\nbase_url = "%s/codex"\nwire_api = "responses"\nrequires_openai_auth = true\n' \
+            "$APERTURE_URL" >> "$cx" && echo "  [+] Codex: [model_providers.aperture] added"
+    fi
+    if [[ -z "$cur_provider" ]]; then
+        # Rewrite in place (cat >, not mv) so the file keeps its 0600 mode.
+        { echo 'model_provider = "aperture"'; cat "$cx"; } > "$cx.tmp" && cat "$cx.tmp" > "$cx" && rm -f "$cx.tmp" \
+            && echo "  [+] Codex: model_provider = \"aperture\""
+    elif [[ "$cur_provider" == "aperture" ]]; then
+        echo "  [=] Codex: already on Aperture"
+    else
+        echo "  [!] Codex: model_provider is $cur_provider (left as is)"
+    fi
+}
+
 # --- setup_agents ---
 # --- provisioning manifest helpers ---
 # The skill/MCP sets are declared in provisioning/*.manifest (single source of
@@ -1632,6 +1695,8 @@ setup_agents() {
         echo ""
         echo "  Note: 1Password CLI is required at runtime for secret-backed MCP servers."
     fi
+
+    configure_aperture
 
     # Session-start auto-refresh reminder (exe.dev VMs only). Each harness runs
     # ~/.agents/refresh-env.sh at session start to keep ~/dotfiles current (see

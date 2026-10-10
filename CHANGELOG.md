@@ -4,6 +4,25 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-10-10 — Aperture is the default LLM gateway on Macs
+
+`install.sh` gained `configure_aperture` (macOS, non-IV): it sets Claude Code's
+`ANTHROPIC_BASE_URL` to `http://aperture.dojo-sun.ts.net` in the live
+`agents/.claude/settings.json`, and adds `model_provider = "aperture"` plus the
+`[model_providers.aperture]` block (`/codex`, `wire_api = "responses"`,
+`requires_openai_auth = true`) to `~/.codex/config.toml`. It only fills in what
+is absent — a hand-set provider is reported and left alone — so a temporary
+switch away from Aperture survives a re-run. No credential is configured: each
+client keeps its own subscription login and Aperture passes it through.
+
+Codex's config is edited in place rather than stowed, because Codex rewrites it
+(project trust, notify path); `model_provider` is prepended since TOML top-level
+keys must precede the first table. Tested in throwaway homes (fresh, existing
+tables, idempotent re-run, hand-set provider, dry-run, Linux no-op; outputs
+parse with `tomllib`) and run on klundstedt-mbp, where it was a no-op over the
+hand edits. The mini picks it up on its next `install.sh`. VMs and containers
+get the same config from iv-provision.
+
 ## 2026-09-19 — AgentsView collector rebuilt; fleet on 0.43.0; iv-provision 3.0.27
 
 `iv-agentsview` recreated on the current exeslim as a **persistent `tag:dev`**
