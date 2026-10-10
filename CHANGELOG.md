@@ -4,6 +4,31 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-10-10 — install.sh runs headless; kc_set actually writes
+
+**`kc_set` never wrote to the Keychain.** Since `d214a14` (2026-09-10) its write
+line called `kc_set` itself instead of `security add-generic-password`. An
+unchanged value returned early, so every run since looked fine; a missing or
+rotated secret recursed until bash crashed, killing `install.sh` mid-run. It now
+writes, and passes `-T /usr/bin/security` only when creating an item: `-T` on
+an update rewrites the item's ACL, which macOS gates behind a keychain-password
+dialog (exit 45 where nobody can answer). A plain `-U` update keeps the ACL, so
+the launchd readers still work. Tested missing/unchanged/rotated against a
+throwaway keychain.
+
+**No terminal → no secrets.** Run without a TTY (`ssh <mac> ./install.sh`),
+`op_resolve_all` now skips 1Password: its approval would appear on the Mac's own
+screen with nobody to answer it, and the login Keychain is locked to SSH
+sessions anyway. Everything it fetched only re-copies secrets already in place,
+so they are refreshed on the next run at the Mac. Keychain provisioning and the
+`gh` fallback skip through the existing "1Password not configured" paths, and
+the token-based (`pat:`) MCP servers are **kept as registered** rather than
+removed — the first test run removed `github-home`/`github-work` from Claude
+Code (the stale-server cleanup removes them unconditionally before re-adding),
+and they were restored by hand. Two full no-TTY runs on klundstedt-mbp: exit 0
+in ~56s, both servers still registered after the second. `sudo` needed no
+change: every use is behind `sudo -n` or `--apps`.
+
 ## 2026-10-10 — Aperture is the default LLM gateway on Macs
 
 `install.sh` gained `configure_aperture` (macOS, non-IV): it sets Claude Code's

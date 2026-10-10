@@ -185,7 +185,15 @@ kc_set() {  # kc_set <service> <value> ; returns 0 on set/unchanged, 1 on failur
     local svc="$1" val="$2" cur
     cur=$(security find-generic-password -a "$USER" -s "$svc" -w 2>/dev/null || true)
     [[ "$cur" == "$val" ]] && return 0
-    kc_set "$svc" "$val"
+    # -T (grant /usr/bin/security read access) only when creating the item:
+    # passing it on an update rewrites the item's ACL, which macOS gates behind a
+    # keychain-password dialog (and fails with exit 45 where nobody can answer).
+    # A plain -U update keeps the existing ACL, so the launchd readers still work.
+    if [[ -z "$cur" ]]; then
+        security add-generic-password -a "$USER" -s "$svc" -T /usr/bin/security -w "$val" 2>/dev/null
+    else
+        security add-generic-password -a "$USER" -s "$svc" -U -w "$val" 2>/dev/null
+    fi
 }
 
 # 1Password, resolved ONCE per account. Every `op` process prompts the desktop
@@ -197,6 +205,7 @@ kc_set() {  # kc_set <service> <value> ; returns 0 on set/unchanged, 1 on failur
 # failed/empty" as before — it never falls back to per-reference reads, so the
 # prompt count is bounded by the number of accounts (two), not references.
 OP_CACHE=""
+OP_SKIPPED=false   # set by op_resolve_all when there is no terminal to approve prompts
 op_get() {  # op_get <op://vault/item/field> -> value on stdout ('' if unresolved)
     [[ -n "$OP_CACHE" && -s "$OP_CACHE" ]] || return 0
     local k="${1#op://}"   # cache keys carry no op:// prefix (see op_batch)
@@ -220,6 +229,16 @@ op_batch() {  # op_batch <account> <ref>... : one op process, appends ref<TAB>va
 }
 op_resolve_all() {  # macOS only; called once, before anything reads a secret
     [[ "$OS" == "macos" && "$DRY_RUN" != true ]] || return 0
+    # No terminal (e.g. `ssh <mac> ./install.sh`): skip secrets entirely. The
+    # 1Password approval would appear on the Mac's own screen with nobody to
+    # answer it, and the login Keychain the secrets are written to is locked to
+    # SSH sessions anyway. Everything here re-copies secrets that are already in
+    # place, so they are refreshed on the next run at the Mac (also when rotating).
+    if [[ "$IS_INTERACTIVE" != true ]]; then
+        OP_SKIPPED=true
+        echo "  Skipping 1Password (no terminal): Keychain secrets and token-based MCP servers not refreshed"
+        return 0
+    fi
     command -v op >/dev/null 2>&1 && [[ -n "$(op account list 2>/dev/null || true)" ]] || return 0
     OP_CACHE=$(mktemp "${TMPDIR:-/tmp}/op-cache.XXXXXX"); chmod 600 "$OP_CACHE"
     # bash runs EXIT traps in explicit ( ) subshells too — an unguarded rm here
@@ -1370,7 +1389,7 @@ setup_agents() {
     # MCP servers (remote HTTP transport)
     echo "  Configuring MCP servers..."
     local op_configured=false
-    if command -v op >/dev/null 2>&1 && [[ -n "$(op account list 2>/dev/null || true)" ]]; then
+    if [[ "$OP_SKIPPED" != true ]] && command -v op >/dev/null 2>&1 && [[ -n "$(op account list 2>/dev/null || true)" ]]; then
         op_configured=true
     fi
 
@@ -1403,8 +1422,15 @@ setup_agents() {
         fi
         # Remove stale or migrated servers before re-adding with correct URLs.
         # On Linux, motherduck migrates from OAuth to exe.dev proxy.
+        # A run that skipped 1Password cannot re-add the token-based (pat:) rows,
+        # so it must not remove them either: keep the existing registrations.
+        local keep_pat=""
+        if [[ "$OP_SKIPPED" == true && -f "$mcp_manifest" ]]; then
+            keep_pat=$(manifest_rows "$mcp_manifest" | awk -F'|' '$4 ~ /^ *pat:/ {gsub(/ /,"",$1); print $1}')
+        fi
         for srv in dlt motherduck github-home github-work tigris readwise hub-mcp; do
             [[ -n "$team_mcp" ]] && grep -qx "$srv" <<<"$team_mcp" && continue
+            [[ -n "$keep_pat" ]] && grep -qx "$srv" <<<"$keep_pat" && continue
             claude mcp remove --scope user "$srv" >/dev/null 2>&1 || true
         done
 
@@ -1446,7 +1472,10 @@ setup_agents() {
                 m_name=$(mtrim "$m_name"); m_mac=$(mtrim "$m_mac")
                 [[ -z "$m_name" || -z "$m_mac" ]] && continue
                 if [[ "$m_mac" == pat:* ]]; then
-                    if [[ "$op_configured" != true ]]; then
+                    if [[ "$OP_SKIPPED" == true ]]; then
+                        echo "  [=] $m_name: kept as registered (1Password skipped, no terminal)"
+                        continue
+                    elif [[ "$op_configured" != true ]]; then
                         echo "  Skipping $m_name (1Password not configured)"
                         continue
                     fi
