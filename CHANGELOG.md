@@ -23,6 +23,57 @@ parse with `tomllib`) and run on klundstedt-mbp, where it was a no-op over the
 hand edits. The mini picks it up on its next `install.sh`. VMs and containers
 get the same config from iv-provision.
 
+## 2026-10-10 — Claude Max API credits linked; Aperture scope decided
+
+Linked the Max 5x API credits to "Kyle's Individual Org". The grant shows
+$100.00, applying to Agent SDK, API, Batch API, Playground and Managed Agents —
+not Claude Code — expiring 2026-10-16 UTC. Decided that Aperture carries Claude
+Code and Codex CLI on their own subscription logins everywhere, while the
+modified Shelley keeps its subscription logins outside Aperture for now. Measured
+usage and pricing: [agent_docs/llm-subscription-vs-metered.md](agent_docs/llm-subscription-vs-metered.md).
+
+## 2026-10-06 — mbp: brew entry point restored; untrusted-taps TODO closed
+
+Opening Ghostty on klundstedt-mbp failed with `.zprofile:2: no such file or
+directory: /opt/homebrew/bin/brew` plus three `command not found: compdef`
+errors. Cause: exactly two tracked files had been deleted from the Homebrew
+checkout — `bin/brew` and `Library/Homebrew/brew.sh` — at 19:13 that evening;
+everything in Cellar/Caskroom was intact and the deletions sat as unstaged
+changes in `/opt/homebrew`'s git repo, so the fix was a plain
+`git -C /opt/homebrew restore` of both files (brew 7.0.6 back). The same
+event (19:13:58) also deleted `npx-cli.js` from fnm's node v24.13.1 npm
+module, breaking `npx`; restored with `npm install -g npm@11.8.0`. **The
+deleter was SentinelOne**: the unified log shows `sentineld`'s
+`quarantinemanager` running a quarantine batch at 19:13:58.677 and
+`matchmanager` recording `quarantined -> 1` at 19:14:00 (facade
+`35648D5A-4FFD-42E2-90FA-9A6072C5BF2E`). The batch looks like a storyline
+mitigation — it also tried to quarantine dozens of already-gone temp paths
+(npm `_cacache` tmp, a Claude Code 2.1.289 `.extract-*` dir, Claude
+skills-plugin tmp files, the `cmg-passthrough` venv) and skipped symlinks
+("not a regular file, mode 0xa1ed"); the three regular files it did reach are
+the ones that vanished. Detection name/verdict are `<private>` in the local
+log — only the S1 management console has them (threat on klundstedt-mbp,
+2026-10-06 ~19:13; quarantined files are restorable there, though we already
+restored from source). **This can recur** whenever the policy auto-mitigates
+a storyline that touched dev tooling; if it was a false positive, the fix is
+a console-side exclusion, not anything local. Gotcha
+worth keeping: the `compdef` noise was pure
+fallout — `zsh/.zshrc` runs `compinit` only inside its `if type brew` guard,
+so a missing brew silently skips completion setup and every later completion
+eval fails with `compdef` undefined.
+
+With brew back and the machine in hand, the "untap the three untrusted taps"
+item (TODO 2026-09-19, blocked on physical access) closed smaller than
+written: only `nikitabobko/tap` existed (no `dopplerhq/doppler`, no
+`quarylabs/quary`), and nothing from it was installed — no aerospace, doppler
+or sqruff anywhere in Cellar/Caskroom — so a single `brew untap
+nikitabobko/tap` cleared it, no uninstalls needed. The `chatgpt` →
+`chatgpt-classic` cask-rename check also came up clean: `/Applications/ChatGPT.app`
+present, Caskroom dir normal, no "ChatGPT Classic.app". Also discarded stray
+LM Studio PATH blocks that `lms` had re-appended to `zsh/.profile` and
+`zsh/.zshrc` through the stow symlinks (duplicates of blocks already in both
+files).
+
 ## 2026-09-19 — AgentsView collector rebuilt; fleet on 0.43.0; iv-provision 3.0.27
 
 `iv-agentsview` recreated on the current exeslim as a **persistent `tag:dev`**

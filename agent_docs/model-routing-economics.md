@@ -4,6 +4,14 @@ Decision record for using multiple model families economically in Shelley and
 adjacent agent harnesses. Pricing and the usage snapshot below are dated
 2026-07-19 and should be refreshed before changing subscriptions.
 
+> **Superseded figures, 2026-10-09.** The subscriptions are now Claude Max 5x
+> and ChatGPT Pro 200, and a measured usage-vs-pricing refresh lives in
+> [llm-subscription-vs-metered.md](llm-subscription-vs-metered.md). That doc also
+> records that the fleet's Shelley fork (`aifoundry-org/shelley`) has been calling
+> Claude through Max OAuth since 2026-08-12 — the use this doc's "Why this is
+> permanent" section describes as prohibited, not a supported subscription
+> benefit.
+
 ## Current subscriptions and constraints
 
 - ChatGPT $100/month tier is connected to exe.dev and works as Shelley's
