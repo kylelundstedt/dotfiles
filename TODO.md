@@ -6,6 +6,7 @@ Open work only, grouped by when it can happen. Completed work →
 
 ## Actionable now
 
+- [ ] **`install.sh` tool upgrades fail over SSH** (found 2026-10-10, remote `--upgrade` on the mini): GitHub-release tools look up versions through the anonymous API, because `gh`'s token is in the locked Keychain over SSH, so they hit the 60/hr limit and stay put. Claude Code and Codex upgrade fine. Fix by resolving versions via `releases/latest/download` redirects (the `install_release_asset` path, which costs no API quota) or by reading a token that SSH can reach.
 - [ ] Fix `monitoring-meta` self-latching: on 2026-09-21 its only failure was its own `[STUCK]` status (down since 09-16), while all 17 other checks were up; exclude its own prior status from the stuck audit without dropping configuration/arrival checks.
 - [ ] Audit backup error suppression before treating green as verified: 2026-09-20 reconcile suppressed 7,255 home and 530 Photos copy-error lines; 09-21 daily suppressed 7,245 and 510. Both modes accept `corrupted on transfer` as benign, so reconcile does not independently resolve the daily exceptions (`backup/tigris-backup.sh:232`). Counts include retries, not unique files.
 - [ ] Fix monitoring digest self-counting: the 2026-09-21 digest reported two checks not up because it counted itself in GRACE before its success ping; the actual outstanding failure was `monitoring-meta`.
