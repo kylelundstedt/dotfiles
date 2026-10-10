@@ -1,12 +1,13 @@
 ---
 name: upgrade-vm
-description: Upgrade an IV exe.dev VM's software layer by re-provisioning it in place at a newer iv-image commit (no recreate, no disk wipe). Falls back to a full destroy/recreate only when a fresh disk or a base change is actually required.
+description: Upgrade an IV exe.dev VM's software layer by re-provisioning it in place at a newer iv-provision commit (no recreate, no disk wipe). Falls back to a full destroy/recreate only when a fresh disk or a base change is actually required.
 ---
 
 # Upgrade VM
 
-IV VMs run **stock `boldsoftware/exeuntu`** (which keeps Shelley) and get their
-tooling from `provision-iv.sh` in the `iv-image` repo. So "upgrading" a VM is
+IV VMs run the **`ghcr.io/kylelundstedt/exeslim-dev`** base (which keeps Shelley
+via `LABEL exe.dev/install-shelley=true` plus its own units) and get their
+tooling from `provision-iv.sh` in the `iv-provision` repo. So "upgrading" a VM is
 normally just **re-running the provisioner at a newer commit** — in place, no
 recreate, no disk wipe, no tailnet churn.
 
@@ -16,38 +17,146 @@ pick up.
 
 ## Path A — Re-provision in place (default)
 
-The user provides the **VM name** and optionally a **target tag/sha** of the
-`iv-image` repo (defaults to the latest on the default branch).
+The user provides the **VM name** and a **target release tag** of the
+`iv-provision` repo.
 
-**One SSH command at a time** — never parallel SSH to `*.exe.xyz` or `exe.dev`.
+**One SSH command at a time** — never parallel SSH.
+
+### Reach the VM over the tailnet: `ssh <vm>`, not `<vm>.exe.xyz`
+
+A fleet VM is a tailnet node, so Tailscale SSH reaches it directly and keylessly.
+The exe.dev edge (`ssh <vm>.exe.xyz`) is the **bootstrap** path for a VM that is
+not on the tailnet yet — it needs an exe.dev SSH key, which a VM does not have,
+so from another VM it fails outright. Use it only in Path B before the join.
+
+### Always name an explicit tag; never `--detach main`
+
+`git checkout --detach main` resolves the **local** `main`, which on a fleet VM is
+whatever was fetched whenever it was last provisioned — often months stale. It
+succeeds, prints nothing alarming, and provisions an older recipe. Name the tag.
+
+Since 3.0.8 the provisioner prints the revision it is provisioning from and warns
+when the checkout is behind its upstream. **Read that line on every run**; it is
+the only thing standing between a typo and a silent downgrade.
 
 ```bash
-ssh -o ConnectTimeout=30 <vm>.exe.xyz "cd ~/iv-image \
+ssh <vm> "cd ~/iv-provision \
   && git fetch --tags --quiet \
-  && git checkout --detach <tag-or-sha> \
-  && ~/iv-image/provision-iv.sh \
-  && ~/iv-image/tests/smoke-provision.sh ~/iv-image"
+  && git checkout --detach <tag> \
+  && ~/iv-provision/provision-iv.sh \
+  && ~/iv-provision/tests/smoke-provision.sh ~/iv-provision"
 ```
 
-(`smoke-provision.sh` ships with iv-image ≥ 2.5.0; on older checkouts skip that
-last step.) This re-pins tools and re-installs the vendored skills + agent
-config, and rewrites `~/iv-provision.lock`. Verify:
+### Migrating a pre-3.0.0 VM (`~/iv-image`)
+
+VMs provisioned before the rename have the checkout at `~/iv-image` with an
+`origin` pointing at the old name. **Delete it and clone fresh** rather than
+renaming the directory and rewriting the remote: the checkout is a disposable
+artifact — it holds no VM state, everything it produces lives elsewhere
+(`~/iv-provision.lock`, `~/.local/bin`, `~/.agents`) — so a fresh clone is fewer
+moving parts and cannot leave behind a half-migrated remote, a stale detached
+HEAD, or local edits nobody meant to keep.
 
 ```bash
-ssh -o ConnectTimeout=30 <vm>.exe.xyz "cat ~/iv-provision.lock"
+ssh <vm> "rm -rf ~/iv-image \
+  && git clone --quiet https://github.com/kylelundstedt/iv-provision.git ~/iv-provision \
+  && git -C ~/iv-provision checkout --detach <tag> \
+  && ~/iv-provision/provision-iv.sh \
+  && ~/iv-provision/tests/smoke-provision.sh ~/iv-provision"
 ```
 
-If `~/iv-image` doesn't exist yet (older VM), clone it first — see `bootstrap.md`.
+Clone from **public `github.com`**, not `github.int.exe.xyz`: the old
+`repo-iv-image` integration targets a repository name that no longer resolves and
+returns HTTP 403. Check with `git -C ~/iv-image remote -v` before assuming which
+remote a VM has.
 
-**Then, if the VM has the personal dotfiles overlay (`~/dotfiles` exists),
-re-run it.** `provision-iv.sh` overwrites `~/.claude/settings.json` with the
-team default, wiping the overlay's spliced hooks (the SessionStart dotfiles
-auto-refresh + the exe.dev SSH guard) — and since the refresh hook lives in
-the clobbered file, it cannot heal itself (observed on all six overlay VMs
-after the 2.5.1 upgrade, 2026-07-14):
+If a VM has local commits in `~/iv-image`, stop and inspect — no VM worktree is
+authoritative, but neither should work be discarded silently.
+
+This re-pins tools and re-installs the vendored skills + agent config, and
+rewrites `~/iv-provision.lock`. Verify:
 
 ```bash
-ssh -o ConnectTimeout=30 <vm>.exe.xyz "cd ~/dotfiles && git pull --ff-only && ./install.sh"
+ssh <vm> "cat ~/iv-provision.lock"
+```
+
+### Verify the Shelley pin twice, minutes apart
+
+A clean provision log is **not** proof. kgl-songs reported 0.959 installed on
+2026-08-17 and was serving the older build again sixty seconds later, via the
+socket-activation race (fixed in 3.0.1). Compare the binary against what is
+actually answering the socket, immediately and again a few minutes later:
+
+```bash
+ssh <vm> "shelley version | jq -r .version; \
+  curl -fsS -H 'X-Exedev-Userid: probe' \
+    --unix-socket ~/.config/shelley/shelley.sock \
+    http://localhost/version | jq -r .version"
+```
+
+Both must equal the pin. Expect **no Shelley restart** on a VM already at the pin
+(`pin and self-update override already in effect; not restarting`) and **no Claude
+Code downgrade** — `claude` and `codex` are floors, not exact pins. If either
+happens, stop and investigate rather than continuing through the fleet.
+
+Also check `~/iv-provision.lock` after each VM: `python3_version`,
+`tailscale_version`, `entire_version`, `entire_plugin_version` and
+`skills_count` should all be populated.
+
+### Log in Claude Code and Codex once (Aperture releases)
+
+From the Aperture release on, both CLIs route through
+`http://aperture.dojo-sun.ts.net` on the VM's **own** subscription logins, so a
+VM without them fails: Codex with `401 Unauthorized` from
+`.../codex/responses`, Claude Code with `Not logged in`. Logins live in the
+home directory, so they survive later in-place upgrades; a recreated VM (Path B)
+needs them again. Check first:
+
+```bash
+ssh <vm> "ls ~/.codex/auth.json ~/.claude/.credentials.json"
+```
+
+For each missing one, the owner approves in a browser:
+
+- **Codex:** `ssh <vm> 'codex login --device-auth'` prints a URL and a one-time
+  code; approve it at `https://auth.openai.com/codex/device`.
+- **Claude Code:** interactive only: `ssh <vm>`, run `claude`, then `/login`.
+
+Then confirm both answer through the gateway with no model override:
+
+```bash
+ssh <vm> 'cd /tmp && claude -p "Reply with exactly: ok" \
+  && codex exec --skip-git-repo-check "Reply with exactly: ok"'
+```
+
+A model error here (e.g. `claude-opus-5[1m]` "may not exist") means the CLI's
+default model is not on Aperture's provider list: the pins are behind the
+gateway. Do not work around it per VM; bump the pins.
+
+### Do production VMs last
+
+VMs running services others depend on (kgl-songs, telnyx-vm) go **last and
+individually**, and their services get confirmed still serving afterwards.
+
+If `~/iv-provision` doesn't exist yet (older VM), clone it first — see `bootstrap.md`.
+
+**Re-running the personal overlay is no longer required for correctness.** Since
+3.0.0 `provision-iv.sh` _merges_ `~/.claude/settings.json`, preserving hook events
+the team file does not define — so an overlay's `SessionStart` auto-refresh
+survives provisioning.
+
+It used to overwrite, which silently deleted that hook, and this step existed to
+repair it. That mitigation failed in practice: `iv-foundry-stage2` was provisioned
+2026-08-17 and found on 2026-08-18 with `.hooks.SessionStart` absent, the overlay
+still installed, and nobody having noticed — the hook _script_ survives, so
+nothing looks broken. It also could never self-heal, since the refresh hook that
+would have restored it is the thing that got deleted.
+
+Still worth running if you want the overlay's own content refreshed (its
+`~/dotfiles` checkout pulled, new personal skills installed):
+
+```bash
+ssh <vm> "cd ~/dotfiles && git pull --ff-only && ./install.sh"
 ```
 
 ## Path B — Full destroy + recreate (only when required)
@@ -63,8 +172,9 @@ This is destructive. Confirm the VM name and that wiping its disk is acceptable.
 
 ### 2. Destroy the old VM
 
-Destroy the old VM before deleting its tailnet node — the stale node can still
-be located by hostname afterward, and it must be gone before the new VM joins.
+Destroy the old VM before creating the replacement. The stale Tailscale node can
+still be located by hostname afterward, and must be deleted before the new VM
+joins.
 
 ```bash
 ssh -o ConnectTimeout=30 exe.dev rm <vm>
@@ -72,19 +182,34 @@ ssh -o ConnectTimeout=30 exe.dev rm <vm>
 
 ### 3. Delete the stale Tailscale node
 
-Otherwise the new VM gets a `-1` suffix. Mint a short-lived token from the
-Tailscale OAuth client (1Password; the old static API key is revoked — 2026-07):
+Delete the old node before the replacement joins, otherwise the new VM gets a
+`-1` suffix. This workstation-specific path expects the 1Password CLI and the
+Industry Vault account. Mint a short-lived (1h) access token from the Tailscale
+OAuth client — the old static API key is revoked (2026-07); see `tailnet.md`
+for the OAuth setup. Credentials are passed through curl config on stdin
+rather than exposed in curl's process arguments:
 
 ```bash
-TOKEN=$(curl -fsS -u "$(op read 'op://Employee/Tailscale OAuth/Client ID' --account industryvault.1password.com):$(op read 'op://Employee/Tailscale OAuth/Client secret' --account industryvault.1password.com)" \
-  -d grant_type=client_credentials https://api.tailscale.com/api/v2/oauth/token | jq -r .access_token)
-NODE_ID=$(curl -fsSL -H "Authorization: Bearer $TOKEN" \
+TS_TOKEN=$(printf 'user = "%s:%s"\n' \
+    "$(op read 'op://Employee/Tailscale OAuth Dev/Client ID' --account industryvault.1password.com)" \
+    "$(op read 'op://Employee/Tailscale OAuth Dev/Client secret' --account industryvault.1password.com)" \
+  | curl --config - -fsS -d grant_type=client_credentials \
+      https://api.tailscale.com/api/v2/oauth/token \
+  | jq -er .access_token)
+
+curl_with_tailscale_auth() {
+  printf 'header = "Authorization: Bearer %s"\n' "$TS_TOKEN" \
+    | curl --config - "$@"
+}
+
+NODE_ID=$(curl_with_tailscale_auth -fsSL \
   https://api.tailscale.com/api/v2/tailnet/-/devices \
-  | jq -er '[.devices[] | select(.hostname == "<vm>") | .id]
-            | if length == 1 then .[0] else error("expected exactly one matching node") end')
-curl -fsSL -X DELETE -H "Authorization: Bearer $TOKEN" \
+  | jq -er --arg hostname "<vm>" \
+      '[.devices[] | select(.hostname == $hostname) | .id] | unique | if length == 1 then .[0] else error("expected exactly one matching node") end')
+
+curl_with_tailscale_auth -fsSL -X DELETE \
   "https://api.tailscale.com/api/v2/device/$NODE_ID"
-unset TOKEN
+unset TS_TOKEN
 ```
 
 ### 4. Remove stale SSH state
@@ -95,10 +220,24 @@ ssh -O exit <vm> 2>/dev/null || true
 ssh -O exit <vm>.exe.xyz 2>/dev/null || true
 ```
 
-### 5. Create the new VM (stock exeuntu — no --image)
+### 5. Create the new VM (IV dev base)
+
+The exe.dev VM tag `iv` is **not** yet wired to integration attachment (as of
+2026-08-19 only `iv-provision` carries it, and nothing attaches by it), so a new
+VM still needs `api-tailscale` attached explicitly at step 7. Note this `iv` is
+an exe.dev tag — unrelated to Tailscale's `tag:dev`, and not the provisioning
+repository release tag either. See `tailnet.md` → "Two tag systems, one word".
+
+Recreate is also the **only** way to pick up a newer base image — exe.dev fixes
+a VM's image at creation. Take the current immutable build ID from the
+[package page](https://github.com/kylelundstedt/exeslim/pkgs/container/exeslim-dev).
+Use the build ID rather than a mutable tag here specifically: the whole point of
+this path is to land on a _known_ base, and exe.dev caches mutable tags for up to
+24 h (`:<date>` and `:<sha>` included — only `latest`/`main`/`master` are 1 h).
 
 ```bash
-ssh -o ConnectTimeout=30 exe.dev new --name=<vm> --tag=<tag>
+ssh -o ConnectTimeout=30 exe.dev new --name=<vm> \
+  --image=ghcr.io/kylelundstedt/exeslim-dev:<date>.<run>.<attempt>
 ```
 
 If the user specified integrations, attach them:
@@ -121,18 +260,25 @@ If it fails, wait 30-60s and try once more.
 ### 7. Rejoin the tailnet + provision
 
 Use the `join-tailnet` skill, then run the full bring-up from `bootstrap.md`
-(attach `github-kylelundstedt-iv-image`, clone, `provision-iv.sh`, then clone the
+(attach `github-kylelundstedt-iv-provision`, clone, `provision-iv.sh`, then clone the
 work repo + `provision-docsite`).
 
 ### 8. Verify
 
 ```bash
 tailscale status | grep <vm>
-ssh -o ConnectTimeout=30 <vm>.exe.xyz "cat ~/iv-provision.lock"
+ssh <vm> "cat ~/iv-provision.lock"
 ```
 
 ## SSH discipline
 
-- **One SSH attempt at a time.** Never launch parallel SSH to `*.exe.xyz` or `exe.dev`.
+- **One SSH attempt at a time.** Never launch parallel SSH.
 - Wait for each command to complete before starting the next.
 - If SSH fails, wait 30-60s before one more attempt.
+- Use `ssh <vm>` (Tailscale SSH) for anything on the tailnet. `<vm>.exe.xyz` is
+  the bootstrap path only, and does not work from another VM.
+- Since 3.0.9 the provisioner writes an ssh config block matching on tailnet
+  _membership_ (`tailscale ip -4 %h`) rather than on an `iv-*` name prefix, so
+  `ssh kgl-songs` and `ssh telnyx-vm` work without flags. On a VM last
+  provisioned before 3.0.9, pass
+  `-o StrictHostKeyChecking=accept-new -o User=exedev` until it is re-provisioned.
