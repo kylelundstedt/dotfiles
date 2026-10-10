@@ -22,6 +22,16 @@ tables, idempotent re-run, hand-set provider, dry-run, Linux no-op; outputs
 parse with `tomllib`) and run on klundstedt-mbp, where it was a no-op over the
 hand edits. The mini picks it up on its next `install.sh`. VMs and containers
 get the same config from iv-provision.
+
+## 2026-10-10 — Claude Max API credits linked; Aperture scope decided
+
+Linked the Max 5x API credits to "Kyle's Individual Org". The grant shows
+$100.00, applying to Agent SDK, API, Batch API, Playground and Managed Agents —
+not Claude Code — expiring 2026-10-16 UTC. Decided that Aperture carries Claude
+Code and Codex CLI on their own subscription logins everywhere, while the
+modified Shelley keeps its subscription logins outside Aperture for now. Measured
+usage and pricing: [agent_docs/llm-subscription-vs-metered.md](agent_docs/llm-subscription-vs-metered.md).
+
 ## 2026-10-06 — mbp: brew entry point restored; untrusted-taps TODO closed
 
 Opening Ghostty on klundstedt-mbp failed with `.zprofile:2: no such file or
