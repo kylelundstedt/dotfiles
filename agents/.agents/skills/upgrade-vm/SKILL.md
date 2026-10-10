@@ -141,14 +141,14 @@ individually**, and their services get confirmed still serving afterwards.
 If `~/iv-provision` doesn't exist yet (older VM), clone it first — see `bootstrap.md`.
 
 **Re-running the personal overlay is no longer required for correctness.** Since
-3.0.0 `provision-iv.sh` _merges_ `~/.claude/settings.json`, preserving hook events
+3.0.0 `provision-iv.sh` *merges* `~/.claude/settings.json`, preserving hook events
 the team file does not define — so an overlay's `SessionStart` auto-refresh
 survives provisioning.
 
 It used to overwrite, which silently deleted that hook, and this step existed to
 repair it. That mitigation failed in practice: `iv-foundry-stage2` was provisioned
 2026-08-17 and found on 2026-08-18 with `.hooks.SessionStart` absent, the overlay
-still installed, and nobody having noticed — the hook _script_ survives, so
+still installed, and nobody having noticed — the hook *script* survives, so
 nothing looks broken. It also could never self-heal, since the refresh hook that
 would have restored it is the thing that got deleted.
 
@@ -232,7 +232,7 @@ Recreate is also the **only** way to pick up a newer base image — exe.dev fixe
 a VM's image at creation. Take the current immutable build ID from the
 [package page](https://github.com/kylelundstedt/exeslim/pkgs/container/exeslim-dev).
 Use the build ID rather than a mutable tag here specifically: the whole point of
-this path is to land on a _known_ base, and exe.dev caches mutable tags for up to
+this path is to land on a *known* base, and exe.dev caches mutable tags for up to
 24 h (`:<date>` and `:<sha>` included — only `latest`/`main`/`master` are 1 h).
 
 ```bash
@@ -278,7 +278,7 @@ ssh <vm> "cat ~/iv-provision.lock"
 - Use `ssh <vm>` (Tailscale SSH) for anything on the tailnet. `<vm>.exe.xyz` is
   the bootstrap path only, and does not work from another VM.
 - Since 3.0.9 the provisioner writes an ssh config block matching on tailnet
-  _membership_ (`tailscale ip -4 %h`) rather than on an `iv-*` name prefix, so
+  *membership* (`tailscale ip -4 %h`) rather than on an `iv-*` name prefix, so
   `ssh kgl-songs` and `ssh telnyx-vm` work without flags. On a VM last
   provisioned before 3.0.9, pass
   `-o StrictHostKeyChecking=accept-new -o User=exedev` until it is re-provisioned.
