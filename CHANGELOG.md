@@ -4,6 +4,43 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-10-10 — Mac cask cleanup: both Macs now match the Brewfile
+
+Commenting a cask out of `homebrew/Brewfile` only stops `--apps` from installing
+it; `brew bundle` never uninstalls. Years of commented-out entries were still
+installed, mostly on the mini. Zoom was also commented out (#79).
+
+- **klundstedt-mbp:** removed the `zoom` cask and the `quarto` cask. The cask's
+  `/usr/local/bin/quarto` (1.10.18) sat ahead of `install.sh`'s
+  `~/.local/bin/quarto` (1.10.19) on `PATH`; `type quarto` now resolves to the
+  `install.sh` copy.
+- **klundstedt-mini:** removed 27 casks. 22 were removed remotely (through
+  iv-docs, no `sudo`): Cursor, Dash, Warp, TablePlus, Tabula, OmniGraffle,
+  OmniOutliner, OmniPlan, Positron, RStudio, eight fonts, and the hand-installed
+  OrbStack, gcloud-cli, Visual Studio Code and Syncthing. Five needed `sudo` and
+  were removed at a terminal: Box Drive, Zoom, SnowSQL, R.app and Dropbox.
+  Dropbox's remote attempt stopped partway, after removing its updater services
+  and before unloading its kernel extension, which needs `sudo`. The second
+  attempt finished it. Box Drive's launch-at-login job stayed loaded in launchd
+  after its plist was deleted; it was unloaded with `launchctl bootout`. The
+  backup's `box` phase reads a 2025 export on the external drive, not Box Drive,
+  so the backup was unaffected. All 19 `com.kylelundstedt.*` LaunchAgents
+  stayed loaded throughout.
+
+**Kept on both Macs:** `codex` and `agentsview`. They are outside the Brewfile
+on purpose: `install.sh` installs both as casks on macOS. On the mini,
+`agentsview` also runs the source daemon the collector pulls from.
+
+**Gotchas:**
+
+- Do not use `brew bundle cleanup --force` for this. It removes everything not
+  listed in the Brewfile, including formulae `install.sh` depends on (`stow`,
+  `git`, `rclone`, and `tailscale` on the mini) and the `codex`, `agentsview` and
+  `tailscale-app` casks.
+- `.pkg` casks (Box Drive, Zoom, SnowSQL, R.app), and Dropbox despite being an
+  app bundle, need `sudo` to uninstall. Over SSH that works only with a terminal
+  (`ssh -t`), so `sudo` can prompt for the password.
+
 ## 2026-10-10 — join-tailnet: two skills, not one stale copy
 
 The TODO said dotfiles' `join-tailnet` had "drifted" from iv-provision's and
