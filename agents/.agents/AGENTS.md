@@ -70,6 +70,7 @@ HERE. -->
 - `/upgrade-vm` — use when upgrading an exe.dev VM to a newer image version.
 - `/apple-containers` — Apple Container VMs on macOS (back-burnered, exe.dev is primary).
 - `/sprites-dev` — Fly.io Sprites (back-burnered, exe.dev is primary).
+- `/unifi-network` — read the home UniFi network (devices, clients, Wi-Fi, firewall, Protect) via the read-only `unifi-api` wrapper. macOS, home LAN only.
 
 ## Memory
 

@@ -18,15 +18,19 @@ pin_file="${XDG_CONFIG_HOME:-$HOME/.config}/unifi-api/console.pem"
 
 usage() {
     cat <<'EOF'
-Usage: unifi-api PATH
+Usage: unifi-api PATH...
        unifi-api --pin
 
-GET one console PATH as the View Only account and print the response body.
-Signs in, makes the request, signs out. Writes are refused by the console.
+GET console PATHs as the View Only account. Signs in once, makes the
+requests, signs out. Writes are refused by the console.
+
+With one PATH, prints the response body. With several, prints one JSON line
+per PATH: {"path": ..., "status": ..., "body": ...}. The console rate-limits
+sign-ins (HTTP 429), so batch the paths you need into one call.
 
   unifi-api /proxy/network/api/self/sites
-  unifi-api /proxy/network/api/s/default/stat/device-basic
-  unifi-api /proxy/network/api/s/default/stat/sta
+  unifi-api /proxy/network/api/s/default/stat/device-basic \
+            /proxy/network/api/s/default/stat/sta
 
 --pin  Fetch the console's self-signed certificate, show its fingerprint and
        save it; every request is verified against the saved certificate.
@@ -48,9 +52,10 @@ for tool in curl jq; do
     command -v "$tool" >/dev/null 2>&1 || fail "$tool is required."
 done
 
-[[ $# -eq 1 ]] || { usage >&2; exit 2; }
+[[ $# -ge 1 ]] || { usage >&2; exit 2; }
 case "$1" in
     -h | --help) usage; exit 0 ;;
+    --pin) [[ $# -eq 1 ]] || fail '--pin takes no other arguments.' ;;
 esac
 
 [[ "$UNIFI_URL" =~ ^https://([a-zA-Z0-9.-]+)(:([0-9]{1,5}))?/?$ ]] ||
@@ -69,10 +74,11 @@ if [[ "$1" == --pin ]]; then
     exit 0
 fi
 
-path=$1
-# A console path and optional query string: no scheme, whitespace or traversal.
-[[ "$path" =~ ^/[A-Za-z0-9._~/?\&=%:,+-]*$ && "$path" != *..* ]] ||
-    fail 'PATH must start with / and contain no whitespace, scheme or "..".'
+# Console paths and optional query strings: no scheme, whitespace or traversal.
+for path in "$@"; do
+    [[ "$path" =~ ^/[A-Za-z0-9._~/?\&=%:,+-]*$ && "$path" != *..* ]] ||
+        fail "PATH must start with / and contain no whitespace, scheme or \"..\": $path"
+done
 
 [[ -f "$pin_file" ]] || fail "No pinned certificate; run: unifi-api --pin"
 for tool in op openssl; do
@@ -112,10 +118,26 @@ code=$({ op read --account "$UNIFI_OP_ACCOUNT" "$UNIFI_OP_ITEM/username" &&
     curl -sS "${tls[@]}" -c "$work/jar" -D "$work/hdr" -o /dev/null \
         -w '%{http_code}' -H 'Content-Type: application/json' --data @- \
         "$base/api/auth/login") || fail 'Sign-in request failed.' 1
+[[ "$code" != 429 ]] ||
+    fail 'Sign-in rate-limited (HTTP 429). Wait a minute, then batch paths into one call.' 1
 [[ "$code" == 200 ]] || fail "Sign-in refused (HTTP $code)." 1
 csrf=$(tr -d '\r' < "$work/hdr" | sed -n 's/^[Xx]-[Cc][Ss][Rr][Ff]-[Tt]oken: *//p' | tail -1)
 
-code=$(curl -sS "${tls[@]}" -b "$work/jar" -o "$work/body" -w '%{http_code}' \
-    "$base$path") || fail 'Request failed.' 1
-cat "$work/body"
-[[ "$code" == 2?? ]] || fail "HTTP $code for $path" 1
+rc=0
+for path in "$@"; do
+    code=$(curl -sS "${tls[@]}" -b "$work/jar" -o "$work/body" -w '%{http_code}' \
+        "$base$path") || { printf 'unifi-api: request failed: %s\n' "$path" >&2; code=000; }
+    [[ -f "$work/body" ]] || : > "$work/body"
+    if [[ $# -eq 1 ]]; then
+        cat "$work/body"
+    else
+        jq -cn --arg path "$path" --arg status "$code" --rawfile body "$work/body" \
+            '{path: $path, status: ($status | tonumber), body: (try ($body | fromjson) catch $body)}'
+    fi
+    if [[ "$code" != 2?? ]]; then
+        printf 'unifi-api: HTTP %s for %s\n' "$code" "$path" >&2
+        rc=1
+    fi
+    rm -f "$work/body"
+done
+exit "$rc"
