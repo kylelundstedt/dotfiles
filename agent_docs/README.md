@@ -49,3 +49,4 @@ always-on rules live in `AGENTS.md`.
 | `mac-audit-mbp-2026-09-10.md`    | mbp run of `provisioning/mac-audit.md` — as-found findings (agentsview absent, github-home MCP failing, skill cruft), remediation, and the drift-checker presence guard |
 
 - [agentsview-peer-path.md](agentsview-peer-path.md) — AgentsView data path over exe.dev peer integrations: canary results, design, open token-model decision
+- [unifi-admin.md](unifi-admin.md) — On-demand Codex launcher: hidden API-key handoff, local workspace, approval workflow, and manual revocation

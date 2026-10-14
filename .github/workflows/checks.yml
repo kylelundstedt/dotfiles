@@ -25,6 +25,11 @@ jobs:
       - name: AgentsView snapshot and restore staging
         run: backup/test_agentsview_snapshot.sh
 
+      - name: UniFi session launcher (offline PTY tests)
+        run: |
+          bash -n maint/.local/bin/unifi-session
+          python3 -m unittest -v maint/test_unifi_session.py
+
       - name: validate launchd plists
         run: |
           python3 - <<'EOF'
@@ -58,3 +63,12 @@ jobs:
         run: |
           grep -q '\[\[ -f "\$HOME/iv-provision.lock" \]\] && IS_IV_VM=true' install.sh
           ! grep -q '\[\[ -d /exe.dev && -f "\$HOME/iv-provision.lock"' install.sh
+
+  unifi-session-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: UniFi launcher on system Bash (offline only)
+        run: |
+          /bin/bash -n maint/.local/bin/unifi-session
+          python3 -m unittest -v maint/test_unifi_session.py
