@@ -4,6 +4,21 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-10-14 — On-demand UniFi session launcher
+
+Added `maint/.local/bin/unifi-session` for a human-run Codex session on the mini:
+HTTPS console prompt, hidden API-key entry, private `~/unifi-admin` workspace,
+and initial read-only inventory instructions. It preserves existing workspace
+instructions, keeps secrets out of its arguments/files, starts without Codex's
+shared daemon, and retains sandboxing and human-requested approvals. Exiting
+clears the launcher's credential variable and reminds the user to revoke the
+key in UniFi; it does not claim API-level read-only access or automatic expiry.
+
+Offline pseudo-terminal tests use a fake Codex and synthetic keys, including
+cancellation and failure paths. They are included in CI. No real key, device,
+or Mac was accessed for implementation; the first live mini run remains an
+owner-supervised qualification step. See [the runbook](agent_docs/unifi-admin.md).
+
 ## 2026-10-10 — tigris CLI: install via the vendor installer
 
 `./install.sh --upgrade` on the mini failed with `tigris: download failed`
