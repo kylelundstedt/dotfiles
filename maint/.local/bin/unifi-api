@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+# Read-only UniFi console access for agents. Bash 3.2+ (macOS/Linux).
+# The boundary is the console account's View Only role, not this script: the
+# script only adds GET-only usage and keeps the password out of argv and disk.
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+    printf 'Run unifi-api as a command; do not source it.\n' >&2
+    return 2
+fi
+set +x
+set +v
+set -euo pipefail
+umask 077
+
+UNIFI_URL=${UNIFI_URL:-https://192.168.1.1}
+UNIFI_OP_ITEM=${UNIFI_OP_ITEM:-op://Private/Unifi agent-readonly}
+UNIFI_OP_ACCOUNT=${UNIFI_OP_ACCOUNT:-lundstedts.1password.com}
+pin_file="${XDG_CONFIG_HOME:-$HOME/.config}/unifi-api/console.pem"
+
+usage() {
+    cat <<'EOF'
+Usage: unifi-api PATH
+       unifi-api --pin
+
+GET one console PATH as the View Only account and print the response body.
+Signs in, makes the request, signs out. Writes are refused by the console.
+
+  unifi-api /proxy/network/api/self/sites
+  unifi-api /proxy/network/api/s/default/stat/device-basic
+  unifi-api /proxy/network/api/s/default/stat/sta
+
+--pin  Fetch the console's self-signed certificate, show its fingerprint and
+       save it; every request is verified against the saved certificate.
+
+Environment (defaults in parentheses):
+  UNIFI_URL         console origin (https://192.168.1.1)
+  UNIFI_OP_ITEM     1Password item with username/password
+                    (op://Private/Unifi agent-readonly)
+  UNIFI_OP_ACCOUNT  1Password account (lundstedts.1password.com)
+EOF
+}
+
+fail() {
+    printf 'unifi-api: %s\n' "$1" >&2
+    exit "${2:-2}"
+}
+
+for tool in curl jq; do
+    command -v "$tool" >/dev/null 2>&1 || fail "$tool is required."
+done
+
+[[ $# -eq 1 ]] || { usage >&2; exit 2; }
+case "$1" in
+    -h | --help) usage; exit 0 ;;
+esac
+
+[[ "$UNIFI_URL" =~ ^https://([a-zA-Z0-9.-]+)(:([0-9]{1,5}))?/?$ ]] ||
+    fail 'UNIFI_URL must be https://HOST[:PORT] with no path.'
+host=${BASH_REMATCH[1]}
+port=${BASH_REMATCH[3]:-443}
+
+if [[ "$1" == --pin ]]; then
+    command -v openssl >/dev/null 2>&1 || fail 'openssl is required for --pin.'
+    mkdir -p "$(dirname "$pin_file")"
+    cert=$(openssl s_client -connect "$host:$port" </dev/null 2>/dev/null |
+        openssl x509 2>/dev/null) || fail "Could not read a certificate from $host:$port."
+    printf '%s\n' "$cert" > "$pin_file"
+    openssl x509 -in "$pin_file" -noout -subject -fingerprint -sha256
+    printf 'Pinned to %s\n' "$pin_file"
+    exit 0
+fi
+
+path=$1
+# A console path and optional query string: no scheme, whitespace or traversal.
+[[ "$path" =~ ^/[A-Za-z0-9._~/?\&=%:,+-]*$ && "$path" != *..* ]] ||
+    fail 'PATH must start with / and contain no whitespace, scheme or "..".'
+
+[[ -f "$pin_file" ]] || fail "No pinned certificate; run: unifi-api --pin"
+for tool in op openssl; do
+    command -v "$tool" >/dev/null 2>&1 || fail "$tool is required."
+done
+# Self-signed console certificates name a host (e.g. unifi.local), not the IP.
+# Verify against that name, routed to the configured address.
+cert_name=$(openssl x509 -in "$pin_file" -noout -subject 2>/dev/null |
+    sed -n 's/.*CN *= *\([^,/]*\).*/\1/p')
+[[ -n "$cert_name" ]] || fail "Could not read the certificate name in $pin_file; re-run --pin."
+
+tls=(--noproxy '*' --globoff --max-time 30 --cacert "$pin_file"
+    --resolve "$cert_name:$port:$host")
+base="https://$cert_name:$port"
+
+work=$(mktemp -d)
+csrf=''
+cleanup() {
+    status=$?
+    trap - EXIT INT TERM HUP
+    if [[ -n "$csrf" ]]; then
+        curl -sS "${tls[@]}" -b "$work/jar" -X POST -H "X-CSRF-Token: $csrf" \
+            -o /dev/null "$base/api/auth/logout" 2>/dev/null || true
+    fi
+    rm -rf "$work"
+    exit "$status"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
+
+# Username and password go op -> jq -> curl stdin; neither appears in argv.
+code=$({ op read --account "$UNIFI_OP_ACCOUNT" "$UNIFI_OP_ITEM/username" &&
+    op read --account "$UNIFI_OP_ACCOUNT" "$UNIFI_OP_ITEM/password"; } |
+    jq -cRn '{username: input, password: input, rememberMe: false}' |
+    curl -sS "${tls[@]}" -c "$work/jar" -D "$work/hdr" -o /dev/null \
+        -w '%{http_code}' -H 'Content-Type: application/json' --data @- \
+        "$base/api/auth/login") || fail 'Sign-in request failed.' 1
+[[ "$code" == 200 ]] || fail "Sign-in refused (HTTP $code)." 1
+csrf=$(tr -d '\r' < "$work/hdr" | sed -n 's/^[Xx]-[Cc][Ss][Rr][Ff]-[Tt]oken: *//p' | tail -1)
+
+code=$(curl -sS "${tls[@]}" -b "$work/jar" -o "$work/body" -w '%{http_code}' \
+    "$base$path") || fail 'Request failed.' 1
+cat "$work/body"
+[[ "$code" == 2?? ]] || fail "HTTP $code for $path" 1

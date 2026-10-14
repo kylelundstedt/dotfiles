@@ -1,5 +1,55 @@
 # On-demand UniFi administration
 
+Two tools, by what the session needs:
+
+- **Reading** (inventory, clients, status): `unifi-api`, below. A standing,
+  read-only credential an agent can use without a human handoff.
+- **Changing anything**: `unifi-session`, with a fresh full-access key that is
+  revoked afterwards.
+
+## Read-only access: `unifi-api`
+
+`unifi-api PATH` makes one GET request against the console as the local
+**View Only** admin `agent-readonly` and prints the response body. Each call
+signs in, reads, and signs out.
+
+```bash
+unifi-api --pin                                         # once per machine
+unifi-api /proxy/network/api/self/sites
+unifi-api /proxy/network/api/s/default/stat/device-basic
+unifi-api /proxy/network/api/s/default/stat/sta         # connected clients
+```
+
+- **Why username and password, not an API key.** UniFi's Integrations API keys
+  have no scope or role: the key created there (2026-10-14) was full-admin with
+  "Expires: Never", and a View Only user is not offered **Create New API Key**.
+  The session login is the only way found to get a role-limited credential.
+- **The boundary is the console role**, not the wrapper. Measured 2026-10-14
+  with a no-op write (a client renamed to its existing name, CSRF token sent):
+  `403 api.err.NoPermission`, name unchanged. Without the CSRF token the same
+  write is a bare `403 Forbidden` from the front door, which does not test the
+  role — any future write check must send the token. Only that one write type
+  was tried; the role (`readonly` for Network, Protect and user management) is
+  the console's claim for the rest.
+- **Credential.** `op://Private/Unifi agent-readonly` (`lundstedts` account),
+  username and password. They go `op read` → `jq` → curl's stdin and never
+  appear in arguments or on disk. Override with `UNIFI_OP_ITEM` /
+  `UNIFI_OP_ACCOUNT`.
+- **TLS.** The console's certificate is self-signed for `CN=unifi.local`.
+  `--pin` saves it to `~/.config/unifi-api/console.pem` and prints its SHA-256
+  fingerprint; requests verify against it, addressed to that name and routed to
+  `UNIFI_URL` (default `https://192.168.1.1`). If the console's certificate
+  changes, requests fail until you re-pin — check the new fingerprint first.
+- **Reach.** Local network only: from the mini, or the mbp when at home.
+- The legacy `/proxy/network/api/...` endpoints are undocumented and can change
+  between Network versions; the session login is what monitoring tools such as
+  UniFi Poller use with a read-only local user.
+
+Pinned fingerprint as of 2026-10-14:
+`25:0F:79:86:93:D9:24:27:93:AC:54:B2:58:B7:74:10:BC:23:C0:53:72:61:2B:A0:3B:7B:3F:13:BB:E1:6E:48`.
+
+## Changes: `unifi-session`
+
 `unifi-session` is a human-run Codex launcher for occasional administration from
 the mini. No container, scheduled agent, credential broker, or oMLX migration is
 required. This script belongs in dotfiles because it is personal workstation
@@ -115,10 +165,14 @@ internet access.
 ## Tests and qualification
 
 ```bash
-bash -n maint/.local/bin/unifi-session
-shellcheck maint/.local/bin/unifi-session
-uv run --no-project python -m unittest -v maint/test_unifi_session.py
+bash -n maint/.local/bin/unifi-session maint/.local/bin/unifi-api
+shellcheck maint/.local/bin/unifi-session maint/.local/bin/unifi-api
+uv run --no-project python -m unittest -v maint/test_unifi_session.py maint/test_unifi_api.py
 ```
+
+`test_unifi_api.py` uses fake `op`, `curl` and `openssl` and a synthetic
+password: it checks path validation, GET-only requests, sign-out on error, and
+that the password reaches curl only on stdin. It makes no network calls.
 
 The PTY tests use a fake Codex and synthetic credentials. They exercise hidden
 input, credential delivery, cancellation, failure status, redaction, workspace

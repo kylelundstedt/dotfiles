@@ -4,6 +4,18 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-10-14 — Read-only UniFi access for agents (`unifi-api`)
+
+Added `maint/.local/bin/unifi-api`: one GET per call against the UDM as a
+local **View Only** admin (`agent-readonly`, `op://Private/Unifi agent-readonly`),
+signing in and out around each request, with the console's self-signed
+certificate pinned. UniFi API keys turned out to be unscoped (full admin,
+never expiring) and View Only users cannot create one, so the session login is
+the read-only credential. A no-op write with a valid CSRF token was refused
+`api.err.NoPermission`. The full-admin `unifi-sonoma` key was revoked.
+`unifi-session` stays the path for changes. See
+[the runbook](agent_docs/unifi-admin.md#read-only-access-unifi-api).
+
 ## 2026-10-14 — Aperture gateway renamed to `ai.dojo-sun.ts.net`
 
 The Aperture node was renamed from `aperture` to `ai` (same IP, 100.126.54.92);
