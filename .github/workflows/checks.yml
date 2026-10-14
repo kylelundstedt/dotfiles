@@ -30,6 +30,11 @@ jobs:
           bash -n maint/.local/bin/unifi-session
           python3 -m unittest -v maint/test_unifi_session.py
 
+      - name: UniFi read-only API wrapper (offline fakes)
+        run: |
+          bash -n maint/.local/bin/unifi-api
+          python3 -m unittest -v maint/test_unifi_api.py
+
       - name: validate launchd plists
         run: |
           python3 - <<'EOF'
@@ -68,7 +73,8 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: UniFi launcher on system Bash (offline only)
+      - name: UniFi launcher and API wrapper on system Bash (offline only)
         run: |
           /bin/bash -n maint/.local/bin/unifi-session
-          python3 -m unittest -v maint/test_unifi_session.py
+          /bin/bash -n maint/.local/bin/unifi-api
+          python3 -m unittest -v maint/test_unifi_session.py maint/test_unifi_api.py
