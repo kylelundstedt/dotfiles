@@ -15,8 +15,11 @@ clears the launcher's credential variable and reminds the user to revoke the
 key in UniFi; it does not claim API-level read-only access or automatic expiry.
 
 Offline pseudo-terminal tests use a fake Codex and synthetic keys, including
-cancellation and failure paths. They are included in CI. No real key, device,
-or Mac was accessed for implementation; the first live mini run remains an
+cancellation and failure paths. They are included in Linux and macOS CI. The
+Mac check caught Bash 3.2's hidden-read prompt/echo race and missing echo restore
+on Ctrl-C; the launcher now manages terminal echo explicitly before prompting
+and restores the original settings in its cleanup trap. No real UniFi key or
+user device was accessed for implementation; the first live mini run remains an
 owner-supervised qualification step. See [the runbook](agent_docs/unifi-admin.md).
 
 ## 2026-10-10 — tigris CLI: install via the vendor installer

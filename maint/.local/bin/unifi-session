@@ -41,9 +41,13 @@ codex_help=$(codex --help) || fail 'Codex CLI could not start; check its install
 unset codex_help
 
 session_key=''
+tty_state=''
 cleanup() {
     status=$?
     trap - EXIT INT TERM HUP
+    if [[ -n "$tty_state" ]]; then
+        stty "$tty_state" 2>/dev/null || true
+    fi
     unset session_key UNIFI_API_KEY
     printf '\nRevoke/delete this API key in UniFi Integrations now. Closing Codex does not revoke it.\n' >&2
     exit "$status"
@@ -114,10 +118,17 @@ fi
 
 printf 'Workspace: %s\n' "$workspace"
 printf 'The key is available to Codex tools; this is not secret isolation.\n'
-if ! IFS= read -r -s -p 'UniFi API key (hidden; paste, then Return): ' session_key; then
+# Bash 3.2 can print read -s's prompt before disabling echo, and may not restore
+# it on SIGINT. Disable echo BEFORE showing the prompt; EXIT restores on errors.
+tty_state=$(stty -g) || fail 'Could not read terminal settings.'
+stty -echo || fail 'Could not disable terminal echo.'
+printf 'UniFi API key (hidden; paste, then Return): ' >&2
+if ! IFS= read -r session_key; then
     printf '\n' >&2
     fail 'Credential entry cancelled.'
 fi
+stty "$tty_state"
+tty_state=''
 printf '\n'
 [[ -n "$session_key" && "$session_key" != *[[:space:]]* ]] ||
     fail 'The API key must be nonempty and contain no whitespace.'

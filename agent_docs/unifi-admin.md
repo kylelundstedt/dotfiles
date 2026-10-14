@@ -57,7 +57,9 @@ verify connectivity, the certificate, or the key.
   workspace or instructions file is rejected.
 - Reads the key silently from an interactive terminal. No secret is put in the
   launcher's arguments, initial prompt, instructions, or a credential file.
-  Shell tracing is disabled before key entry.
+  Shell tracing is disabled before key entry. Terminal echo is disabled before
+  displaying the key prompt and the original terminal settings are restored on
+  success, cancellation, and error, including on macOS's Bash 3.2.
 - Supplies `UNIFI_URL` and `UNIFI_API_KEY` through the Codex process environment.
   A session-only shell-environment allowlist forwards these and basic OS
   variables to tools, rather than forwarding every inherited token.
