@@ -4,6 +4,17 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-10-14 — `unifi-network` skill; `unifi-api` batches paths
+
+The first endpoint probe signed in once per request and was rate-limited
+(`HTTP 429`) on the sixth sign-in, so `unifi-api` now takes several paths per
+call: one sign-in, one `{"path","status","body"}` JSON line per path, and a
+429 message that says to batch. Added the macOS-only `unifi-network` skill
+(skills manifest `mac` layer, pointer in the global `AGENTS.md`) listing the
+endpoints verified for the View Only account. The probe also found that View
+Only reads `rest/setting`'s `peer_to_peer.psk` and `ips.utm_token` unmasked
+(Wi-Fi passphrases are withheld); the skill tells agents not to print them.
+
 ## 2026-10-14 — Read-only UniFi access for agents (`unifi-api`)
 
 Added `maint/.local/bin/unifi-api`: one GET per call against the UDM as a

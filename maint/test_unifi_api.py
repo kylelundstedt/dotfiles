@@ -41,7 +41,7 @@ FAKE_CURL = textwrap.dedent(
     elif url.endswith("/api/auth/logout"):
         code, body = "200", ""
     else:
-        code = os.environ.get("FAKE_GET_CODE", "200")
+        code = "404" if "missing" in url else os.environ.get("FAKE_GET_CODE", "200")
         body = '{"data":["fake"]}'
     out = opts.get("-o", ["-"])[0]
     if out != "/dev/null":
@@ -122,9 +122,8 @@ class UnifiApiTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 2)
         self.assertEqual(self.calls(), [])
 
-    def test_rejects_extra_arguments_and_bad_origin(self):
+    def test_rejects_bad_origin(self):
         self.pin()
-        self.assertEqual(self.run_wrapper("/a", "/b").returncode, 2)
         result = self.run_wrapper("/a", UNIFI_URL="http://192.0.2.1")
         self.assertEqual(result.returncode, 2)
         self.assertEqual(self.calls(), [])
@@ -169,6 +168,43 @@ class UnifiApiTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("Sign-in refused (HTTP 401)", result.stderr)
         self.assertEqual(len(self.calls()), 1)
+
+    def test_rate_limited_sign_in_says_to_batch(self):
+        self.pin()
+        result = self.run_wrapper(
+            "/proxy/network/api/self/sites", FAKE_LOGIN_CODE="429"
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("rate-limited", result.stderr)
+        self.assertEqual(len(self.calls()), 1)
+
+    def test_batch_signs_in_once_and_reports_each_path(self):
+        self.pin()
+        result = self.run_wrapper("/proxy/a", "/proxy/missing", "/proxy/b")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("HTTP 404 for /proxy/missing", result.stderr)
+        lines = [json.loads(line) for line in result.stdout.splitlines()]
+        self.assertEqual(
+            lines,
+            [
+                {"path": "/proxy/a", "status": 200, "body": {"data": ["fake"]}},
+                {"path": "/proxy/missing", "status": 404, "body": {"data": ["fake"]}},
+                {"path": "/proxy/b", "status": 200, "body": {"data": ["fake"]}},
+            ],
+        )
+        urls = [call["url"] for call in self.calls()]
+        self.assertEqual(sum(u.endswith("/api/auth/login") for u in urls), 1)
+        self.assertTrue(urls[-1].endswith("/api/auth/logout"))
+        self.assertEqual(len(urls), 5)
+
+    def test_batch_validates_every_path_before_requests(self):
+        self.pin()
+        result = self.run_wrapper("/proxy/a", "/a/../b")
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(self.calls(), [])
+
+    def test_pin_takes_no_other_arguments(self):
+        self.assertEqual(self.run_wrapper("--pin", "/a").returncode, 2)
 
     def test_error_status_fails_and_still_signs_out(self):
         self.pin()

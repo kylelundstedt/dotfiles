@@ -53,4 +53,4 @@ personal npx marimo-team/marimo-pair
 personal npx kylelundstedt/dotfiles -s sprites-dev join-tailnet upgrade-vm exe-dev
 # apple-containers is private (macOS-only, this repo) — installed from `.`, not
 # published to a skills repo and not vendored into iv-image
-mac npx . -s apple-containers
+mac npx . -s apple-containers unifi-network

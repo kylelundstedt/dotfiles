@@ -16,9 +16,22 @@ signs in, reads, and signs out.
 ```bash
 unifi-api --pin                                         # once per machine
 unifi-api /proxy/network/api/self/sites
-unifi-api /proxy/network/api/s/default/stat/device-basic
-unifi-api /proxy/network/api/s/default/stat/sta         # connected clients
+unifi-api /proxy/network/api/s/default/stat/device-basic \
+          /proxy/network/api/s/default/stat/sta         # one sign-in, JSON line per path
 ```
+
+Agents reach it through the `unifi-network` skill (macOS layer of
+`provisioning/skills.manifest`), which lists the verified endpoints and the
+handling rules below.
+
+- **Batch paths.** The console rate-limits sign-ins: probing ~15 endpoints with
+  one sign-in each got `HTTP 429` on the sixth (2026-10-14). One call with
+  several paths signs in once and prints `{"path","status","body"}` per line.
+  The wrapper keeps no session on disk, so batching is the only mitigation.
+- **View Only still reads some secrets.** `rest/wlanconf` omits Wi-Fi
+  passphrases, but `rest/setting` returns `peer_to_peer.psk` and
+  `ips.utm_token` unmasked (2026-10-14). The skill tells agents to filter them;
+  nothing in the console or wrapper enforces it.
 
 - **Why username and password, not an API key.** UniFi's Integrations API keys
   have no scope or role: the key created there (2026-10-14) was full-admin with
