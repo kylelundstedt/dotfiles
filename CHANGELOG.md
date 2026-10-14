@@ -15,8 +15,10 @@ Re-running `install.sh` does **not** repair an existing Mac:
 `ANTHROPIC_BASE_URL` gets a `[!] … left as is` warning and an existing Codex
 `[model_providers.aperture]` block is kept. Each Mac's live config is edited by
 hand — the mini's Codex `base_url` was fixed 2026-10-14 (Claude's was already
-updated); the mbp still needs both checked. VMs pick up the change by
-re-provisioning at the iv-provision release that carries it.
+updated); on the mbp Claude already pointed at `ai`, and the Codex `base_url`
+was fixed the same day (`codex exec` answers through the gateway). VMs pick up
+the change by re-provisioning at the iv-provision release that carries it
+(iv-provision `3.1.1`, rolled out to the fleet 2026-10-14).
 
 ## 2026-10-14 — On-demand UniFi session launcher
 
