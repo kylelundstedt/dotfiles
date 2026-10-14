@@ -1232,7 +1232,7 @@ run_stow() {
 # iv-provision. Adds settings only when ABSENT: a hand-set value (e.g. a
 # different provider while Aperture is down) is left alone, not reverted.
 # Decision + economics: agent_docs/llm-subscription-vs-metered.md.
-APERTURE_URL="http://aperture.dojo-sun.ts.net"
+APERTURE_URL="http://ai.dojo-sun.ts.net"
 configure_aperture() {
     [[ "$OS" == "macos" && "$IS_IV_VM" != true ]] || return 0
     echo ""

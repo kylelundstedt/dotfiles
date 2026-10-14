@@ -4,6 +4,20 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-10-14 — Aperture gateway renamed to `ai.dojo-sun.ts.net`
+
+The Aperture node was renamed from `aperture` to `ai` (same IP, 100.126.54.92);
+`aperture.dojo-sun.ts.net` no longer resolves. `install.sh`'s `APERTURE_URL`
+and the `upgrade-vm` skill now name `http://ai.dojo-sun.ts.net`.
+
+Re-running `install.sh` does **not** repair an existing Mac:
+`configure_aperture` only writes a URL where none is set, so a stale
+`ANTHROPIC_BASE_URL` gets a `[!] … left as is` warning and an existing Codex
+`[model_providers.aperture]` block is kept. Each Mac's live config is edited by
+hand — the mini's Codex `base_url` was fixed 2026-10-14 (Claude's was already
+updated); the mbp still needs both checked. VMs pick up the change by
+re-provisioning at the iv-provision release that carries it.
+
 ## 2026-10-14 — On-demand UniFi session launcher
 
 Added `maint/.local/bin/unifi-session` for a human-run Codex session on the mini:
