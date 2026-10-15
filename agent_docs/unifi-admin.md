@@ -30,8 +30,9 @@ handling rules below.
   The wrapper keeps no session on disk, so batching is the only mitigation.
 - **View Only still reads some secrets.** `rest/wlanconf` omits Wi-Fi
   passphrases, but `rest/setting` returns `peer_to_peer.psk` and
-  `ips.utm_token` unmasked (2026-10-14). The skill tells agents to filter them;
-  nothing in the console or wrapper enforces it.
+  `ips.utm_token` unmasked, and every device in `stat/device` carries a
+  `syslog_key` (2026-10-14). The skill tells agents to filter them; nothing in
+  the console or wrapper enforces it.
 
 - **Why username and password, not an API key.** UniFi's Integrations API keys
   have no scope or role: the key created there (2026-10-14) was full-admin with
@@ -112,6 +113,46 @@ Replace that example with your actual console hostname. IPv4, bracketed IPv6,
 and an optional port are accepted; HTTP, embedded credentials, paths, and query
 strings are not. The launcher itself makes **no UniFi requests**, so it cannot
 verify connectivity, the certificate, or the key.
+
+## Findings from the first live session (2026-10-14)
+
+The first real `unifi-session` run was from the mbp at home (Wi-Fi). It added a
+guest VLAN, using the official Integration API on Network 10.6.106.
+
+- **TLS needs the certificate's name, not the IP.** The console's self-signed
+  certificate covers `unifi.local`, `localhost` and loopback addresses only. It
+  has no SAN for `192.168.1.1`, so the launcher's initial discovery against
+  `https://192.168.1.1` failed verification, and Codex stopped, correctly.
+  Requests work when routed the way `unifi-api` does it:
+
+  ```bash
+  curl -sS --cacert ~/.config/unifi-api/console.pem \
+      --resolve unifi.local:443:192.168.1.1 \
+      -K <(printf 'header = "X-API-KEY: %s"\n' "$UNIFI_API_KEY") \
+      https://unifi.local/proxy/network/integration/v1/sites
+  ```
+
+  Check the pinned fingerprint (above) first. `printf` is a bash builtin, so the
+  key stays out of process arguments. Passing `unifi-session https://unifi.local`
+  instead was not tried, and works only if that name resolves on the LAN.
+
+- **The console uses the legacy firewall.** The Integration API's firewall
+  endpoints return `400 api.firewall.zone-based-firewall-not-configured`. The
+  legacy v2 endpoints behave differently: `firewall-policies`, `firewall/zone`
+  and `firewall/zone-matrix` return `200 []`, which looks like "no rules" but is
+  really "no zone-based firewall".
+- **The API can't create a legacy guest network.** The 10.6.106 create-network
+  schema exposes `isolationEnabled` and `zoneId`, but not the legacy
+  `purpose: guest` that the guest restrictions (`guest_access.restricted_subnet_*`)
+  depend on. Create guest networks in the UI. Wi-Fi broadcast updates are said
+  to be whole-object PUTs, passphrase included (community API clients; not
+  tested here), so an SSID edit is also simpler and safer in the UI. Use the
+  session for pre-checks and verification reads.
+- **Port VLAN forwarding is only in the legacy API.** The official device
+  responses omit it. `unifi-api`'s `stat/device` has it in `port_table[].forward`
+  and `port_overrides`, and `uplink.type` (`wire`/`wireless`) for mesh APs.
+- **Editing an SSID reprovisions every AP**, which briefly drops all SSIDs. If
+  the session runs over Wi-Fi, expect a dropped request around that write.
 
 ## What the launcher does
 

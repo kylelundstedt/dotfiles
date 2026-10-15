@@ -4,6 +4,24 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-10-14 — First live `unifi-session` run: findings
+
+The first real run (from the mbp) moved the guest SSID to its own VLAN. It
+showed three things, now recorded in
+[the runbook](agent_docs/unifi-admin.md#findings-from-the-first-live-session-2026-10-14)
+and the `unifi-network` skill:
+
+- The console certificate covers `unifi.local` only, so requests to
+  `https://192.168.1.1` fail verification; route the name with `--resolve`
+  instead.
+- On a legacy-firewall console, the official Network 10.6.106 API cannot
+  create a guest-purpose network, so that change was made in the UI.
+- View Only also reads each device's `syslog_key` and the Protect bootstrap's
+  `accessKey`/HomeKit setup fields, so the skill now lists them as secrets.
+
+The skill also notes that the zone-based firewall endpoints return `200 []` on
+a legacy-firewall console.
+
 ## 2026-10-14 — `unifi-network` skill; `unifi-api` batches paths
 
 The first endpoint probe signed in once per request and was rate-limited
