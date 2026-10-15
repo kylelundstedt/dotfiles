@@ -4,6 +4,25 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-10-14 — `unifi-session` verifies TLS against the pinned certificate
+
+The first live session failed TLS at `https://192.168.1.1`: the console's
+certificate names only `unifi.local`. The launcher now reads `unifi-api`'s
+pinned certificate, if there is one, and exports three non-secret variables:
+`UNIFI_CA_FILE`, `UNIFI_CONNECT_TO` (`unifi.local:443:<address>:443`) and
+`UNIFI_TLS_ORIGIN`. The initial prompt and the seeded `AGENTS.md` give Codex the
+`curl --cacert … --connect-to … -K <(printf …)` form that uses them.
+
+It uses `--connect-to` rather than the session's `--resolve`, because
+`--resolve` takes only an IP address; both were checked against a local
+self-signed server. Without a pin the launcher warns and adds nothing. A pin
+with no readable hostname stops the launch before the key prompt.
+
+The variables are exported rather than passed through `env`, which would have
+put the API key in `env`'s process arguments. There are four new offline PTY
+tests: pinned, IPv6 with a port, no pin (inherited values cleared) and an
+unreadable pin.
+
 ## 2026-10-14 — First live `unifi-session` run: findings
 
 The first real run (from the mbp) moved the guest SSID to its own VLAN. It

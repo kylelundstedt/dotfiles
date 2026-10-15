@@ -123,18 +123,24 @@ guest VLAN, using the official Integration API on Network 10.6.106.
   certificate covers `unifi.local`, `localhost` and loopback addresses only. It
   has no SAN for `192.168.1.1`, so the launcher's initial discovery against
   `https://192.168.1.1` failed verification, and Codex stopped, correctly.
-  Requests work when routed the way `unifi-api` does it:
+  Requests work when routed the way `unifi-api` does it. **The launcher now
+  does this itself**, as described under
+  [What the launcher does](#what-the-launcher-does): when `unifi-api` has
+  pinned the certificate, it exports the TLS details and tells Codex to use
+  this form:
 
   ```bash
-  curl -sS --cacert ~/.config/unifi-api/console.pem \
-      --resolve unifi.local:443:192.168.1.1 \
+  curl -sS --cacert "$UNIFI_CA_FILE" --connect-to "$UNIFI_CONNECT_TO" \
       -K <(printf 'header = "X-API-KEY: %s"\n' "$UNIFI_API_KEY") \
-      https://unifi.local/proxy/network/integration/v1/sites
+      "$UNIFI_TLS_ORIGIN/proxy/network/integration/v1/sites"
   ```
 
-  Check the pinned fingerprint (above) first. `printf` is a bash builtin, so the
-  key stays out of process arguments. Passing `unifi-session https://unifi.local`
-  instead was not tried, and works only if that name resolves on the LAN.
+  For `https://192.168.1.1` those variables expand to
+  `~/.config/unifi-api/console.pem`, `unifi.local:443:192.168.1.1:443` and
+  `https://unifi.local:443`. `--connect-to` replaces the session's
+  `--resolve unifi.local:443:192.168.1.1`, because `--resolve` takes only an IP
+  and fails if the console address is a hostname. `printf` is a shell builtin,
+  so the key stays out of process arguments.
 
 - **The console uses the legacy firewall.** The Integration API's firewall
   endpoints return `400 api.firewall.zone-based-firewall-not-configured`. The
@@ -167,6 +173,22 @@ guest VLAN, using the official Integration API on Network 10.6.106.
 - Supplies `UNIFI_URL` and `UNIFI_API_KEY` through the Codex process environment.
   A session-only shell-environment allowlist forwards these and basic OS
   variables to tools, rather than forwarding every inherited token.
+- Reads the certificate that `unifi-api --pin` saved, if one exists. From it,
+  the launcher exports three non-secret variables:
+  - `UNIFI_CA_FILE`: the pinned certificate;
+  - `UNIFI_CONNECT_TO`: the certificate's hostname routed to the address you
+    gave;
+  - `UNIFI_TLS_ORIGIN`: the HTTPS origin under the certificate's hostname.
+
+  The initial prompt and the seeded `AGENTS.md` give Codex the curl form that
+  uses them. Inherited values of those variables are cleared first. Without a
+  pin, the launcher warns and passes none of them. A pin it can't read a
+  hostname from stops the launch before the key prompt. The launcher still
+  makes no UniFi request: it doesn't check that the pin matches the console,
+  and a mismatch shows up as a verification failure in Codex. An existing
+  `~/unifi-admin/AGENTS.md` is never rewritten, so only the prompt carries the
+  curl form into an older workspace.
+
 - Uses `--no-daemon` to avoid putting the credential in a shared Codex server.
   Disables both shell-snapshot features (which can persist allowed exports) and
   login-shell execution for this run. Existing provider, login, and model
@@ -211,6 +233,8 @@ internet access.
   the launcher's allowlist are filtered out.
 - **Certificate verification failure:** establish trust for the UDM's actual
   certificate and use a matching hostname/address. Do not default to `curl -k`.
+  If the launcher printed `TLS: no pinned certificate`, run `unifi-api --pin`,
+  compare the fingerprint with the one recorded above, and relaunch.
 - **Workspace error:** inspect `~/unifi-admin`; do not replace somebody else's
   directory or symlink blindly.
 - **Cancel:** Ctrl-C at either prompt, or exit Codex. Revoke the key even if the
