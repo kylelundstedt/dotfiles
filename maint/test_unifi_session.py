@@ -83,7 +83,7 @@ class UnifiSessionTests(unittest.TestCase):
         self.options = self.root / "options.json"
         self.options.write_text("{}")
         self.env = {
-            **os.environ,
+            **{k: v for k, v in os.environ.items() if k != "XDG_CONFIG_HOME"},
             "HOME": str(self.home),
             "PATH": f"{self.bin}:{os.environ['PATH']}",
             "TERM": "xterm",
@@ -98,6 +98,8 @@ class UnifiSessionTests(unittest.TestCase):
             "    print('Codex CLI ' + ('--no-daemon' if not options.get('old') else ''))\n"
             "    sys.exit(0)\n"
             "result = {'args': sys.argv[1:], 'url': os.environ.get('UNIFI_URL'),\n"
+            "          'tls': {k: os.environ.get(k) for k in\n"
+            "                  ('UNIFI_CA_FILE', 'UNIFI_CONNECT_TO', 'UNIFI_TLS_ORIGIN')},\n"
             f"          'key_matches': os.environ.get('UNIFI_API_KEY') == {FAKE_KEY!r}}}\n"
             f"with open({str(self.capture)!r}, 'w') as f: json.dump(result, f)\n"
             "if options.get('wait'):\n"
@@ -120,6 +122,31 @@ class UnifiSessionTests(unittest.TestCase):
         terminal.read_until("UniFi API key (hidden; paste, then Return):")
         self.assertFalse(termios.tcgetattr(terminal.fd)[3] & termios.ECHO)
         terminal.send(key + "\n")
+
+    def pin(self, subject="/CN=unifi.local"):
+        pin_file = self.home / ".config/unifi-api/console.pem"
+        pin_file.parent.mkdir(parents=True)
+        subprocess.run(
+            [
+                "openssl",
+                "req",
+                "-x509",
+                "-newkey",
+                "rsa:2048",
+                "-nodes",
+                "-days",
+                "1",
+                "-subj",
+                subject,
+                "-keyout",
+                str(self.root / "key.pem"),
+                "-out",
+                str(pin_file),
+            ],
+            check=True,
+            capture_output=True,
+        )
+        return pin_file
 
     def assert_no_secret_output(self, terminal):
         self.assertNotIn(FAKE_KEY.encode(), terminal.output)
@@ -158,6 +185,60 @@ class UnifiSessionTests(unittest.TestCase):
         self.assertEqual(sorted(p.name for p in workspace.iterdir()), ["AGENTS.md"])
         self.assertIn(b"Revoke/delete this API key", terminal.output)
         self.assert_no_secret_output(terminal)
+
+    def test_pinned_certificate_routes_tls_name_to_console(self):
+        pin_file = self.pin()
+        terminal = self.start(["https://192.0.2.1"])
+        terminal.read_until("TLS: pinned certificate for unifi.local")
+        self.supply_key(terminal)
+        self.assertEqual(terminal.finish(), 0)
+        result = json.loads(self.capture.read_text())
+        self.assertEqual(result["url"], "https://192.0.2.1")
+        self.assertEqual(
+            result["tls"],
+            {
+                "UNIFI_CA_FILE": str(pin_file),
+                "UNIFI_CONNECT_TO": "unifi.local:443:192.0.2.1:443",
+                "UNIFI_TLS_ORIGIN": "https://unifi.local:443",
+            },
+        )
+        args = result["args"]
+        policy = next(a for a in args if a.startswith("shell_environment_policy="))
+        for name in ("UNIFI_CA_FILE", "UNIFI_CONNECT_TO", "UNIFI_TLS_ORIGIN"):
+            self.assertIn(f'"{name}"', policy)
+        self.assertIn('--connect-to "$UNIFI_CONNECT_TO"', args[-1])
+        self.assertIn('"$UNIFI_API_KEY"', args[-1])
+        instructions = (self.home / "unifi-admin/AGENTS.md").read_text()
+        self.assertIn('--connect-to "$UNIFI_CONNECT_TO"', instructions)
+        self.assertNotIn(FAKE_KEY, json.dumps(args))
+        self.assert_no_secret_output(terminal)
+
+    def test_pinned_certificate_with_port_and_ipv6(self):
+        self.pin()
+        terminal = self.start(["https://[2001:db8::1]:8443"])
+        self.supply_key(terminal)
+        self.assertEqual(terminal.finish(), 0)
+        tls = json.loads(self.capture.read_text())["tls"]
+        self.assertEqual(tls["UNIFI_CONNECT_TO"], "unifi.local:8443:[2001:db8::1]:8443")
+        self.assertEqual(tls["UNIFI_TLS_ORIGIN"], "https://unifi.local:8443")
+
+    def test_without_pin_tls_variables_not_passed(self):
+        self.env["UNIFI_CA_FILE"] = "/inherited/not-pinned.pem"
+        terminal = self.start(["https://192.0.2.1"])
+        terminal.read_until("Run unifi-api --pin first.")
+        self.supply_key(terminal)
+        self.assertEqual(terminal.finish(), 0)
+        result = json.loads(self.capture.read_text())
+        self.assertEqual(set(result["tls"].values()), {None})
+        self.assertNotIn("--connect-to", result["args"][-1])
+
+    def test_unreadable_pin_rejected_before_credential_prompt(self):
+        self.pin(subject="/O=No Common Name")
+        terminal = self.start(["https://192.0.2.1"])
+        self.assertEqual(terminal.finish(), 2)
+        self.assertIn(b"re-run: unifi-api --pin", terminal.output)
+        self.assertNotIn(b"UniFi API key", terminal.output)
+        self.assertFalse(self.capture.exists())
 
     def test_existing_instructions_preserved(self):
         workspace = self.home / "unifi-admin"
