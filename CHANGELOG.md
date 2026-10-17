@@ -4,6 +4,22 @@ A dated work journal for this repo — completed changes, with rationale and got
 that commit messages don't always capture. Newest first. Open work lives in
 [TODO.md](TODO.md).
 
+## 2026-10-17 — Rex session-start hooks for Claude Code and Codex
+
+`rex skill setup` added a SessionStart hook to both harnesses. It gives an agent
+running in a Rex terminal its session and pane IDs. The Codex hook went into the
+stowed `agents/.codex/hooks.json` directly. The Claude Code hook landed only in
+the gitignored `settings.json`, so it's now in `settings.json.example`, and
+`sync_claude_settings_hooks` splices it into existing installs.
+
+SessionStart now holds two hooks, so each splice appends only its own entries
+from the example. Before, the `refresh-env.sh` splice appended the example's
+whole SessionStart list, which would have duplicated the Rex hook on a machine
+that already had it. IV VMs don't get the hook: Rex is a Mac app, and
+`overlay_claude_settings` only adds `refresh-env.sh`. Both hooks end in
+`|| true`, so they do nothing where `rex` isn't installed. The Rex skill itself
+isn't managed here; `rex skill setup` writes it per machine.
+
 ## 2026-10-14 — `unifi-session` verifies TLS against the pinned certificate
 
 The first live session failed TLS at `https://192.168.1.1`: the console's

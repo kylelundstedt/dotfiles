@@ -1110,9 +1110,15 @@ sync_claude_settings_hooks() {
     local ex="$DOTFILES_DIR/agents/.claude/settings.json.example"
     [[ -f "$f" && -f "$ex" ]] || return 0
     command -v jq >/dev/null 2>&1 || return 0
+    # SessionStart holds more than one hook; each splice appends only its own
+    # entries so a machine missing one doesn't get a duplicate of the other.
     if ! grep -q "refresh-env.sh" "$f"; then
-        jq --slurpfile ex "$ex" '.hooks.SessionStart = ((.hooks.SessionStart // []) + $ex[0].hooks.SessionStart)' "$f" > "$f.tmp" \
+        jq --slurpfile ex "$ex" '.hooks.SessionStart = ((.hooks.SessionStart // []) + [$ex[0].hooks.SessionStart[] | select(tostring | contains("refresh-env.sh"))])' "$f" > "$f.tmp" \
             && mv "$f.tmp" "$f" && echo "  [+] settings.json: SessionStart hook synced from example"
+    fi
+    if ! grep -q "rex __internal session-start" "$f"; then
+        jq --slurpfile ex "$ex" '.hooks.SessionStart = ((.hooks.SessionStart // []) + [$ex[0].hooks.SessionStart[] | select(tostring | contains("rex __internal session-start"))])' "$f" > "$f.tmp" \
+            && mv "$f.tmp" "$f" && echo "  [+] settings.json: Rex SessionStart hook synced from example"
     fi
     if ! grep -q "exe.dev SSH guard" "$f"; then
         jq --slurpfile ex "$ex" '.hooks.PreToolUse = ((.hooks.PreToolUse // []) + $ex[0].hooks.PreToolUse)' "$f" > "$f.tmp" \
